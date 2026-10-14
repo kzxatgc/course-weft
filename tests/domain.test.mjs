@@ -29,11 +29,6 @@ test('smoke: synthetic target fixtures are properly isolated and configured', ()
   assert.ok(bioLabB);
   assert.equal(bioLabB.seat, 'open');
 
-  const refusalCat = catalogForScenario('refusal');
-  const refusalLabB = refusalCat.find((s) => s.id === 'BIO-214L-B');
-  assert.ok(refusalLabB);
-  assert.equal(refusalLabB.seat, 'unknown');
-
   const noRepairCat = catalogForScenario('noRepair');
   const noRepairLabB = noRepairCat.find((s) => s.id === 'BIO-214L-B');
   assert.ok(noRepairLabB);
@@ -69,19 +64,20 @@ test('catalogue exports correct section records, relations, and initial states',
   assert.equal(labB.requiredBy, 'BIO-214');
 });
 
-test('refusal scenario makes copy without shared mutation', () => {
+test('noRepair scenario makes copy without shared mutation', () => {
   const main = getCatalogForScenario('main');
-  const refusal = getCatalogForScenario('refusal');
+  const noRepair = getCatalogForScenario('noRepair');
 
   const mainLabB = main.find((s) => s.id === 'BIO-214L-B');
-  const refusalLabB = refusal.find((s) => s.id === 'BIO-214L-B');
+  const noRepairLabB = noRepair.find((s) => s.id === 'BIO-214L-B');
 
   assert.equal(mainLabB.seat, 'open');
-  assert.equal(refusalLabB.seat, 'unknown');
+  assert.equal(noRepairLabB.seat, 'full');
 
-  // Verify mutating copy does not mutate original or subsequent calls
-  refusalLabB.seat = 'mutated';
+  // Verify mutating copy does not mutate original or other scenario
+  noRepairLabB.seat = 'mutated';
   assert.equal(getCatalogForScenario('main').find((s) => s.id === 'BIO-214L-B').seat, 'open');
+  assert.equal(getCatalogForScenario('noRepair').find((s) => s.id === 'BIO-214L-B').seat, 'full');
   assert.equal(PRODUCTION_CATALOG.find((s) => s.id === 'BIO-214L-B').seat, 'open');
 });
 
@@ -226,13 +222,16 @@ test('no-repair scenario has BIO-214L-B at 30/30 (full)', () => {
   assert.equal(labB.seat, 'full');
 });
 
-test('unknown-seat technical fixture omits counts on BIO-214L-B', () => {
-  const cat = getCatalogForScenario('refusal');
-  const labB = cat.find((s) => s.id === 'BIO-214L-B');
-  assert.ok(labB);
-  assert.equal(labB.enrolled, undefined);
-  assert.equal(labB.capacity, undefined);
-  assert.equal(labB.seat, 'unknown');
+test('catalog exposes only main and noRepair scenarios without named refusal fixture', () => {
+  const mainCat = getCatalogForScenario('main');
+  const noRepairCat = getCatalogForScenario('noRepair');
+  assert.equal(mainCat.find((s) => s.id === 'BIO-214L-B').seat, 'open');
+  assert.equal(noRepairCat.find((s) => s.id === 'BIO-214L-B').seat, 'full');
+
+  // Passing any unhandled scenario name defaults to main copy with standard open seats
+  const unhandled = getCatalogForScenario('refusal');
+  assert.equal(unhandled.find((s) => s.id === 'BIO-214L-B').seat, 'open');
+  assert.equal(unhandled.find((s) => s.id === 'BIO-214L-B').enrolled, 22);
 });
 
 test('fixture-copy isolation: mutating one scenario does not affect another', () => {
