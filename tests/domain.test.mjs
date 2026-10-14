@@ -33,6 +33,13 @@ test('smoke: synthetic target fixtures are properly isolated and configured', ()
   const refusalLabB = refusalCat.find((s) => s.id === 'BIO-214L-B');
   assert.ok(refusalLabB);
   assert.equal(refusalLabB.seat, 'unknown');
+
+  const noRepairCat = catalogForScenario('noRepair');
+  const noRepairLabB = noRepairCat.find((s) => s.id === 'BIO-214L-B');
+  assert.ok(noRepairLabB);
+  assert.equal(noRepairLabB.seat, 'full');
+  assert.equal(noRepairLabB.enrolled, 30);
+  assert.equal(noRepairLabB.capacity, 30);
 });
 
 test('catalogue exports correct section records, relations, and initial states', () => {
@@ -177,4 +184,70 @@ test('validateCatalogue rejects non-object record', () => {
   const bad = ['not-an-object'];
   const result = validateCatalogue(bad);
   assert.equal(result.ok, false);
+});
+
+// --- Synthetic enrollment and capacity counts ---
+
+test('every section in the main catalogue has integer enrolled and capacity', () => {
+  const cat = getCatalogForScenario('main');
+  for (const s of cat) {
+    assert.equal(typeof s.enrolled, 'number', `${s.id} enrolled must be a number`);
+    assert.equal(typeof s.capacity, 'number', `${s.id} capacity must be a number`);
+    assert.ok(Number.isInteger(s.enrolled), `${s.id} enrolled must be integer`);
+    assert.ok(Number.isInteger(s.capacity), `${s.id} capacity must be integer`);
+    assert.ok(s.capacity > 0, `${s.id} capacity must be > 0`);
+    assert.ok(s.enrolled >= 0, `${s.id} enrolled must be >= 0`);
+    assert.ok(s.enrolled <= s.capacity, `${s.id} enrolled must be <= capacity`);
+  }
+});
+
+test('availability is derived from counts: enrolled < capacity means open, enrolled === capacity means full', () => {
+  const cat = getCatalogForScenario('main');
+  for (const s of cat) {
+    const expected = s.enrolled < s.capacity ? 'open' : 'full';
+    assert.equal(s.seat, expected, `${s.id} seat derived incorrectly`);
+  }
+});
+
+test('successful scenario has BIO-214L-B with seats available (enrolled < capacity)', () => {
+  const cat = getCatalogForScenario('main');
+  const labB = cat.find((s) => s.id === 'BIO-214L-B');
+  assert.ok(labB);
+  assert.ok(labB.enrolled < labB.capacity, 'BIO-214L-B should have seats in main scenario');
+  assert.equal(labB.seat, 'open');
+});
+
+test('no-repair scenario has BIO-214L-B at 30/30 (full)', () => {
+  const cat = getCatalogForScenario('noRepair');
+  const labB = cat.find((s) => s.id === 'BIO-214L-B');
+  assert.ok(labB);
+  assert.equal(labB.enrolled, 30);
+  assert.equal(labB.capacity, 30);
+  assert.equal(labB.seat, 'full');
+});
+
+test('unknown-seat technical fixture omits counts on BIO-214L-B', () => {
+  const cat = getCatalogForScenario('refusal');
+  const labB = cat.find((s) => s.id === 'BIO-214L-B');
+  assert.ok(labB);
+  assert.equal(labB.enrolled, undefined);
+  assert.equal(labB.capacity, undefined);
+  assert.equal(labB.seat, 'unknown');
+});
+
+test('fixture-copy isolation: mutating one scenario does not affect another', () => {
+  const main1 = getCatalogForScenario('main');
+  const main2 = getCatalogForScenario('main');
+  const labB1 = main1.find((s) => s.id === 'BIO-214L-B');
+  labB1.enrolled = 999;
+  const labB2 = main2.find((s) => s.id === 'BIO-214L-B');
+  assert.ok(labB2.enrolled !== 999, 'mutating one copy must not affect a separate call');
+});
+
+test('count formatting label: enrolled/capacity renders as "enrolled / capacity"', () => {
+  const cat = getCatalogForScenario('main');
+  for (const s of cat) {
+    const label = `${s.enrolled} / ${s.capacity}`;
+    assert.match(label, /^\d+ \/ \d+$/, `${s.id} label format wrong: ${label}`);
+  }
 });
