@@ -250,3 +250,114 @@ test('count formatting label: enrolled/capacity renders as "enrolled / capacity"
     assert.match(label, /^\d+ \/ \d+$/, `${s.id} label format wrong: ${label}`);
   }
 });
+
+// --- Time, meeting, and seat validation ---
+
+test('validateDraft rejects draft containing a full section (seat-not-certified-open)', () => {
+  const fullCat = getCatalogForScenario('noRepair');
+  // In noRepair scenario, BIO-214L-B is 30/30 (full)
+  const result = validateDraft(['CHEM-A', 'BIO-214L-B'], fullCat);
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, 'seat-not-certified-open');
+});
+
+test('full section remains valid catalogue data in validateCatalogue', () => {
+  const fullCat = getCatalogForScenario('noRepair');
+  const result = validateCatalogue(fullCat);
+  assert.equal(result.ok, true);
+  assert.equal(result.reason, null);
+});
+
+test('validateDraft rejects draft containing generic section with missing counts (seat-not-certified-open)', () => {
+  const missingCountCat = PRODUCTION_CATALOG.map((s) => (s.id === 'BIO-214L-B' ? { ...s, enrolled: undefined, capacity: undefined, seat: 'unknown' } : s));
+  const result = validateDraft(['CHEM-A', 'BIO-214L-B'], missingCountCat);
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, 'seat-not-certified-open');
+});
+
+test('generic missing-count section with seat unknown remains valid catalogue data in validateCatalogue', () => {
+  const missingCountCat = PRODUCTION_CATALOG.map((s) => (s.id === 'BIO-214L-B' ? { ...s, enrolled: undefined, capacity: undefined, seat: 'unknown' } : s));
+  const result = validateCatalogue(missingCountCat);
+  assert.equal(result.ok, true);
+  assert.equal(result.reason, null);
+});
+
+test('validateDraft rejects unrecognized seat state (malformed-seat-state)', () => {
+  const badSeatCat = PRODUCTION_CATALOG.map((s) => (s.id === 'CHEM-A' ? { ...s, seat: 'maybe' } : s));
+  const result = validateDraft(['CHEM-A'], badSeatCat);
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, 'malformed-seat-state');
+});
+
+test('validateDraft rejects missing, string, negative, reversed, zero-length, and out-of-range times', () => {
+  const badTimeVariations = [
+    { desc: 'missing start', patch: { start: undefined, end: 660 } },
+    { desc: 'missing end', patch: { start: 600, end: undefined } },
+    { desc: 'string start', patch: { start: '600', end: 660 } },
+    { desc: 'string end', patch: { start: 600, end: '660' } },
+    { desc: 'negative start', patch: { start: -1, end: 660 } },
+    { desc: 'zero-length meeting', patch: { start: 600, end: 600 } },
+    { desc: 'reversed meeting time', patch: { start: 660, end: 600 } },
+    { desc: 'start out of range (>1440)', patch: { start: 1441, end: 1500 } },
+    { desc: 'end out of range (>1440)', patch: { start: 600, end: 1441 } },
+  ];
+
+  for (const { desc, patch } of badTimeVariations) {
+    const patchedCat = PRODUCTION_CATALOG.map((s) => (s.id === 'CHEM-A' ? { ...s, ...patch } : s));
+    const result = validateDraft(['CHEM-A'], patchedCat);
+    assert.equal(result.ok, false, `Expected failure for ${desc}`);
+    assert.equal(result.reason, 'bad-time-or-day', `Expected bad-time-or-day for ${desc}`);
+  }
+});
+
+test('validateDraft rejects invalid weekday (bad-time-or-day)', () => {
+  const invalidDays = ['Funday', '', 'Tomorrow', 123, null, undefined];
+  for (const day of invalidDays) {
+    const patchedCat = PRODUCTION_CATALOG.map((s) => (s.id === 'CHEM-A' ? { ...s, day } : s));
+    const result = validateDraft(['CHEM-A'], patchedCat);
+    assert.equal(result.ok, false, `Expected failure for day: ${day}`);
+    assert.equal(result.reason, 'bad-time-or-day');
+  }
+});
+
+test('validateDraft rejects malformed catalogue with stable malformed-catalog reason', () => {
+  const dupCat = [...PRODUCTION_CATALOG, PRODUCTION_CATALOG[0]];
+  const result = validateDraft(['CHEM-A'], dupCat);
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, 'malformed-catalog');
+});
+
+test('validateCatalogue rejects sections with invalid weekday or invalid meeting time', () => {
+  const badDayCat = PRODUCTION_CATALOG.map((s) => (s.id === 'CHEM-A' ? { ...s, day: 'InvalidDay' } : s));
+  assert.equal(validateCatalogue(badDayCat).ok, false);
+
+  const badTimeCat = PRODUCTION_CATALOG.map((s) => (s.id === 'CHEM-A' ? { ...s, start: 700, end: 600 } : s));
+  assert.equal(validateCatalogue(badTimeCat).ok, false);
+});
+
+test('validateCatalogue rejects sections with unrecognized seat or corrupted counts', () => {
+  const badSeatCat = PRODUCTION_CATALOG.map((s) => (s.id === 'CHEM-A' ? { ...s, seat: 'unknown-state' } : s));
+  assert.equal(validateCatalogue(badSeatCat).ok, false);
+
+  const badCapacityCat = PRODUCTION_CATALOG.map((s) => (s.id === 'CHEM-A' ? { ...s, capacity: 0 } : s));
+  assert.equal(validateCatalogue(badCapacityCat).ok, false);
+
+  const negativeEnrolledCat = PRODUCTION_CATALOG.map((s) => (s.id === 'CHEM-A' ? { ...s, enrolled: -5 } : s));
+  assert.equal(validateCatalogue(negativeEnrolledCat).ok, false);
+
+  const enrolledOverCapCat = PRODUCTION_CATALOG.map((s) => (s.id === 'CHEM-A' ? { ...s, enrolled: 35, capacity: 30 } : s));
+  assert.equal(validateCatalogue(enrolledOverCapCat).ok, false);
+
+  const mismatchedSeatCat = PRODUCTION_CATALOG.map((s) => (s.id === 'CHEM-A' ? { ...s, enrolled: 30, capacity: 30, seat: 'open' } : s));
+  assert.equal(validateCatalogue(mismatchedSeatCat).ok, false);
+});
+
+test('validateDraft and validateCatalogue never throw exceptions on malformed input', () => {
+  const pathologicalInputs = [null, undefined, 42, 'string', {}, [], [null], [{}]];
+  for (const input of pathologicalInputs) {
+    assert.doesNotThrow(() => validateDraft(input, PRODUCTION_CATALOG));
+    assert.doesNotThrow(() => validateDraft(['CHEM-A'], input));
+    assert.doesNotThrow(() => validateCatalogue(input));
+  }
+});
+

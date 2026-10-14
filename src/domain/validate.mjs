@@ -3,17 +3,105 @@
  * All functions return { ok: boolean, reason: string | null }.
  */
 
+export const VALID_WEEKDAYS = Object.freeze([
+  'Mon',
+  'Tue',
+  'Wed',
+  'Thu',
+  'Fri',
+  'Sat',
+  'Sun',
+]);
+
+export const KNOWN_SEAT_STATES = Object.freeze(['open', 'full', 'unknown']);
+
+/**
+ * Check if a section meeting has a valid weekday and positive time duration.
+ *
+ * @param {any} item
+ * @returns {boolean}
+ */
+export function hasValidTime(item) {
+  if (!item || typeof item !== 'object') return false;
+  return (
+    typeof item.day === 'string' &&
+    VALID_WEEKDAYS.includes(item.day) &&
+    Number.isInteger(item.start) &&
+    Number.isInteger(item.end) &&
+    item.start >= 0 &&
+    item.start <= 1440 &&
+    item.end >= 0 &&
+    item.end <= 1440 &&
+    item.end > item.start
+  );
+}
+
+/**
+ * Check if a section has a recognized seat state.
+ *
+ * @param {any} item
+ * @returns {boolean}
+ */
+export function hasValidSeatState(item) {
+  if (!item || typeof item !== 'object') return false;
+  return typeof item.seat === 'string' && KNOWN_SEAT_STATES.includes(item.seat);
+}
+
+/**
+ * Check if a section has valid synthetic capacity and enrollment counts.
+ * If counts are omitted (generic unknown-seat record), returns true.
+ * If counts are provided, requires capacity > 0 and 0 <= enrolled <= capacity.
+ *
+ * @param {any} item
+ * @returns {boolean}
+ */
+export function hasValidCounts(item) {
+  if (!item || typeof item !== 'object') return false;
+  if (item.enrolled === undefined && item.capacity === undefined) {
+    return true;
+  }
+  return (
+    Number.isInteger(item.capacity) &&
+    item.capacity > 0 &&
+    Number.isInteger(item.enrolled) &&
+    item.enrolled >= 0 &&
+    item.enrolled <= item.capacity
+  );
+}
+
+/**
+ * Check basic structural validity of a catalogue array without inspecting meeting times.
+ *
+ * @param {unknown} catalogue
+ * @returns {boolean}
+ */
+function hasValidCatalogStructure(catalogue) {
+  if (!Array.isArray(catalogue)) return false;
+  const seen = new Set();
+  for (const item of catalogue) {
+    if (!item || typeof item !== 'object') return false;
+    if (typeof item.id !== 'string' || item.id.trim() === '') return false;
+    if (seen.has(item.id)) return false;
+    seen.add(item.id);
+  }
+  return true;
+}
+
 /**
  * Validate a draft array of section IDs against a catalogue.
  *
  * Checks:
  * - draft must be an array
- * - every ID must be a nonempty string
+ * - catalogue must have valid structure (array of unique IDs)
+ * - every draft ID must be a nonempty string
  * - IDs must be unique within the draft
  * - every ID must exist in the catalogue
+ * - every selected section must have recognized seat state ('open', 'full', 'unknown')
+ * - every selected section must have valid weekday and meeting time
+ * - selected sections must have seat certified as 'open' (fails closed on 'full' or 'unknown')
  *
  * @param {unknown} draft
- * @param {Array<{id: string}>} catalogue
+ * @param {unknown} catalogue
  * @returns {{ ok: boolean, reason: string | null }}
  */
 export function validateDraft(draft, catalogue) {
@@ -21,21 +109,60 @@ export function validateDraft(draft, catalogue) {
     return { ok: false, reason: 'draft must be an array' };
   }
 
-  const catalogueIds = new Set(
-    Array.isArray(catalogue) ? catalogue.map((s) => s.id) : []
-  );
+  if (!hasValidCatalogStructure(catalogue)) {
+    return { ok: false, reason: 'malformed-catalog' };
+  }
+
+  const byId = new Map(catalogue.map((s) => [s.id, s]));
 
   const seen = new Set();
   for (const id of draft) {
     if (typeof id !== 'string' || id.trim() === '') {
-      return { ok: false, reason: 'draft IDs must be nonempty strings' };
+      return { ok: false, reason: 'malformed-or-duplicate-ids' };
     }
     if (seen.has(id)) {
       return { ok: false, reason: `duplicate draft ID: ${id}` };
     }
     seen.add(id);
-    if (!catalogueIds.has(id)) {
+    if (!byId.has(id)) {
       return { ok: false, reason: `unknown section ID in draft: ${id}` };
+    }
+  }
+
+  // Validate each chosen section record
+  for (const id of draft) {
+    const item = byId.get(id);
+
+    if (
+      typeof item.course !== 'string' ||
+      !item.course.trim() ||
+      typeof item.component !== 'string' ||
+      !item.component.trim()
+    ) {
+      return { ok: false, reason: 'malformed-section-record' };
+    }
+
+    if (!hasValidSeatState(item)) {
+      return { ok: false, reason: 'malformed-seat-state' };
+    }
+
+    if (!hasValidCounts(item)) {
+      return { ok: false, reason: 'malformed-seat-state' };
+    }
+
+    if (item.enrolled !== undefined && item.capacity !== undefined) {
+      const expected = item.enrolled < item.capacity ? 'open' : 'full';
+      if (item.seat !== expected) {
+        return { ok: false, reason: 'malformed-seat-state' };
+      }
+    }
+
+    if (!hasValidTime(item)) {
+      return { ok: false, reason: 'bad-time-or-day' };
+    }
+
+    if (item.seat !== 'open') {
+      return { ok: false, reason: 'seat-not-certified-open' };
     }
   }
 
@@ -43,12 +170,17 @@ export function validateDraft(draft, catalogue) {
 }
 
 /**
- * Validate that a catalogue array has unique IDs.
+ * Validate that a catalogue array is complete and well-formed.
  *
  * Checks:
  * - catalogue must be an array
- * - every record must be an object with a nonempty string id
- * - IDs must be unique across the catalogue
+ * - every record must be an object with unique, nonempty string id
+ * - required course and component strings
+ * - valid weekday and positive time duration
+ * - recognized seat state ('open', 'full', 'unknown')
+ * - count bounds and consistency with seat state
+ *
+ * Note: sections with seat: 'full' remain completely valid catalogue data.
  *
  * @param {unknown} catalogue
  * @returns {{ ok: boolean, reason: string | null }}
@@ -58,6 +190,7 @@ export function validateCatalogue(catalogue) {
     return { ok: false, reason: 'catalogue must be an array' };
   }
 
+  // Pass 1: Ensure all items are objects with unique nonempty string IDs
   const seen = new Set();
   for (const record of catalogue) {
     if (typeof record !== 'object' || record === null) {
@@ -71,6 +204,11 @@ export function validateCatalogue(catalogue) {
       return { ok: false, reason: `duplicate catalogue ID: ${id}` };
     }
     seen.add(id);
+  }
+
+  // Pass 2: Ensure required fields, valid meeting times, and consistent seat/count data
+  for (const record of catalogue) {
+    const { id } = record;
 
     // Required course field
     if (typeof record.course !== 'string' || record.course.trim() === '') {
@@ -80,6 +218,31 @@ export function validateCatalogue(catalogue) {
     // Required component field
     if (typeof record.component !== 'string' || record.component.trim() === '') {
       return { ok: false, reason: `malformed record ${id}: component must be a nonempty string` };
+    }
+
+    // Meeting time and day validation
+    if (!hasValidTime(record)) {
+      return { ok: false, reason: 'bad-time-or-day' };
+    }
+
+    // Seat state validation
+    if (!hasValidSeatState(record)) {
+      return { ok: false, reason: 'malformed-seat-state' };
+    }
+
+    // Counts validation
+    if (!hasValidCounts(record)) {
+      return { ok: false, reason: 'malformed-counts' };
+    }
+
+    // Seat count consistency
+    if (record.enrolled !== undefined && record.capacity !== undefined) {
+      const expected = record.enrolled < record.capacity ? 'open' : 'full';
+      if (record.seat !== expected) {
+        return { ok: false, reason: 'malformed-seat-state' };
+      }
+    } else if (record.seat !== 'unknown') {
+      return { ok: false, reason: 'malformed-seat-state' };
     }
   }
 
