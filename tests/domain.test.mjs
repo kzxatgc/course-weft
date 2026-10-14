@@ -12,6 +12,7 @@ import {
   MAIN_CATALOG as PRODUCTION_CATALOG,
   catalogForScenario as getCatalogForScenario,
 } from '../src/domain/catalog.mjs';
+import { validateDraft, validateCatalogue } from '../src/domain/validate.mjs';
 
 test('smoke: test harness is discovered and assertions execute cleanly', () => {
   assert.equal(1 + 1, 2);
@@ -75,4 +76,105 @@ test('refusal scenario makes copy without shared mutation', () => {
   refusalLabB.seat = 'mutated';
   assert.equal(getCatalogForScenario('main').find((s) => s.id === 'BIO-214L-B').seat, 'open');
   assert.equal(PRODUCTION_CATALOG.find((s) => s.id === 'BIO-214L-B').seat, 'open');
+});
+
+// --- Validate IDs and catalogue records ---
+
+test('validateDraft accepts a valid empty draft', () => {
+  const result = validateDraft([], PRODUCTION_CATALOG);
+  assert.equal(result.ok, true);
+  assert.equal(result.reason, null);
+});
+
+test('validateDraft accepts the initial draft against production catalogue', () => {
+  const result = validateDraft([...CATALOG_INITIAL_DRAFT], PRODUCTION_CATALOG);
+  assert.equal(result.ok, true);
+  assert.equal(result.reason, null);
+});
+
+test('validateDraft rejects non-array draft', () => {
+  assert.equal(validateDraft(null, PRODUCTION_CATALOG).ok, false);
+  assert.equal(validateDraft('CHEM-A', PRODUCTION_CATALOG).ok, false);
+  assert.equal(validateDraft(undefined, PRODUCTION_CATALOG).ok, false);
+  assert.equal(validateDraft(42, PRODUCTION_CATALOG).ok, false);
+});
+
+test('validateDraft rejects nonstring IDs', () => {
+  const result = validateDraft([42], PRODUCTION_CATALOG);
+  assert.equal(result.ok, false);
+  assert.ok(result.reason);
+});
+
+test('validateDraft rejects empty-string IDs', () => {
+  const result = validateDraft([''], PRODUCTION_CATALOG);
+  assert.equal(result.ok, false);
+  assert.ok(result.reason);
+});
+
+test('validateDraft rejects whitespace-only IDs', () => {
+  const result = validateDraft(['   '], PRODUCTION_CATALOG);
+  assert.equal(result.ok, false);
+  assert.ok(result.reason);
+});
+
+test('validateDraft rejects duplicate IDs in draft', () => {
+  const result = validateDraft(['CHEM-A', 'CHEM-A'], PRODUCTION_CATALOG);
+  assert.equal(result.ok, false);
+  assert.match(result.reason, /duplicate/i);
+});
+
+test('validateDraft rejects ID not in catalogue', () => {
+  const result = validateDraft(['CHEM-A', 'UNKNOWN-999'], PRODUCTION_CATALOG);
+  assert.equal(result.ok, false);
+  assert.match(result.reason, /unknown/i);
+});
+
+test('validateCatalogue accepts a well-formed catalogue', () => {
+  const result = validateCatalogue(PRODUCTION_CATALOG);
+  assert.equal(result.ok, true);
+  assert.equal(result.reason, null);
+});
+
+test('validateCatalogue rejects non-array input', () => {
+  assert.equal(validateCatalogue(null).ok, false);
+  assert.equal(validateCatalogue({}).ok, false);
+  assert.equal(validateCatalogue('string').ok, false);
+});
+
+test('validateCatalogue rejects catalogue with duplicate IDs', () => {
+  const dupCat = [
+    { id: 'CHEM-A', course: 'CHEM', component: 'lecture' },
+    { id: 'CHEM-A', course: 'CHEM', component: 'lecture' },
+  ];
+  const result = validateCatalogue(dupCat);
+  assert.equal(result.ok, false);
+  assert.match(result.reason, /duplicate/i);
+});
+
+test('validateCatalogue rejects record with nonstring/empty id', () => {
+  const bad1 = [{ id: 42, course: 'CHEM', component: 'lecture' }];
+  assert.equal(validateCatalogue(bad1).ok, false);
+
+  const bad2 = [{ id: '', course: 'CHEM', component: 'lecture' }];
+  assert.equal(validateCatalogue(bad2).ok, false);
+});
+
+test('validateCatalogue rejects record missing required course field', () => {
+  const bad = [{ id: 'CHEM-A', component: 'lecture' }];
+  const result = validateCatalogue(bad);
+  assert.equal(result.ok, false);
+  assert.match(result.reason, /course/i);
+});
+
+test('validateCatalogue rejects record missing required component field', () => {
+  const bad = [{ id: 'CHEM-A', course: 'CHEM' }];
+  const result = validateCatalogue(bad);
+  assert.equal(result.ok, false);
+  assert.match(result.reason, /component/i);
+});
+
+test('validateCatalogue rejects non-object record', () => {
+  const bad = ['not-an-object'];
+  const result = validateCatalogue(bad);
+  assert.equal(result.ok, false);
 });
