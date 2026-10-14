@@ -16,6 +16,16 @@ export const VALID_WEEKDAYS = Object.freeze([
 export const KNOWN_SEAT_STATES = Object.freeze(['open', 'full', 'unknown']);
 
 /**
+ * Authoritative rule for the linked lecture in this demo.
+ * Kept separate from catalogue records so removing or corrupting catalogue metadata fails closed.
+ */
+export const REQUIRED_LINK_RULES = Object.freeze({
+  'BIO-214': Object.freeze([
+    Object.freeze({ component: 'lab', linkedGroup: 'BIO-214-labs', min: 1, max: 1 }),
+  ]),
+});
+
+/**
  * Check if a section meeting has a valid weekday and positive time duration.
  *
  * @param {any} item
@@ -110,6 +120,56 @@ export function overlaps(a, b) {
 }
 
 /**
+ * Validate that linked course components satisfy min/max constraints and are not orphaned.
+ *
+ * @param {Array<any>} chosen
+ * @param {Map<string, any>} byId
+ * @returns {{ ok: boolean, reason?: string | null }}
+ */
+export function validateLinks(chosen, byId) {
+  for (const parent of chosen) {
+    for (const requirement of parent.requires ?? []) {
+      if (
+        !requirement ||
+        typeof requirement.component !== 'string' ||
+        typeof requirement.linkedGroup !== 'string' ||
+        !Number.isInteger(requirement.min) ||
+        requirement.min < 0 ||
+        !Number.isInteger(requirement.max) ||
+        requirement.max < requirement.min
+      ) {
+        return { ok: false, reason: 'malformed-link-requirement' };
+      }
+      const matching = chosen.filter(
+        (candidate) =>
+          candidate.component === requirement.component &&
+          candidate.linkedGroup === requirement.linkedGroup &&
+          candidate.requiredBy === parent.id
+      );
+      if (matching.length < requirement.min || matching.length > requirement.max) {
+        return { ok: false, reason: 'linked-group-invalid' };
+      }
+    }
+  }
+
+  for (const child of chosen) {
+    if (!child.linkedGroup) continue;
+    const parent = byId.get(child.requiredBy);
+    const parentIsSelected = chosen.some((candidate) => candidate.id === child.requiredBy);
+    const hasMatchingRequirement = parent?.requires?.some(
+      (requirement) =>
+        requirement.component === child.component &&
+        requirement.linkedGroup === child.linkedGroup
+    );
+    if (!parentIsSelected || !hasMatchingRequirement) {
+      return { ok: false, reason: 'orphan-linked-section' };
+    }
+  }
+
+  return { ok: true, reason: null };
+}
+
+/**
  * Validate a draft array of section IDs against a catalogue.
  *
  * Checks:
@@ -190,6 +250,36 @@ export function validateDraft(draft, catalogue) {
       return { ok: false, reason: 'seat-not-certified-open' };
     }
 
+    // Verify authoritative link requirements if this is a known parent section
+    const expectedRequirements = REQUIRED_LINK_RULES[item.id];
+    if (expectedRequirements) {
+      const actualRequirements = item.requires;
+      const normalize = (list) =>
+        Array.isArray(list)
+          ? list
+              .map((r) => ({
+                component: r?.component,
+                linkedGroup: r?.linkedGroup,
+                min: r?.min,
+                max: r?.max,
+              }))
+              .sort(
+                (a, b) =>
+                  String(a.component).localeCompare(String(b.component)) ||
+                  String(a.linkedGroup).localeCompare(String(b.linkedGroup))
+              )
+          : null;
+      if (
+        JSON.stringify(normalize(actualRequirements)) !==
+        JSON.stringify(normalize(expectedRequirements))
+      ) {
+        return { ok: false, reason: 'malformed-link-requirement' };
+      }
+    }
+    if (item.requires !== undefined && !Array.isArray(item.requires)) {
+      return { ok: false, reason: 'malformed-link-requirement' };
+    }
+
     chosen.push(item);
   }
 
@@ -210,6 +300,12 @@ export function validateDraft(draft, catalogue) {
         return { ok: false, reason: 'time-conflict' };
       }
     }
+  }
+
+  // Enforce linked course requirements
+  const linkResult = validateLinks(chosen, byId);
+  if (!linkResult.ok) {
+    return linkResult;
   }
 
   return { ok: true, reason: null };

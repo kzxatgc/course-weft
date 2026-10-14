@@ -12,7 +12,13 @@ import {
   MAIN_CATALOG as PRODUCTION_CATALOG,
   catalogForScenario as getCatalogForScenario,
 } from '../src/domain/catalog.mjs';
-import { validateDraft, validateCatalogue, overlaps } from '../src/domain/validate.mjs';
+import {
+  validateDraft,
+  validateCatalogue,
+  overlaps,
+  REQUIRED_LINK_RULES,
+  validateLinks,
+} from '../src/domain/validate.mjs';
 
 test('smoke: test harness is discovered and assertions execute cleanly', () => {
   assert.equal(1 + 1, 2);
@@ -414,5 +420,96 @@ test('starting draft is valid, conflict-free, and contains no duplicate componen
   assert.equal(result.ok, true);
   assert.equal(result.reason, null);
 });
+
+// --- Linked lab requirement enforcement ---
+
+test('REQUIRED_LINK_RULES defines authoritative exact-one-lab rule for BIO-214', () => {
+  assert.ok(REQUIRED_LINK_RULES['BIO-214']);
+  assert.deepEqual(REQUIRED_LINK_RULES['BIO-214'], [
+    { component: 'lab', linkedGroup: 'BIO-214-labs', min: 1, max: 1 },
+  ]);
+});
+
+test('validateDraft accepts valid draft with BIO-214 and exactly one matching lab', () => {
+  // Valid with Lab B (CHEM-A + STAT-B + BIO-214 + BIO-214L-B)
+  const validWithLabB = validateDraft(
+    ['CHEM-A', 'STAT-B', 'BIO-214', 'BIO-214L-B'],
+    PRODUCTION_CATALOG
+  );
+  assert.equal(validWithLabB.ok, true);
+  assert.equal(validWithLabB.reason, null);
+
+  // Valid with Lab A (CHEM-B on Thu avoids Tue clash with Lab A; STAT-B on Thu 780 avoids Mon BIO)
+  const validWithLabA = validateDraft(
+    ['CHEM-B', 'BIO-214', 'BIO-214L-A'],
+    PRODUCTION_CATALOG
+  );
+  assert.equal(validWithLabA.ok, true);
+  assert.equal(validWithLabA.reason, null);
+});
+
+test('validateDraft rejects draft with BIO-214 missing its required linked lab', () => {
+  const missingLab = validateDraft(
+    ['CHEM-A', 'STAT-B', 'BIO-214'],
+    PRODUCTION_CATALOG
+  );
+  assert.equal(missingLab.ok, false);
+  assert.equal(missingLab.reason, 'linked-group-invalid');
+});
+
+test('validateDraft rejects draft with extra linked labs exceeding max', () => {
+  const twoLabs = validateDraft(
+    ['CHEM-B', 'BIO-214', 'BIO-214L-A', 'BIO-214L-B'],
+    PRODUCTION_CATALOG
+  );
+  assert.equal(twoLabs.ok, false);
+  // Rejection reason is either linked-group-invalid or duplicate-course-component
+  assert.ok(twoLabs.reason === 'linked-group-invalid' || twoLabs.reason === 'duplicate-course-component');
+});
+
+test('validateDraft rejects orphan linked lab selected without its parent lecture', () => {
+  const orphan = validateDraft(['CHEM-A', 'BIO-214L-B'], PRODUCTION_CATALOG);
+  assert.equal(orphan.ok, false);
+  assert.equal(orphan.reason, 'orphan-linked-section');
+});
+
+test('validateDraft rejects linked lab with wrong linkedGroup', () => {
+  const wrongGroupCat = PRODUCTION_CATALOG.map((item) =>
+    item.id === 'BIO-214L-B' ? { ...item, linkedGroup: 'WRONG-GROUP' } : item
+  );
+  const result = validateDraft(
+    ['CHEM-A', 'STAT-B', 'BIO-214', 'BIO-214L-B'],
+    wrongGroupCat
+  );
+  assert.equal(result.ok, false);
+  assert.ok(result.reason === 'orphan-linked-section' || result.reason === 'linked-group-invalid');
+});
+
+test('validateDraft fails closed when required-link metadata is removed or corrupt', () => {
+  // Missing requires array on parent
+  const missingRequires = PRODUCTION_CATALOG.map((item) =>
+    item.id === 'BIO-214' ? { ...item, requires: undefined } : item
+  );
+  const res1 = validateDraft(
+    ['CHEM-A', 'STAT-B', 'BIO-214', 'BIO-214L-B'],
+    missingRequires
+  );
+  assert.equal(res1.ok, false);
+  assert.equal(res1.reason, 'malformed-link-requirement');
+
+  // Corrupted min/max
+  const invalidCount = PRODUCTION_CATALOG.map((item) =>
+    item.id === 'BIO-214'
+      ? { ...item, requires: [{ component: 'lab', linkedGroup: 'BIO-214-labs', min: 1, max: 0 }] }
+      : item
+  );
+  const res2 = validateDraft(
+    ['CHEM-A', 'STAT-B', 'BIO-214', 'BIO-214L-B'],
+    invalidCount
+  );
+  assert.equal(res2.ok, false);
+  assert.equal(res2.reason, 'malformed-link-requirement');
+});
+
 
 
