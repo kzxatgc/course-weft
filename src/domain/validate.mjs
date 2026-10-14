@@ -88,6 +88,28 @@ function hasValidCatalogStructure(catalogue) {
 }
 
 /**
+ * Test whether two section meetings overlap on the same day.
+ * Uses half-open intervals [start, end) so adjacent meetings (e.g. 600..660 and 660..720) do not clash.
+ *
+ * @param {any} a
+ * @param {any} b
+ * @returns {boolean}
+ */
+export function overlaps(a, b) {
+  if (!a || !b || typeof a !== 'object' || typeof b !== 'object') return false;
+  if (typeof a.day !== 'string' || typeof b.day !== 'string') return false;
+  if (
+    !Number.isInteger(a.start) ||
+    !Number.isInteger(a.end) ||
+    !Number.isInteger(b.start) ||
+    !Number.isInteger(b.end)
+  ) {
+    return false;
+  }
+  return a.day === b.day && a.start < b.end && b.start < a.end;
+}
+
+/**
  * Validate a draft array of section IDs against a catalogue.
  *
  * Checks:
@@ -99,6 +121,8 @@ function hasValidCatalogStructure(catalogue) {
  * - every selected section must have recognized seat state ('open', 'full', 'unknown')
  * - every selected section must have valid weekday and meeting time
  * - selected sections must have seat certified as 'open' (fails closed on 'full' or 'unknown')
+ * - sections cannot share the same course and component (even with distinct IDs)
+ * - sections cannot have conflicting meeting times on the same day
  *
  * @param {unknown} draft
  * @param {unknown} catalogue
@@ -129,6 +153,7 @@ export function validateDraft(draft, catalogue) {
     }
   }
 
+  const chosen = [];
   // Validate each chosen section record
   for (const id of draft) {
     const item = byId.get(id);
@@ -163,6 +188,27 @@ export function validateDraft(draft, catalogue) {
 
     if (item.seat !== 'open') {
       return { ok: false, reason: 'seat-not-certified-open' };
+    }
+
+    chosen.push(item);
+  }
+
+  // Disallow duplicate course and component
+  const courseComponents = new Set();
+  for (const item of chosen) {
+    const key = `${item.course}|${item.component}`;
+    if (courseComponents.has(key)) {
+      return { ok: false, reason: 'duplicate-course-component' };
+    }
+    courseComponents.add(key);
+  }
+
+  // Pairwise meeting collision check
+  for (let i = 0; i < chosen.length; i += 1) {
+    for (let j = i + 1; j < chosen.length; j += 1) {
+      if (overlaps(chosen[i], chosen[j])) {
+        return { ok: false, reason: 'time-conflict' };
+      }
     }
   }
 

@@ -12,7 +12,7 @@ import {
   MAIN_CATALOG as PRODUCTION_CATALOG,
   catalogForScenario as getCatalogForScenario,
 } from '../src/domain/catalog.mjs';
-import { validateDraft, validateCatalogue } from '../src/domain/validate.mjs';
+import { validateDraft, validateCatalogue, overlaps } from '../src/domain/validate.mjs';
 
 test('smoke: test harness is discovered and assertions execute cleanly', () => {
   assert.equal(1 + 1, 2);
@@ -360,4 +360,59 @@ test('validateDraft and validateCatalogue never throw exceptions on malformed in
     assert.doesNotThrow(() => validateCatalogue(input));
   }
 });
+
+// --- Timetable conflicts and duplicate components ---
+
+test('overlaps helper correctly identifies same-day interval conflicts and allows adjacent intervals', () => {
+  // Same day adjacent: end of first equals start of second -> allowed (false)
+  assert.equal(overlaps({ day: 'Mon', start: 600, end: 660 }, { day: 'Mon', start: 660, end: 720 }), false);
+  assert.equal(overlaps({ day: 'Mon', start: 660, end: 720 }, { day: 'Mon', start: 600, end: 660 }), false);
+
+  // Same day overlap: one extra minute causes clash -> rejected (true)
+  assert.equal(overlaps({ day: 'Mon', start: 600, end: 661 }, { day: 'Mon', start: 660, end: 720 }), true);
+  assert.equal(overlaps({ day: 'Mon', start: 660, end: 720 }, { day: 'Mon', start: 600, end: 661 }), true);
+
+  // Different days: identical times do not conflict
+  assert.equal(overlaps({ day: 'Mon', start: 600, end: 660 }, { day: 'Tue', start: 600, end: 660 }), false);
+
+  // Contained interval
+  assert.equal(overlaps({ day: 'Wed', start: 500, end: 800 }, { day: 'Wed', start: 600, end: 700 }), true);
+
+  // Non-object or missing times return false safely
+  assert.equal(overlaps(null, { day: 'Mon', start: 600, end: 660 }), false);
+  assert.equal(overlaps({ day: 'Mon', start: 'bad', end: 660 }, { day: 'Mon', start: 600, end: 660 }), false);
+});
+
+test('validateDraft rejects draft with timetable clash (STAT-A and BIO-214 conflict on Monday)', () => {
+  // STAT-A: Mon 780..840; BIO-214: Mon 780..840
+  const result = validateDraft(['STAT-A', 'BIO-214'], PRODUCTION_CATALOG);
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, 'time-conflict');
+});
+
+test('validateDraft rejects draft with overlapping lecture and lab (CHEM-A and BIO-214L-A on Tuesday)', () => {
+  // CHEM-A: Tue 600..660; BIO-214L-A: Tue 600..720
+  const result = validateDraft(['CHEM-A', 'BIO-214', 'BIO-214L-A'], PRODUCTION_CATALOG);
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, 'time-conflict');
+});
+
+test('validateDraft rejects duplicate course/component even with distinct section IDs', () => {
+  // CHEM-A (CHEM lecture) and CHEM-B (CHEM lecture)
+  const chemResult = validateDraft(['CHEM-A', 'CHEM-B'], PRODUCTION_CATALOG);
+  assert.equal(chemResult.ok, false);
+  assert.equal(chemResult.reason, 'duplicate-course-component');
+
+  // STAT-A (STAT lecture) and STAT-B (STAT lecture)
+  const statResult = validateDraft(['STAT-A', 'STAT-B'], PRODUCTION_CATALOG);
+  assert.equal(statResult.ok, false);
+  assert.equal(statResult.reason, 'duplicate-course-component');
+});
+
+test('starting draft is valid, conflict-free, and contains no duplicate components', () => {
+  const result = validateDraft([...CATALOG_INITIAL_DRAFT], PRODUCTION_CATALOG);
+  assert.equal(result.ok, true);
+  assert.equal(result.reason, null);
+});
+
 
