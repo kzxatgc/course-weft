@@ -398,3 +398,263 @@ describe('snapshot and undo', () => {
     assert.equal(canUndo(restored), false);
   });
 });
+
+// ---------------------------------------------------------------------------
+// 9. ADD_SECTION (Task 20)
+// ---------------------------------------------------------------------------
+
+describe('ADD_SECTION', () => {
+  it('adds a valid section to draft after removal of other', () => {
+    // Start with CHEM-A and STAT-A. Remove STAT-A, then add STAT-B.
+    const s1 = reduce(initialState(), { type: ACTION.REMOVE_SECTION, payload: 'STAT-A' });
+    const s2 = reduce(s1, { type: ACTION.ADD_SECTION, payload: 'STAT-B' });
+    assert.deepEqual(s2.draft, ['CHEM-A', 'STAT-B']);
+    assert.equal(s2.notice.kind, 'success');
+  });
+
+  it('rejects adding an already-selected section without mutating draft', () => {
+    const s = initialState();
+    const next = reduce(s, { type: ACTION.ADD_SECTION, payload: 'CHEM-A' });
+    assert.deepEqual(next.draft, s.draft);
+    assert.equal(next.notice.kind, 'info');
+    assert.match(next.notice.message, /already selected/i);
+  });
+
+  it('rejects adding an unknown section ID without mutating draft', () => {
+    const s = initialState();
+    const next = reduce(s, { type: ACTION.ADD_SECTION, payload: 'NONEXISTENT-999' });
+    assert.deepEqual(next.draft, s.draft);
+    assert.equal(next.notice.kind, 'error');
+  });
+
+  it('rejects adding to wrong day without mutating draft', () => {
+    const s = initialState();
+    // CHEM-B meets on Thu; try dropping it on Mon
+    const next = reduce(s, {
+      type: ACTION.ADD_SECTION,
+      payload: { sectionId: 'CHEM-B', dropDay: 'Mon' },
+    });
+    assert.deepEqual(next.draft, s.draft);
+    assert.equal(next.notice.kind, 'error');
+    assert.match(next.notice.message, /meets on Thu/i);
+  });
+
+  it('standalone lab gets explanatory refusal without mutating draft', () => {
+    const s = initialState();
+    // Try adding lab BIO-214L-A while lecture BIO-214 is not in draft
+    const next = reduce(s, { type: ACTION.ADD_SECTION, payload: 'BIO-214L-A' });
+    assert.deepEqual(next.draft, s.draft);
+    assert.equal(next.notice.kind, 'error');
+    assert.match(next.notice.title, /choose the lecture first/i);
+    assert.match(next.notice.message, /BIO-214/i);
+  });
+
+  it('rejects duplicate course and suggests switch without mutating draft', () => {
+    const s = initialState();
+    // STAT-A is already in draft; try adding STAT-B via ADD_SECTION
+    const next = reduce(s, { type: ACTION.ADD_SECTION, payload: 'STAT-B' });
+    assert.deepEqual(next.draft, s.draft);
+    assert.equal(next.notice.kind, 'error');
+    assert.match(next.notice.message, /switch to its alternate/i);
+  });
+
+  it('rejects time conflict without mutating draft and records request', () => {
+    const s = initialState();
+    // BIO-214 meets Mon 780-840, clashing with STAT-A (Mon 780-840)
+    const next = reduce(s, { type: ACTION.ADD_SECTION, payload: 'BIO-214' });
+    assert.deepEqual(next.draft, s.draft);
+    assert.equal(next.request, 'BIO-214');
+    assert.equal(next.notice.kind, 'error');
+    assert.match(next.notice.title, /clashes with your timetable/i);
+  });
+
+  it('rejects missing linked lab without mutating draft and records request', () => {
+    // Draft without clash: remove STAT-A so BIO-214 has no time overlap
+    const s1 = reduce(initialState(), { type: ACTION.REMOVE_SECTION, payload: 'STAT-A' });
+    // But BIO-214 requires a linked lab from BIO-214-labs
+    const s2 = reduce(s1, { type: ACTION.ADD_SECTION, payload: 'BIO-214' });
+    assert.deepEqual(s2.draft, ['CHEM-A']);
+    assert.equal(s2.request, 'BIO-214');
+    assert.equal(s2.notice.kind, 'error');
+    assert.match(nextNoticeTitleOrMessage(s2), /lab/i);
+  });
+});
+
+function nextNoticeTitleOrMessage(state) {
+  return `${state.notice?.title || ''} ${state.notice?.message || ''}`;
+}
+
+// ---------------------------------------------------------------------------
+// 10. SWITCH_SECTION (Task 20)
+// ---------------------------------------------------------------------------
+
+describe('SWITCH_SECTION', () => {
+  it('switches to declared alternate after whole-draft validation', () => {
+    const s = initialState();
+    // STAT-A has declared alternate STAT-B; switching produces valid draft ['CHEM-A', 'STAT-B']
+    const next = reduce(s, {
+      type: ACTION.SWITCH_SECTION,
+      payload: { fromId: 'STAT-A', toId: 'STAT-B' },
+    });
+    assert.deepEqual(next.draft, ['CHEM-A', 'STAT-B']);
+    assert.equal(next.notice.kind, 'success');
+  });
+
+  it('infers fromId when only toId is provided if alternate is declared', () => {
+    const s = initialState();
+    const next = reduce(s, {
+      type: ACTION.SWITCH_SECTION,
+      payload: 'STAT-B',
+    });
+    assert.deepEqual(next.draft, ['CHEM-A', 'STAT-B']);
+    assert.equal(next.notice.kind, 'success');
+  });
+
+  it('refuses switch to a non-declared alternate without mutating draft', () => {
+    const s = initialState();
+    // STAT-A declared alternate is STAT-B, NOT CHEM-B
+    const next = reduce(s, {
+      type: ACTION.SWITCH_SECTION,
+      payload: { fromId: 'STAT-A', toId: 'CHEM-B' },
+    });
+    assert.deepEqual(next.draft, s.draft);
+    assert.equal(next.notice.kind, 'error');
+    assert.match(next.notice.title, /not a declared alternate/i);
+  });
+
+  it('refuses switch if course is not currently in draft', () => {
+    const s = initialState();
+    const next = reduce(s, {
+      type: ACTION.SWITCH_SECTION,
+      payload: { fromId: 'BIO-214', toId: 'BIO-214' },
+    });
+    assert.deepEqual(next.draft, s.draft);
+    assert.equal(next.notice.kind, 'error');
+  });
+
+  it('refuses switch if toId section is not in available courses', () => {
+    const s = initialState();
+    const next = reduce(s, {
+      type: ACTION.SWITCH_SECTION,
+      payload: { fromId: 'STAT-A', toId: 'NONEXISTENT' },
+    });
+    assert.deepEqual(next.draft, s.draft);
+    assert.equal(next.notice.kind, 'error');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 11. REMOVE_SECTION (Task 20)
+// ---------------------------------------------------------------------------
+
+describe('REMOVE_SECTION', () => {
+  it('removes section from draft', () => {
+    const s = initialState();
+    const next = reduce(s, { type: ACTION.REMOVE_SECTION, payload: 'STAT-A' });
+    assert.deepEqual(next.draft, ['CHEM-A']);
+    assert.equal(next.notice.kind, 'success');
+  });
+
+  it('removing non-draft section returns state unchanged', () => {
+    const s = initialState();
+    const next = reduce(s, { type: ACTION.REMOVE_SECTION, payload: 'BIO-214' });
+    assert.strictEqual(next, s);
+  });
+
+  it('removing lecture cascades removal of child lab', () => {
+    // Manually create a state with a linked lecture and lab in draft
+    const s = {
+      ...initialState(),
+      draft: Object.freeze(['CHEM-A', 'BIO-214', 'BIO-214L-A']),
+    };
+    const next = reduce(s, { type: ACTION.REMOVE_SECTION, payload: 'BIO-214' });
+    assert.deepEqual(next.draft, ['CHEM-A']);
+  });
+
+  it('removing child lab cascades removal of parent lecture', () => {
+    const s = {
+      ...initialState(),
+      draft: Object.freeze(['CHEM-A', 'BIO-214', 'BIO-214L-A']),
+    };
+    const next = reduce(s, { type: ACTION.REMOVE_SECTION, payload: 'BIO-214L-A' });
+    assert.deepEqual(next.draft, ['CHEM-A']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 12. RESET_DRAFT (Task 20)
+// ---------------------------------------------------------------------------
+
+describe('RESET_DRAFT', () => {
+  it('restores draft to INITIAL_DRAFT and clears transient state', () => {
+    // Perform mutations: switch to STAT-B, set search, set candidate
+    const mutated = dispatch([
+      { type: ACTION.SWITCH_SECTION, payload: 'STAT-B' },
+      { type: ACTION.SET_SEARCH, payload: 'bio' },
+      { type: ACTION.SET_CANDIDATE, payload: { ids: ['test'] } },
+    ]);
+    assert.deepEqual(mutated.draft, ['CHEM-A', 'STAT-B']);
+    assert.equal(mutated.search, 'bio');
+
+    const reset = reduce(mutated, { type: ACTION.RESET_DRAFT });
+    assert.deepEqual(reset.draft, [...INITIAL_DRAFT]);
+    assert.equal(reset.candidate, null);
+    assert.equal(reset.request, null);
+    assert.equal(reset.snapshot, null);
+    assert.equal(reset.search, '');
+    assert.equal(reset.notice.kind, 'info');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 13. Case-insensitive search and card preservation on failure (Task 20)
+// ---------------------------------------------------------------------------
+
+describe('case-insensitive search and card preservation on refusal', () => {
+  it('case-insensitive search matches uppercase, lowercase, and mixed case', () => {
+    const sLower = reduce(initialState(), { type: ACTION.SET_SEARCH, payload: 'chem' });
+    const sUpper = reduce(initialState(), { type: ACTION.SET_SEARCH, payload: 'CHEM' });
+    const sMixed = reduce(initialState(), { type: ACTION.SET_SEARCH, payload: 'ChEm' });
+
+    const lowerIds = filteredAvailableCourses(sLower).map((c) => c.id);
+    const upperIds = filteredAvailableCourses(sUpper).map((c) => c.id);
+    const mixedIds = filteredAvailableCourses(sMixed).map((c) => c.id);
+
+    assert.deepEqual(lowerIds, ['CHEM-A', 'CHEM-B']);
+    assert.deepEqual(upperIds, ['CHEM-A', 'CHEM-B']);
+    assert.deepEqual(mixedIds, ['CHEM-A', 'CHEM-B']);
+  });
+
+  it('matches sectionName in search filter', () => {
+    const s = reduce(initialState(), { type: ACTION.SET_SEARCH, payload: 'Section B' });
+    const ids = filteredAvailableCourses(s).map((c) => c.id);
+    assert.ok(ids.includes('CHEM-B'));
+    assert.ok(ids.includes('STAT-B'));
+  });
+
+  it('conflict/wrong-day/missing-lab rejection never hides cards from available courses', () => {
+    const initialAvailableCount = filteredAvailableCourses(initialState()).length;
+
+    // 1. Conflict rejection
+    const afterConflict = reduce(initialState(), { type: ACTION.ADD_SECTION, payload: 'BIO-214' });
+    assert.equal(filteredAvailableCourses(afterConflict).length, initialAvailableCount);
+    assert.ok(filteredAvailableCourses(afterConflict).some((c) => c.id === 'BIO-214'));
+
+    // 2. Wrong-day rejection
+    const afterWrongDay = reduce(initialState(), {
+      type: ACTION.ADD_SECTION,
+      payload: { sectionId: 'CHEM-B', dropDay: 'Mon' },
+    });
+    assert.equal(filteredAvailableCourses(afterWrongDay).length, initialAvailableCount);
+    assert.ok(filteredAvailableCourses(afterWrongDay).some((c) => c.id === 'CHEM-B'));
+
+    // 3. Standalone lab rejection
+    const afterStandaloneLab = reduce(initialState(), {
+      type: ACTION.ADD_SECTION,
+      payload: 'BIO-214L-A',
+    });
+    assert.equal(filteredAvailableCourses(afterStandaloneLab).length, initialAvailableCount);
+    assert.ok(filteredAvailableCourses(afterStandaloneLab).some((c) => c.id === 'BIO-214L-A'));
+  });
+});
+
