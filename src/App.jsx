@@ -1,4 +1,5 @@
 import React from 'react';
+import EarlySchedulePreview from './EarlySchedulePreview.jsx';
 
 export default function App() {
   return (
@@ -51,12 +52,7 @@ export default function App() {
         </section>
 
         {/* Workbench Content Area */}
-        <section
-          className="min-h-64 flex items-center justify-center border border-dashed border-slate-300 rounded-2xl bg-white/60 text-slate-500 text-sm"
-          aria-label="Registration timetable and available courses"
-        >
-          <p>Registration workbench initializing…</p>
-        </section>
+        <EarlySchedulePreview />
       </main>
 
       {/* Footer */}
