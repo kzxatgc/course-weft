@@ -19,6 +19,7 @@ import {
   REQUIRED_LINK_RULES,
   validateLinks,
 } from '../src/domain/validate.mjs';
+import { formatTime, formatTimeRange } from '../src/domain/time.mjs';
 
 test('smoke: test harness is discovered and assertions execute cleanly', () => {
   assert.equal(1 + 1, 2);
@@ -511,5 +512,51 @@ test('validateDraft fails closed when required-link metadata is removed or corru
   assert.equal(res2.reason, 'malformed-link-requirement');
 });
 
+// --- Time formatting (Task 12) ---
 
+test('formatTime formats midnight (0 minutes) as 12:00 AM', () => {
+  assert.equal(formatTime(0), '12:00 AM');
+});
+
+test('formatTime formats noon (720 minutes) as 12:00 PM', () => {
+  assert.equal(formatTime(720), '12:00 PM');
+});
+
+test('formatTime formats 721 minutes as 12:01 PM', () => {
+  assert.equal(formatTime(721), '12:01 PM');
+});
+
+test('formatTime formats 600 minutes as 10:00 AM', () => {
+  assert.equal(formatTime(600), '10:00 AM');
+});
+
+test('formatTime formats 780 minutes as 1:00 PM', () => {
+  assert.equal(formatTime(780), '1:00 PM');
+});
+
+test('formatTime formats 840 minutes as 2:00 PM', () => {
+  assert.equal(formatTime(840), '2:00 PM');
+});
+
+test('formatTime formats 1440 (24:00 midnight endpoint) as 12:00 AM', () => {
+  assert.equal(formatTime(1440), '12:00 AM');
+});
+
+test('formatTime returns "Unknown time" for invalid inputs', () => {
+  assert.equal(formatTime(-1), 'Unknown time');
+  assert.equal(formatTime(1441), 'Unknown time');
+  assert.equal(formatTime(1.5), 'Unknown time');
+  assert.equal(formatTime('600'), 'Unknown time');
+  assert.equal(formatTime(null), 'Unknown time');
+  assert.equal(formatTime(undefined), 'Unknown time');
+  assert.equal(formatTime(NaN), 'Unknown time');
+});
+
+test('formatTimeRange formats BIO-214L-B section as "Wed 2:00 PM–4:00 PM"', () => {
+  const cat = getCatalogForScenario('main');
+  const labB = cat.find((s) => s.id === 'BIO-214L-B');
+  assert.ok(labB, 'BIO-214L-B must exist in main catalogue');
+  // BIO-214L-B: Wed, start=840, end=960
+  assert.equal(formatTimeRange(labB), 'Wed 2:00 PM–4:00 PM');
+});
 
