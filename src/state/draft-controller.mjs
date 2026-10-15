@@ -21,6 +21,7 @@
 
 import { INITIAL_DRAFT, REQUESTED_SECTION_ID, catalogForScenario } from '../domain/available-courses.mjs';
 import { validateDraft, overlaps } from '../domain/validate.mjs';
+import { enumerateRepairs, isCurrentCandidate } from '../domain/repairs.mjs';
 
 // ---------------------------------------------------------------------------
 // Initial state factory
@@ -42,6 +43,7 @@ export function initialState() {
     candidate: null,
     snapshot: null,
     search: '',
+    isApplied: false,
   });
 }
 
@@ -64,6 +66,14 @@ export const ACTION = Object.freeze({
   SWITCH_SECTION: 'SWITCH_SECTION',
   REMOVE_SECTION: 'REMOVE_SECTION',
   RESET_DRAFT: 'RESET_DRAFT',
+  SUGGEST_REPAIR: 'SUGGEST_REPAIR',
+  SHOW_SUGGESTION: 'SHOW_SUGGESTION',
+  APPLY_REPAIR: 'APPLY_REPAIR',
+  APPLY_SUGGESTION: 'APPLY_SUGGESTION',
+  UNDO_REPAIR: 'UNDO_REPAIR',
+  UNDO_SUGGESTION: 'UNDO_SUGGESTION',
+  DISMISS_REPAIR: 'DISMISS_REPAIR',
+  DISMISS_SUGGESTION: 'DISMISS_SUGGESTION',
 });
 
 // ---------------------------------------------------------------------------
@@ -95,6 +105,7 @@ export function reduce(state, action) {
         candidate: null,
         snapshot: null,
         search: '',
+        isApplied: false,
       });
     }
 
@@ -157,6 +168,7 @@ export function reduce(state, action) {
         availableCourses: Object.freeze(catalogForScenario(scenario)),
         candidate: candidate ? Object.freeze({ ...candidate }) : null,
         snapshot: null,
+        isApplied: false,
         notice: null,
       });
     }
@@ -287,8 +299,6 @@ export function reduce(state, action) {
       return Object.freeze({
         ...state,
         draft: Object.freeze(nextDraft),
-        candidate: null,
-        request: null,
         notice: Object.freeze({
           kind: 'success',
           title: 'Class added',
@@ -394,8 +404,6 @@ export function reduce(state, action) {
       return Object.freeze({
         ...state,
         draft: Object.freeze(nextDraft),
-        candidate: null,
-        request: null,
         notice: Object.freeze({
           kind: 'success',
           title: 'Section changed',
@@ -432,8 +440,6 @@ export function reduce(state, action) {
       return Object.freeze({
         ...state,
         draft: Object.freeze(nextDraft),
-        candidate: null,
-        request: null,
         notice: Object.freeze({
           kind: 'success',
           title: 'Class removed',
@@ -453,10 +459,156 @@ export function reduce(state, action) {
         request: null,
         snapshot: null,
         search: '',
+        isApplied: false,
         notice: Object.freeze({
           kind: 'info',
           title: 'Timetable reset',
           message: 'Timetable reset to the starting selections.',
+        }),
+      });
+    }
+
+    // Suggest repair: dynamically generate using domain engine; handle no-repair scenario
+    case ACTION.SUGGEST_REPAIR:
+    case ACTION.SHOW_SUGGESTION: {
+      const requestedId =
+        (typeof action.payload === 'string' ? action.payload : null) ||
+        (action.payload && typeof action.payload === 'object' ? action.payload.requestedId : null) ||
+        state.request ||
+        REQUESTED_SECTION_ID;
+
+      const candidates = enumerateRepairs(
+        state.draft,
+        state.availableCourses,
+        requestedId
+      );
+
+      if (!candidates || candidates.length === 0) {
+        return Object.freeze({
+          ...state,
+          request: requestedId,
+          candidate: null,
+          isApplied: false,
+          notice: Object.freeze({
+            kind: 'error',
+            title: 'No suitable timetable found',
+            message: 'Try a different section or remove a class that conflicts with this one.',
+          }),
+        });
+      }
+
+      return Object.freeze({
+        ...state,
+        request: requestedId,
+        candidate: Object.freeze({ ...candidates[0] }),
+        isApplied: false,
+        notice: Object.freeze({
+          kind: 'info',
+          title: 'Suggested timetable ready',
+          message: 'Review the changes before applying them.',
+        }),
+      });
+    }
+
+    // Apply repair: immediately revalidate candidate before applying; exact snapshot for undo
+    case ACTION.APPLY_REPAIR:
+    case ACTION.APPLY_SUGGESTION: {
+      const candidate = state.candidate;
+      const requestedId = state.request || REQUESTED_SECTION_ID;
+
+      if (!candidate || !Array.isArray(candidate.ids)) {
+        return Object.freeze({
+          ...state,
+          notice: Object.freeze({
+            kind: 'error',
+            title: 'No suggestion to apply',
+            message: 'There is no active repair suggestion to apply.',
+          }),
+        });
+      }
+
+      // Revalidate immediately before Apply: ensure candidate matches current state
+      if (!isCurrentCandidate(state.draft, candidate.ids, state.availableCourses, requestedId)) {
+        return Object.freeze({
+          ...state,
+          candidate: null,
+          isApplied: false,
+          notice: Object.freeze({
+            kind: 'error',
+            title: 'This suggestion is out of date',
+            message: 'Your selected classes have changed. Try adding the course again to get an updated suggestion.',
+          }),
+        });
+      }
+
+      // Revalidate whole-draft against current catalog
+      const finalCheck = validateDraft(candidate.ids, state.availableCourses);
+      if (!finalCheck.ok) {
+        return Object.freeze({
+          ...state,
+          candidate: null,
+          isApplied: false,
+          notice: Object.freeze({
+            kind: 'error',
+            title: 'This timetable needs another look',
+            message: 'The suggested changes are no longer valid, so nothing was applied.',
+          }),
+        });
+      }
+
+      // Snapshot exact current draft and scenario before applying
+      const snapshot = Object.freeze({
+        draft: Object.freeze([...state.draft]),
+        scenario: state.scenario,
+        candidate: Object.freeze({ ...candidate }),
+      });
+
+      return Object.freeze({
+        ...state,
+        draft: Object.freeze([...candidate.ids]),
+        snapshot,
+        isApplied: true,
+        notice: Object.freeze({
+          kind: 'success',
+          title: 'Timetable updated',
+          message: 'These changes are saved in this demo only. You have not enrolled at your university.',
+        }),
+      });
+    }
+
+    // Undo repair: restore exact pre-apply draft and scenario; clear applied preview
+    case ACTION.UNDO_REPAIR:
+    case ACTION.UNDO_SUGGESTION: {
+      if (!state.snapshot) return state;
+      const { draft, scenario } = state.snapshot;
+      return Object.freeze({
+        ...state,
+        draft: Object.freeze([...draft]),
+        scenario,
+        availableCourses: Object.freeze(catalogForScenario(scenario)),
+        candidate: null,
+        snapshot: null,
+        isApplied: false,
+        notice: Object.freeze({
+          kind: 'success',
+          title: 'Previous timetable restored',
+          message: 'Your selected classes are back to how they were before the change.',
+        }),
+      });
+    }
+
+    // Dismiss repair: no mutation of draft
+    case ACTION.DISMISS_REPAIR:
+    case ACTION.DISMISS_SUGGESTION: {
+      if (state.candidate === null) return state;
+      return Object.freeze({
+        ...state,
+        candidate: null,
+        isApplied: false,
+        notice: Object.freeze({
+          kind: 'info',
+          title: 'No changes made',
+          message: 'Your current timetable has been kept.',
         }),
       });
     }

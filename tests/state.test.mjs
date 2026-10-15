@@ -658,3 +658,148 @@ describe('case-insensitive search and card preservation on refusal', () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// 14. Suggestion, Apply, Exact Undo, Dismiss (Task 21)
+// ---------------------------------------------------------------------------
+
+describe('suggestion, apply, exact undo, dismiss (Task 21)', () => {
+  it('main flow: suggest finds repair, apply updates draft and snapshots, undo restores exact pre-apply state', () => {
+    const s0 = initialState();
+    assert.deepEqual(s0.draft, ['CHEM-A', 'STAT-A']);
+
+    // 1. Suggest repair for BIO-214
+    const s1 = reduce(s0, { type: ACTION.SUGGEST_REPAIR, payload: 'BIO-214' });
+    assert.ok(s1.candidate !== null, 'candidate was generated');
+    assert.deepEqual(s1.candidate.ids, ['BIO-214', 'BIO-214L-B', 'CHEM-A', 'STAT-B']);
+    assert.deepEqual(s1.candidate.swap, { old: 'STAT-A', replacement: 'STAT-B' });
+    assert.equal(s1.notice.kind, 'info');
+    assert.equal(s1.isApplied, false);
+    // Suggestion does NOT mutate draft
+    assert.deepEqual(s1.draft, ['CHEM-A', 'STAT-A']);
+
+    // 2. Apply repair
+    const s2 = reduce(s1, { type: ACTION.APPLY_REPAIR });
+    assert.deepEqual(s2.draft, ['BIO-214', 'BIO-214L-B', 'CHEM-A', 'STAT-B']);
+    assert.equal(s2.isApplied, true);
+    assert.ok(s2.snapshot !== null, 'snapshot created');
+    assert.deepEqual(s2.snapshot.draft, ['CHEM-A', 'STAT-A']);
+    assert.equal(s2.notice.kind, 'success');
+
+    // 3. Exact Undo
+    const s3 = reduce(s2, { type: ACTION.UNDO_REPAIR });
+    assert.deepEqual(s3.draft, ['CHEM-A', 'STAT-A']);
+    assert.equal(s3.candidate, null, 'applied preview cleared');
+    assert.equal(s3.snapshot, null);
+    assert.equal(s3.isApplied, false);
+    assert.equal(s3.notice.kind, 'success');
+    assert.match(s3.notice.title, /restored/i);
+  });
+
+  it('stale Apply is rejected and does not mutate draft', () => {
+    const s0 = initialState();
+    // Suggest repair based on initial draft ['CHEM-A', 'STAT-A']
+    const s1 = reduce(s0, { type: ACTION.SUGGEST_REPAIR, payload: 'BIO-214' });
+    assert.ok(s1.candidate !== null);
+
+    // Before Apply, mutate draft by removing CHEM-A
+    const s2 = reduce(s1, { type: ACTION.REMOVE_SECTION, payload: 'CHEM-A' });
+    assert.deepEqual(s2.draft, ['STAT-A']);
+
+    // Now attempt Apply with the stale candidate (which assumed CHEM-A was present)
+    const s3 = reduce(s2, { type: ACTION.APPLY_REPAIR });
+    // Must refuse to mutate draft!
+    assert.deepEqual(s3.draft, ['STAT-A']);
+    assert.equal(s3.candidate, null);
+    assert.equal(s3.notice.kind, 'error');
+    assert.match(s3.notice.title, /out of date/i);
+  });
+
+  it('rejected Apply on invalid data leaves draft untouched', () => {
+    const s0 = initialState();
+    // Attempt Apply without candidate
+    const noCand = reduce(s0, { type: ACTION.APPLY_REPAIR });
+    assert.deepEqual(noCand.draft, s0.draft);
+    assert.equal(noCand.notice.kind, 'error');
+
+    // Attempt Apply with an invalid candidate (e.g. unknown section or clashing IDs)
+    const sWithInvalid = {
+      ...s0,
+      candidate: Object.freeze({ ids: ['CHEM-A', 'NONEXISTENT-999'] }),
+    };
+    const afterInvalid = reduce(sWithInvalid, { type: ACTION.APPLY_REPAIR });
+    assert.deepEqual(afterInvalid.draft, s0.draft);
+    assert.equal(afterInvalid.candidate, null);
+    assert.equal(afterInvalid.notice.kind, 'error');
+  });
+
+  it('repeat Apply and Undo sequence operates cleanly', () => {
+    let s = initialState();
+
+    for (let i = 0; i < 3; i += 1) {
+      s = reduce(s, { type: ACTION.SUGGEST_REPAIR, payload: 'BIO-214' });
+      assert.ok(s.candidate !== null);
+
+      s = reduce(s, { type: ACTION.APPLY_REPAIR });
+      assert.deepEqual(s.draft, ['BIO-214', 'BIO-214L-B', 'CHEM-A', 'STAT-B']);
+
+      s = reduce(s, { type: ACTION.UNDO_REPAIR });
+      assert.deepEqual(s.draft, ['CHEM-A', 'STAT-A']);
+      assert.equal(s.candidate, null);
+      assert.equal(s.snapshot, null);
+    }
+  });
+
+  it('Undo restores exact pre-Apply selected sections and preserves a prior STAT-B switch', () => {
+    // 1. Prior switch: student switched STAT-A to STAT-B
+    const s0 = initialState();
+    const sSwitched = reduce(s0, {
+      type: ACTION.SWITCH_SECTION,
+      payload: { fromId: 'STAT-A', toId: 'STAT-B' },
+    });
+    assert.deepEqual(sSwitched.draft, ['CHEM-A', 'STAT-B']);
+
+    // 2. Student requests repair for BIO-214
+    const sSuggested = reduce(sSwitched, { type: ACTION.SUGGEST_REPAIR, payload: 'BIO-214' });
+    assert.ok(sSuggested.candidate !== null);
+
+    // 3. Apply repair
+    const sApplied = reduce(sSuggested, { type: ACTION.APPLY_REPAIR });
+    assert.ok(sApplied.draft.includes('BIO-214'));
+    assert.ok(sApplied.draft.includes('STAT-B'));
+
+    // 4. Undo repair
+    const sUndone = reduce(sApplied, { type: ACTION.UNDO_REPAIR });
+    // Prior STAT-B switch MUST be completely preserved!
+    assert.deepEqual(sUndone.draft, ['CHEM-A', 'STAT-B']);
+    assert.equal(sUndone.candidate, null);
+    assert.equal(sUndone.snapshot, null);
+  });
+
+  it('dismiss repair has no draft mutation and clears candidate', () => {
+    const s0 = initialState();
+    const s1 = reduce(s0, { type: ACTION.SUGGEST_REPAIR, payload: 'BIO-214' });
+    assert.ok(s1.candidate !== null);
+
+    const sDismissed = reduce(s1, { type: ACTION.DISMISS_REPAIR });
+    assert.deepEqual(sDismissed.draft, ['CHEM-A', 'STAT-A']);
+    assert.equal(sDismissed.candidate, null);
+    assert.equal(sDismissed.notice.kind, 'info');
+    assert.match(sDismissed.notice.title, /no changes made/i);
+  });
+
+  it('suggest in noRepair scenario returns safe refusal and null candidate', () => {
+    const sNoRepair = reduce(initialState(), {
+      type: ACTION.SELECT_SCENARIO,
+      payload: 'noRepair',
+    });
+    const sSuggested = reduce(sNoRepair, {
+      type: ACTION.SUGGEST_REPAIR,
+      payload: 'BIO-214',
+    });
+    assert.equal(sSuggested.candidate, null);
+    assert.equal(sSuggested.notice.kind, 'error');
+    assert.match(sSuggested.notice.title, /no suitable timetable/i);
+    assert.deepEqual(sSuggested.draft, ['CHEM-A', 'STAT-A']);
+  });
+});
+
