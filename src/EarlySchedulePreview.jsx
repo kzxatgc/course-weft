@@ -28,29 +28,33 @@ const TIME_MARKS = [
   { hour: 18, label: '6:00 PM', minute: 1080 },
 ];
 
-export default function EarlySchedulePreview() {
-  const selectedSections = MAIN_CATALOG.filter((item) =>
-    INITIAL_DRAFT.includes(item.id)
+export default function EarlySchedulePreview({ state, dispatch }) {
+  const availableCourses = state?.availableCourses || MAIN_CATALOG;
+  const draft = state?.draft || INITIAL_DRAFT;
+  const selectedSections = availableCourses.filter((item) =>
+    draft.includes(item.id)
   );
 
   return (
     <div className="space-y-6">
-      {/* Persistent Required Disclosure */}
-      <div
-        role="region"
-        aria-label="Demo disclosure notice"
-        className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-950 shadow-xs"
-      >
-        <div className="flex items-center gap-2">
-          <span className="inline-block h-2.5 w-2.5 rounded-full bg-amber-500" aria-hidden="true" />
-          <strong className="text-xs sm:text-sm font-bold tracking-wide uppercase">
-            SYNTHETIC SAMPLE DATA — NO REAL REGISTRATION IS SUBMITTED
-          </strong>
+      {/* Fallback disclosure only when rendered without AppShell */}
+      {!state && (
+        <div
+          role="region"
+          aria-label="Demo disclosure notice"
+          className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-950 shadow-xs"
+        >
+          <div className="flex items-center gap-2">
+            <span className="inline-block h-2.5 w-2.5 rounded-full bg-amber-500" aria-hidden="true" />
+            <strong className="text-xs sm:text-sm font-bold tracking-wide uppercase">
+              SYNTHETIC SAMPLE DATA — NO REAL REGISTRATION IS SUBMITTED
+            </strong>
+          </div>
+          <p className="mt-1 text-xs text-amber-900/90 leading-relaxed">
+            All courses, meeting times, and availability counts are fictional sample data for local demonstration only. This portal does not connect to university registration systems.
+          </p>
         </div>
-        <p className="mt-1 text-xs text-amber-900/90 leading-relaxed">
-          All courses, meeting times, and availability counts are fictional sample data for local demonstration only. This portal does not connect to university registration systems.
-        </p>
-      </div>
+      )}
 
       {/* Main Planning Workspace: Weekly Calendar Timetable beside Course Catalogue */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
@@ -59,19 +63,10 @@ export default function EarlySchedulePreview() {
           aria-labelledby="timetable-heading"
           className="lg:col-span-8 rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 shadow-xs"
         >
-          <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-3">
-            <div>
-              <h2 id="timetable-heading" className="text-base sm:text-lg font-bold text-slate-900">
-                Weekly Timetable
-              </h2>
-              <p className="text-xs text-slate-500">
-                Monday–Friday official schedule (8:00 AM – 6:00 PM)
-              </p>
-            </div>
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden="true" />
-              {selectedSections.length} classes scheduled
-            </span>
+          <div className="border-b border-slate-100 pb-3 mb-3">
+            <h2 id="timetable-heading" className="text-base sm:text-lg font-bold text-slate-900">
+              Weekly Timetable
+            </h2>
           </div>
 
           {/* Calendar Table Container with Shared Vertical Time Scale */}
@@ -173,11 +168,6 @@ export default function EarlySchedulePreview() {
               </div>
             </div>
           </div>
-
-          <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
-            <span>Grid position indicates class meeting time</span>
-            <span className="font-medium text-slate-600">No overlapping classes</span>
-          </div>
         </section>
 
         {/* Available Courses Side Panel (4 cols) */}
@@ -186,17 +176,9 @@ export default function EarlySchedulePreview() {
           className="lg:col-span-4 rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 shadow-xs"
         >
           <div className="border-b border-slate-100 pb-3 mb-3">
-            <div className="flex items-center justify-between">
-              <h2 id="catalogue-heading" className="text-base sm:text-lg font-bold text-slate-900">
-                Available Courses
-              </h2>
-              <span className="text-xs font-semibold text-slate-500">
-                {MAIN_CATALOG.filter((item) => !INITIAL_DRAFT.includes(item.id)).length} sections
-              </span>
-            </div>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Available sections with days, meeting times, and capacity
-            </p>
+            <h2 id="catalogue-heading" className="text-base sm:text-lg font-bold text-slate-900">
+              Available Courses
+            </h2>
           </div>
 
           <div className="space-y-3 max-h-[555px] overflow-y-auto pr-1">
@@ -230,11 +212,7 @@ export default function EarlySchedulePreview() {
             ))}
           </div>
 
-          <div className="mt-3 pt-3 border-t border-slate-100 text-center">
-            <span className="text-[11px] text-slate-400">
-              Numbers reflect sample enrollment counts only.
-            </span>
-          </div>
+
         </section>
       </div>
     </div>

@@ -1,0 +1,144 @@
+import { useState, useCallback, useEffect, useRef } from 'react';
+
+/** Window configurations — order matches the dock left-to-right. */
+export const WINDOW_CONFIGS = [
+  {
+    id: 'schedule',
+    title: 'Schedule',
+    icon: '📅',
+    label: 'Schedule',
+    defaultOpen: true,
+    defaultPos: { x: 20, y: 40 },
+    width: 'fluid',   // uses most viewport width
+  },
+  {
+    id: 'scenarios',
+    title: 'Demo Scenarios',
+    icon: '🧪',
+    label: 'Scenarios',
+    defaultOpen: false,
+    defaultPos: { x: 740, y: 54 },
+    width: 480,
+  },
+  {
+    id: 'settings',
+    title: 'Settings',
+    icon: '⚙',
+    label: 'Settings',
+    defaultOpen: false,
+    defaultPos: { x: 700, y: 78 },
+    width: 500,
+  },
+  {
+    id: 'profile',
+    title: 'Profile — Bill Andrew',
+    icon: '👤',
+    label: 'Profile',
+    defaultOpen: false,
+    defaultPos: { x: 760, y: 102 },
+    width: 440,
+  },
+  {
+    id: 'courseDetails',
+    title: 'Course Details',
+    icon: '📋',
+    label: 'Courses',
+    defaultOpen: false,
+    defaultPos: { x: 720, y: 126 },
+    width: 480,
+  },
+];
+
+/**
+ * Manages open/closed, minimized, position, and z-index for all desktop windows.
+ * Window positions are stored in React state; drag commits on pointer-up.
+ */
+export function useWindowManager() {
+  const hasMovedSchedule = useRef(false);
+
+  const [windows, setWindows] = useState(() =>
+    WINDOW_CONFIGS.map((cfg, i) => {
+      let initialPos = cfg.defaultPos;
+      if (typeof window !== 'undefined') {
+        if (cfg.id === 'schedule') {
+          const scheduleWidth = Math.min(1280, window.innerWidth - 40);
+          const centerX = Math.max(0, Math.round((window.innerWidth - scheduleWidth) / 2));
+          initialPos = { x: centerX, y: cfg.defaultPos.y };
+        } else if (typeof cfg.width === 'number') {
+          // Randomly choose either left or right side for supporting windows
+          const isRight = Math.random() < 0.5;
+          const offset = 24 + Math.round(Math.random() * 40);
+          const posX = isRight
+            ? Math.max(20, window.innerWidth - cfg.width - offset)
+            : offset;
+          const posY = 48 + Math.round(Math.random() * 50);
+          initialPos = { x: posX, y: posY };
+        }
+      }
+      return {
+        ...cfg,
+        isOpen: cfg.defaultOpen,
+        isMinimized: false,
+        pos: initialPos,
+        zIndex: 10 + i,
+      };
+    })
+  );
+
+  // Keep schedule window centered on screen resize if user hasn't dragged it
+  useEffect(() => {
+    function handleResize() {
+      if (hasMovedSchedule.current) return;
+      const scheduleWidth = Math.min(1280, window.innerWidth - 40);
+      const centerX = Math.max(0, Math.round((window.innerWidth - scheduleWidth) / 2));
+      setWindows((ws) =>
+        ws.map((w) =>
+          w.id === 'schedule' ? { ...w, pos: { ...w.pos, x: centerX } } : w
+        )
+      );
+    }
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  /** Bring a specific window to the front without toggling open state. */
+  const bringToFront = useCallback((id) => {
+    setWindows((ws) => {
+      const maxZ = Math.max(...ws.map((w) => w.zIndex));
+      return ws.map((w) => (w.id === id ? { ...w, zIndex: maxZ + 1 } : w));
+    });
+  }, []);
+
+  /** Open a window (or un-minimize it) and bring it to front. */
+  const openWindow = useCallback((id) => {
+    setWindows((ws) => {
+      const maxZ = Math.max(...ws.map((w) => w.zIndex));
+      return ws.map((w) => {
+        if (w.id !== id) return w;
+        return { ...w, isOpen: true, isMinimized: false, zIndex: maxZ + 1 };
+      });
+    });
+  }, []);
+
+  /** Hide a window (dock item can reopen it). */
+  const closeWindow = useCallback((id) => {
+    setWindows((ws) => ws.map((w) => (w.id === id ? { ...w, isOpen: false } : w)));
+  }, []);
+
+  /** Toggle minimized state (title-bar only / restored body). */
+  const minimizeWindow = useCallback((id) => {
+    setWindows((ws) =>
+      ws.map((w) => (w.id === id ? { ...w, isMinimized: !w.isMinimized } : w))
+    );
+  }, []);
+
+  /** Commit the drag final position after pointer-up. */
+  const moveWindow = useCallback((id, newPos) => {
+    if (id === 'schedule') {
+      hasMovedSchedule.current = true;
+    }
+    setWindows((ws) => ws.map((w) => (w.id === id ? { ...w, pos: newPos } : w)));
+  }, []);
+
+  return { windows, bringToFront, openWindow, closeWindow, minimizeWindow, moveWindow };
+}
