@@ -513,7 +513,7 @@ test('validateDraft fails closed when required-link metadata is removed or corru
   assert.equal(res2.reason, 'malformed-link-requirement');
 });
 
-// --- Time formatting (Task 12) ---
+// --- Time formatting ---
 
 test('formatTime formats midnight (0 minutes) as 12:00 AM', () => {
   assert.equal(formatTime(0), '12:00 AM');
@@ -561,7 +561,7 @@ test('formatTimeRange formats BIO-214L-B section as "Wed 2:00 PM–4:00 PM"', ()
   assert.equal(formatTimeRange(labB), 'Wed 2:00 PM–4:00 PM');
 });
 
-// --- Enumerate bounded repairs (Task 13) ---
+// --- Enumerate bounded repairs ---
 
 test('enumerateRepairs returns empty array for invalid or malformed draft inputs', () => {
   const cat = getCatalogForScenario('main');
@@ -692,3 +692,104 @@ test('enumerateRepairs: unsupported multi-link requirement (requires.length > 1)
   );
   assert.deepEqual(enumerateRepairs([...CATALOG_INITIAL_DRAFT], cat), []);
 });
+
+// --- Validate, deduplicate, rank candidates ---
+
+test('exact main candidate is BIO-214 + BIO-214L-B + CHEM-A + STAT-B (Chemistry kept, Statistics swapped)', () => {
+  const cat = getCatalogForScenario('main');
+  const candidates = enumerateRepairs([...CATALOG_INITIAL_DRAFT], cat);
+  assert.equal(candidates.length, 1, 'main scenario must yield exactly one candidate');
+  const [c] = candidates;
+  // Exact sorted IDs
+  assert.deepEqual(c.ids, ['BIO-214', 'BIO-214L-B', 'CHEM-A', 'STAT-B']);
+  // Chemistry is kept (CHEM-A stays, was in original draft)
+  assert.ok(c.kept.includes('CHEM-A'), 'CHEM-A must be in kept set');
+  assert.ok(!c.kept.includes('STAT-A'), 'STAT-A must not be in kept set');
+  // Statistics is swapped (STAT-A → STAT-B)
+  assert.deepEqual(c.swap, { old: 'STAT-A', replacement: 'STAT-B' });
+  // BIO-214 and BIO-214L-B and STAT-B are added
+  assert.deepEqual(c.added, ['BIO-214', 'BIO-214L-B', 'STAT-B']);
+});
+
+test('known-data no-repair scenario (BIO-214L-B full at 30/30) yields zero candidates', () => {
+  const cat = getCatalogForScenario('noRepair');
+  const labB = cat.find((s) => s.id === 'BIO-214L-B');
+  assert.equal(labB.seat, 'full', 'precondition: BIO-214L-B must be full in noRepair scenario');
+  assert.equal(labB.enrolled, 30);
+  assert.equal(labB.capacity, 30);
+  const candidates = enumerateRepairs([...CATALOG_INITIAL_DRAFT], cat);
+  assert.equal(candidates.length, 0, 'no-repair scenario must yield zero candidates');
+});
+
+test('missing availability counts (seat unknown) produces zero candidates', () => {
+  const cat = getCatalogForScenario('main').map((s) =>
+    s.id === 'BIO-214L-B'
+      ? { ...s, enrolled: undefined, capacity: undefined, seat: 'unknown' }
+      : s
+  );
+  const candidates = enumerateRepairs([...CATALOG_INITIAL_DRAFT], cat);
+  assert.equal(candidates.length, 0, 'unknown seat must yield zero candidates');
+});
+
+test('malformed availability counts (enrolled > capacity) produces zero candidates', () => {
+  const cat = getCatalogForScenario('main').map((s) =>
+    s.id === 'BIO-214L-B'
+      ? { ...s, enrolled: 31, capacity: 30, seat: 'open' }
+      : s
+  );
+  const candidates = enumerateRepairs([...CATALOG_INITIAL_DRAFT], cat);
+  assert.equal(candidates.length, 0, 'malformed counts must yield zero candidates');
+});
+
+test('full section seat cannot become a candidate even if listed in metadata', () => {
+  const cat = getCatalogForScenario('main').map((s) =>
+    s.id === 'BIO-214L-B' ? { ...s, seat: 'full' } : s
+  );
+  const candidates = enumerateRepairs([...CATALOG_INITIAL_DRAFT], cat);
+  assert.equal(candidates.length, 0, 'full seat must reject candidate');
+});
+
+test('independent validation rejects candidate with corrupted time on swap target', () => {
+  const cat = getCatalogForScenario('main').map((s) =>
+    s.id === 'STAT-B' ? { ...s, start: 800, end: 780 } : s
+  );
+  const candidates = enumerateRepairs([...CATALOG_INITIAL_DRAFT], cat);
+  assert.equal(candidates.length, 0, 'reversed time on swap target must reject candidate');
+});
+
+test('independent validation rejects candidate with corrupted seat on swap target', () => {
+  const cat = getCatalogForScenario('main').map((s) =>
+    s.id === 'STAT-B' ? { ...s, seat: 'maybe' } : s
+  );
+  const candidates = enumerateRepairs([...CATALOG_INITIAL_DRAFT], cat);
+  assert.equal(candidates.length, 0, 'malformed seat on swap target must reject candidate');
+});
+
+test('stable ordering — no-swap candidates always precede swap candidates', () => {
+  const cat = getCatalogForScenario('main');
+  const candidates = enumerateRepairs(['CHEM-A', 'STAT-B'], cat);
+  let seenSwap = false;
+  for (const c of candidates) {
+    if (c.swap !== null) seenSwap = true;
+    if (seenSwap) {
+      assert.notEqual(c.swap, null, 'no direct-add candidate should follow a swap candidate');
+    }
+  }
+});
+
+test('deduplication — identical final ID sets appear exactly once', () => {
+  const cat = getCatalogForScenario('main');
+  const candidates = enumerateRepairs([...CATALOG_INITIAL_DRAFT], cat);
+  const keys = candidates.map((c) => c.ids.join('|'));
+  assert.equal(new Set(keys).size, keys.length, 'candidate list must contain no duplicate ID sets');
+});
+
+test('each included candidate carries an independent validation result with ok:true', () => {
+  const cat = getCatalogForScenario('main');
+  const candidates = enumerateRepairs([...CATALOG_INITIAL_DRAFT], cat);
+  for (const c of candidates) {
+    assert.ok(c.validation, 'candidate must carry a validation object');
+    assert.equal(c.validation.ok, true, 'every included candidate must pass independent validation');
+  }
+});
+
