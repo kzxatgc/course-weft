@@ -9,17 +9,17 @@
  * precomputed fallback is available via Plan B state when needed.
  *
  * Managed slices:
- *   scenario   — 'main' | 'noRepair'
- *   catalogue  — section records for the current scenario (copy, not shared)
- *   draft      — ordered array of selected section IDs
- *   notice     — { kind: 'info'|'error'|'success', message: string } | null
- *   request    — requested section ID awaiting repair (string | null)
- *   candidate  — validated repair candidate object | null
- *   snapshot   — pre-Apply draft/state for exact Undo | null
- *   search     — current catalogue search string
+ *   scenario         — 'main' | 'noRepair'
+ *   availableCourses — section records for the current scenario (copy, not shared)
+ *   draft            — ordered array of selected section IDs
+ *   notice           — { kind: 'info'|'error'|'success', message: string } | null
+ *   request          — requested section ID awaiting repair (string | null)
+ *   candidate        — validated repair candidate object | null
+ *   snapshot         — pre-Apply draft/state for exact Undo | null
+ *   search           — current Available Courses search string
  */
 
-import { INITIAL_DRAFT, REQUESTED_SECTION_ID, catalogForScenario } from '../domain/catalog.mjs';
+import { INITIAL_DRAFT, REQUESTED_SECTION_ID, catalogForScenario } from '../domain/available-courses.mjs';
 
 // ---------------------------------------------------------------------------
 // Initial state factory
@@ -34,7 +34,7 @@ import { INITIAL_DRAFT, REQUESTED_SECTION_ID, catalogForScenario } from '../doma
 export function initialState() {
   return Object.freeze({
     scenario: 'main',
-    catalogue: Object.freeze(catalogForScenario('main')),
+    availableCourses: Object.freeze(catalogForScenario('main')),
     draft: Object.freeze([...INITIAL_DRAFT]),
     notice: null,
     request: null,
@@ -76,14 +76,14 @@ export const ACTION = Object.freeze({
  */
 export function reduce(state, action) {
   switch (action.type) {
-    // Switch scenario and rebuild catalogue; clear transient slices
+    // Switch scenario and rebuild Available Courses list; clear transient slices
     case ACTION.SELECT_SCENARIO: {
       const scenario = action.payload === 'noRepair' ? 'noRepair' : 'main';
       if (scenario === state.scenario) return state;
       return Object.freeze({
         ...state,
         scenario,
-        catalogue: Object.freeze(catalogForScenario(scenario)),
+        availableCourses: Object.freeze(catalogForScenario(scenario)),
         draft: Object.freeze([...INITIAL_DRAFT]),
         notice: null,
         request: null,
@@ -93,7 +93,7 @@ export function reduce(state, action) {
       });
     }
 
-    // Update the catalogue search filter string
+    // Update the Available Courses search filter string
     case ACTION.SET_SEARCH: {
       const search = typeof action.payload === 'string' ? action.payload : '';
       if (search === state.search) return state;
@@ -149,7 +149,7 @@ export function reduce(state, action) {
         ...state,
         draft: Object.freeze([...draft]),
         scenario,
-        catalogue: Object.freeze(catalogForScenario(scenario)),
+        availableCourses: Object.freeze(catalogForScenario(scenario)),
         candidate: candidate ? Object.freeze({ ...candidate }) : null,
         snapshot: null,
         notice: null,
@@ -172,16 +172,16 @@ export function reduce(state, action) {
 // ---------------------------------------------------------------------------
 
 /**
- * Returns catalogue items that match the current search string (case-insensitive).
- * Empty search returns the full catalogue.
+ * Returns Available Courses items that match the current search string (case-insensitive).
+ * Empty search returns the full list.
  *
  * @param {object} state
  * @returns {Array<object>}
  */
-export function filteredCatalogue(state) {
+export function filteredAvailableCourses(state) {
   const q = (state.search || '').trim().toLowerCase();
-  if (!q) return state.catalogue;
-  return state.catalogue.filter(
+  if (!q) return state.availableCourses;
+  return state.availableCourses.filter(
     (item) =>
       item.id.toLowerCase().includes(q) ||
       item.title.toLowerCase().includes(q) ||

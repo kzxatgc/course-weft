@@ -1,5 +1,5 @@
 import React from 'react';
-import { MAIN_CATALOG, INITIAL_DRAFT } from './domain/catalog.mjs';
+import { MAIN_CATALOG, INITIAL_DRAFT } from './domain/available-courses.mjs';
 import { formatTimeRange } from './domain/time.mjs';
 
 const WEEKDAYS = [
@@ -180,7 +180,7 @@ export default function EarlySchedulePreview() {
           </div>
         </section>
 
-        {/* Course Catalogue Side Panel (4 cols) */}
+        {/* Available Courses Side Panel (4 cols) */}
         <section
           aria-labelledby="catalogue-heading"
           className="lg:col-span-4 rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 shadow-xs"
@@ -188,7 +188,7 @@ export default function EarlySchedulePreview() {
           <div className="border-b border-slate-100 pb-3 mb-3">
             <div className="flex items-center justify-between">
               <h2 id="catalogue-heading" className="text-base sm:text-lg font-bold text-slate-900">
-                Course Catalogue
+                Available Courses
               </h2>
               <span className="text-xs font-semibold text-slate-500">
                 {MAIN_CATALOG.filter((item) => !INITIAL_DRAFT.includes(item.id)).length} sections

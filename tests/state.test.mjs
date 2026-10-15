@@ -14,7 +14,7 @@ import {
   initialState,
   reduce,
   ACTION,
-  filteredCatalogue,
+  filteredAvailableCourses,
   canUndo,
 } from '../src/state/draft-controller.mjs';
 
@@ -42,10 +42,10 @@ describe('initialState', () => {
     assert.deepEqual(initialState().draft, [...INITIAL_DRAFT]);
   });
 
-  it('catalogue is non-empty array', () => {
+  it('availableCourses is non-empty array', () => {
     const s = initialState();
-    assert.ok(Array.isArray(s.catalogue));
-    assert.ok(s.catalogue.length > 0);
+    assert.ok(Array.isArray(s.availableCourses));
+    assert.ok(s.availableCourses.length > 0);
   });
 
   it('transient slices start null/empty', () => {
@@ -147,21 +147,21 @@ describe('SELECT_SCENARIO', () => {
     assert.equal(s.search, '');
   });
 
-  it('noRepair catalogue has BIO-214L-B as full', () => {
+  it('noRepair availableCourses has BIO-214L-B as full', () => {
     const s = dispatch([{ type: ACTION.SELECT_SCENARIO, payload: 'noRepair' }]);
-    const labB = s.catalogue.find((c) => c.id === 'BIO-214L-B');
-    assert.ok(labB, 'BIO-214L-B must be in catalogue');
+    const labB = s.availableCourses.find((c) => c.id === 'BIO-214L-B');
+    assert.ok(labB, 'BIO-214L-B must be in availableCourses');
     assert.equal(labB.seat, 'full');
     assert.equal(labB.enrolled, 30);
     assert.equal(labB.capacity, 30);
   });
 
-  it('main catalogue has BIO-214L-B as open', () => {
+  it('main availableCourses has BIO-214L-B as open', () => {
     const s = dispatch([
       { type: ACTION.SELECT_SCENARIO, payload: 'noRepair' },
       { type: ACTION.SELECT_SCENARIO, payload: 'main' },
     ]);
-    const labB = s.catalogue.find((c) => c.id === 'BIO-214L-B');
+    const labB = s.availableCourses.find((c) => c.id === 'BIO-214L-B');
     assert.ok(labB);
     assert.equal(labB.seat, 'open');
   });
@@ -200,34 +200,34 @@ describe('SET_SEARCH', () => {
   });
 });
 
-describe('filteredCatalogue', () => {
-  it('empty search returns full catalogue', () => {
+describe('filteredAvailableCourses', () => {
+  it('empty search returns full availableCourses list', () => {
     const s = initialState();
-    assert.equal(filteredCatalogue(s).length, s.catalogue.length);
+    assert.equal(filteredAvailableCourses(s).length, s.availableCourses.length);
   });
 
   it('filters by course code (case-insensitive)', () => {
     const s = dispatch([{ type: ACTION.SET_SEARCH, payload: 'BIO' }]);
-    const results = filteredCatalogue(s);
+    const results = filteredAvailableCourses(s);
     assert.ok(results.length > 0);
     assert.ok(results.every((r) => r.course === 'BIO' || r.id.includes('BIO')));
   });
 
   it('filters by title substring', () => {
     const s = dispatch([{ type: ACTION.SET_SEARCH, payload: 'statistics' }]);
-    const results = filteredCatalogue(s);
+    const results = filteredAvailableCourses(s);
     assert.ok(results.length > 0);
     assert.ok(results.every((r) => r.title.toLowerCase().includes('statistics')));
   });
 
   it('returns empty array when no match', () => {
     const s = dispatch([{ type: ACTION.SET_SEARCH, payload: 'ZZZNOMATCH' }]);
-    assert.equal(filteredCatalogue(s).length, 0);
+    assert.equal(filteredAvailableCourses(s).length, 0);
   });
 
   it('filters by component', () => {
     const s = dispatch([{ type: ACTION.SET_SEARCH, payload: 'lab' }]);
-    const results = filteredCatalogue(s);
+    const results = filteredAvailableCourses(s);
     assert.ok(results.length > 0);
     assert.ok(results.every((r) => r.component === 'lab'));
   });
