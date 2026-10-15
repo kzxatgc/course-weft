@@ -20,6 +20,7 @@ import {
   validateLinks,
 } from '../src/domain/validate.mjs';
 import { formatTime, formatTimeRange } from '../src/domain/time.mjs';
+import { enumerateRepairs } from '../src/domain/repairs.mjs';
 
 test('smoke: test harness is discovered and assertions execute cleanly', () => {
   assert.equal(1 + 1, 2);
@@ -560,3 +561,134 @@ test('formatTimeRange formats BIO-214L-B section as "Wed 2:00 PM–4:00 PM"', ()
   assert.equal(formatTimeRange(labB), 'Wed 2:00 PM–4:00 PM');
 });
 
+// --- Enumerate bounded repairs (Task 13) ---
+
+test('enumerateRepairs returns empty array for invalid or malformed draft inputs', () => {
+  const cat = getCatalogForScenario('main');
+  assert.deepEqual(enumerateRepairs(null, cat), []);
+  assert.deepEqual(enumerateRepairs(undefined, cat), []);
+  assert.deepEqual(enumerateRepairs(42, cat), []);
+  assert.deepEqual(enumerateRepairs('CHEM-A', cat), []);
+  assert.deepEqual(enumerateRepairs([42], cat), []);
+  assert.deepEqual(enumerateRepairs(['CHEM-A', 'CHEM-A'], cat), []); // duplicate draft IDs
+});
+
+test('enumerateRepairs returns empty array for malformed or missing catalogue', () => {
+  assert.deepEqual(enumerateRepairs([...CATALOG_INITIAL_DRAFT], null), []);
+  assert.deepEqual(enumerateRepairs([...CATALOG_INITIAL_DRAFT], undefined), []);
+  assert.deepEqual(enumerateRepairs([...CATALOG_INITIAL_DRAFT], 'bad'), []);
+  assert.deepEqual(enumerateRepairs([...CATALOG_INITIAL_DRAFT], [{ id: 'CHEM-A' }, { id: 'CHEM-A' }]), []); // dup catalogue
+});
+
+test('enumerateRepairs returns empty array if requested section is already in the draft', () => {
+  const cat = getCatalogForScenario('main');
+  assert.deepEqual(enumerateRepairs(['CHEM-A', 'STAT-A', CATALOG_REQUESTED_SECTION_ID], cat), []);
+});
+
+test('enumerateRepairs returns empty array if requested section is unknown in the catalogue', () => {
+  const cat = getCatalogForScenario('main');
+  assert.deepEqual(enumerateRepairs([...CATALOG_INITIAL_DRAFT], cat, 'NO-SUCH-SECTION'), []);
+});
+
+test('enumerateRepairs returns empty array if the base draft itself is invalid', () => {
+  // STAT-A and BIO-214 conflict on Monday — draft is invalid before any repair
+  const cat = getCatalogForScenario('main');
+  assert.deepEqual(enumerateRepairs(['STAT-A', 'BIO-214'], cat), []);
+});
+
+test('enumerateRepairs: main scenario yields exactly one candidate with correct ids', () => {
+  const cat = getCatalogForScenario('main');
+  const candidates = enumerateRepairs([...CATALOG_INITIAL_DRAFT], cat);
+  assert.equal(candidates.length, 1);
+  assert.deepEqual(candidates[0].ids, ['BIO-214', 'BIO-214L-B', 'CHEM-A', 'STAT-B']);
+});
+
+test('enumerateRepairs: main scenario candidate has correct swap (STAT-A → STAT-B)', () => {
+  const cat = getCatalogForScenario('main');
+  const [candidate] = enumerateRepairs([...CATALOG_INITIAL_DRAFT], cat);
+  assert.deepEqual(candidate.swap, { old: 'STAT-A', replacement: 'STAT-B' });
+});
+
+test('enumerateRepairs: main scenario candidate has correct added and kept sets', () => {
+  const cat = getCatalogForScenario('main');
+  const [candidate] = enumerateRepairs([...CATALOG_INITIAL_DRAFT], cat);
+  assert.deepEqual(candidate.added, ['BIO-214', 'BIO-214L-B', 'STAT-B']);
+  assert.deepEqual(candidate.kept, ['CHEM-A']);
+});
+
+test('enumerateRepairs rejects undeclared alternate (alternate not in section.alternates)', () => {
+  // Patch STAT-A so its alternates point to CHEM-B instead of STAT-B
+  const cat = getCatalogForScenario('main').map((s) =>
+    s.id === 'STAT-A' ? { ...s, alternates: ['CHEM-B'] } : s
+  );
+  assert.deepEqual(enumerateRepairs([...CATALOG_INITIAL_DRAFT], cat), []);
+});
+
+test('enumerateRepairs rejects swap where alternate has a different course or component', () => {
+  // Patch STAT-A alternates to include CHEM-A (different course)
+  const cat = getCatalogForScenario('main').map((s) =>
+    s.id === 'STAT-A' ? { ...s, alternates: ['CHEM-A'] } : s
+  );
+  // CHEM-A is already in draft so result may be empty; alternately patch a section not in draft
+  // Use a fresh scenario: STAT-A declares CHEM-B as alternate, CHEM-B is different course
+  const cat2 = getCatalogForScenario('main').map((s) =>
+    s.id === 'STAT-A' ? { ...s, alternates: ['CHEM-B'] } : s
+  );
+  assert.deepEqual(enumerateRepairs([...CATALOG_INITIAL_DRAFT], cat2), []);
+});
+
+test('enumerateRepairs: direct add (no swap) is supported when no swap needed', () => {
+  // Draft already has STAT-B (which does not conflict with BIO-214); direct add should work
+  // CHEM-A Tue 10-11, STAT-B Thu 13-14, BIO-214 Mon 13-14, BIO-214L-B Wed 14-16 -> no conflicts
+  const cat = getCatalogForScenario('main');
+  // Request BIO-214 from draft ['CHEM-A', 'STAT-B'] — should find direct add candidate (no swap)
+  const candidates = enumerateRepairs(['CHEM-A', 'STAT-B'], cat);
+  assert.ok(candidates.length >= 1, 'direct add without swap should yield at least one candidate');
+  const directAdd = candidates.find((c) => c.swap === null);
+  assert.ok(directAdd, 'should include a no-swap (direct add) candidate');
+  assert.ok(directAdd.ids.includes('BIO-214'), 'candidate must include BIO-214');
+  assert.ok(directAdd.ids.includes('BIO-214L-B'), 'candidate must include the linked lab');
+});
+
+test('enumerateRepairs: no-swap candidates sorted before swap candidates', () => {
+  // When both direct-add and swap candidates exist, no-swap should appear first
+  const cat = getCatalogForScenario('main');
+  const candidates = enumerateRepairs(['CHEM-A', 'STAT-B'], cat);
+  if (candidates.length > 1) {
+    const firstSwapIndex = candidates.findIndex((c) => c.swap !== null);
+    const lastDirectIndex = candidates.reduce((acc, c, i) => (c.swap === null ? i : acc), -1);
+    assert.ok(lastDirectIndex < firstSwapIndex || firstSwapIndex === -1,
+      'no-swap candidates should precede swap candidates');
+  }
+});
+
+test('enumerateRepairs deduplicates candidates with identical final IDs', () => {
+  const cat = getCatalogForScenario('main');
+  const first = enumerateRepairs([...CATALOG_INITIAL_DRAFT], cat);
+  const ids = first.map((c) => c.ids.join('|'));
+  const unique = new Set(ids);
+  assert.equal(unique.size, ids.length, 'candidate IDs must be deduplicated');
+});
+
+test('enumerateRepairs is deterministic across multiple calls', () => {
+  const cat = getCatalogForScenario('main');
+  const first = enumerateRepairs([...CATALOG_INITIAL_DRAFT], cat);
+  const second = enumerateRepairs([...CATALOG_INITIAL_DRAFT], cat);
+  assert.deepEqual(first, second);
+});
+
+test('enumerateRepairs: unsupported multi-link requirement (requires.length > 1) yields no candidate', () => {
+  // Patch BIO-214 to have two separate linked requirements (unsupported)
+  const cat = getCatalogForScenario('main').map((s) =>
+    s.id === 'BIO-214'
+      ? {
+          ...s,
+          requires: [
+            { component: 'lab', linkedGroup: 'BIO-214-labs', min: 1, max: 1 },
+            { component: 'tutorial', linkedGroup: 'BIO-214-tutorials', min: 1, max: 1 },
+          ],
+        }
+      : s
+  );
+  assert.deepEqual(enumerateRepairs([...CATALOG_INITIAL_DRAFT], cat), []);
+});
