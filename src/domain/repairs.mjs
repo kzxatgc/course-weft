@@ -168,3 +168,36 @@ export function enumerateRepairs(draftIds, catalog, requestedId = REQUESTED_SECT
       a.ids.join('|').localeCompare(b.ids.join('|'))
   );
 }
+
+/**
+ * Re-derive and validate a candidate from current state at use time.
+ * Never trusts a stored valid flag or UI object property.
+ *
+ * Checks that:
+ * 1. candidateIds is an array of non-empty strings with no duplicates.
+ * 2. candidateIds independently passes validateDraft against current catalog.
+ * 3. candidateIds exactly matches one of the candidate repair option sets
+ *    produced by enumerateRepairs for the current draft, catalog, and requestedId.
+ *
+ * @param {string[]} draftIds - Current selected section IDs
+ * @param {string[]} candidateIds - Proposed candidate section IDs to revalidate
+ * @param {object[]} catalog - Full section catalogue
+ * @param {string} [requestedId] - Requested section ID (defaults to REQUESTED_SECTION_ID)
+ * @returns {boolean}
+ */
+export function isCurrentCandidate(draftIds, candidateIds, catalog, requestedId = REQUESTED_SECTION_ID) {
+  if (!Array.isArray(candidateIds) || candidateIds.length === 0) return false;
+  if (candidateIds.some((id) => typeof id !== 'string' || !id)) return false;
+  if (new Set(candidateIds).size !== candidateIds.length) return false;
+
+  const valid = validateDraft(candidateIds, catalog);
+  if (!valid.ok) return false;
+
+  const sortedCandidate = [...candidateIds].sort((a, b) => a.localeCompare(b));
+  const candidateKey = sortedCandidate.join('|');
+
+  return enumerateRepairs(draftIds, catalog, requestedId).some(
+    (candidate) => candidate.ids.join('|') === candidateKey
+  );
+}
+

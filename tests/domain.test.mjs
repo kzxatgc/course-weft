@@ -20,7 +20,7 @@ import {
   validateLinks,
 } from '../src/domain/validate.mjs';
 import { formatTime, formatTimeRange } from '../src/domain/time.mjs';
-import { enumerateRepairs } from '../src/domain/repairs.mjs';
+import { enumerateRepairs, isCurrentCandidate } from '../src/domain/repairs.mjs';
 
 test('smoke: test harness is discovered and assertions execute cleanly', () => {
   assert.equal(1 + 1, 2);
@@ -791,5 +791,97 @@ test('each included candidate carries an independent validation result with ok:t
     assert.ok(c.validation, 'candidate must carry a validation object');
     assert.equal(c.validation.ok, true, 'every included candidate must pass independent validation');
   }
+});
+
+// --- Revalidate current candidate at use time ---
+
+test('isCurrentCandidate succeeds for current valid candidate in main scenario', () => {
+  const cat = getCatalogForScenario('main');
+  const [candidate] = enumerateRepairs([...CATALOG_INITIAL_DRAFT], cat);
+  assert.ok(candidate, 'candidate must exist');
+  assert.equal(isCurrentCandidate([...CATALOG_INITIAL_DRAFT], candidate.ids, cat), true);
+});
+
+test('isCurrentCandidate handles unsorted candidate IDs cleanly', () => {
+  const cat = getCatalogForScenario('main');
+  const [candidate] = enumerateRepairs([...CATALOG_INITIAL_DRAFT], cat);
+  const reversed = [...candidate.ids].reverse();
+  assert.equal(isCurrentCandidate([...CATALOG_INITIAL_DRAFT], reversed, cat), true);
+});
+
+test('isCurrentCandidate fails if candidate IDs input is not an array or is invalid', () => {
+  const cat = getCatalogForScenario('main');
+  assert.equal(isCurrentCandidate([...CATALOG_INITIAL_DRAFT], null, cat), false);
+  assert.equal(isCurrentCandidate([...CATALOG_INITIAL_DRAFT], undefined, cat), false);
+  assert.equal(isCurrentCandidate([...CATALOG_INITIAL_DRAFT], 'BIO-214', cat), false);
+  assert.equal(isCurrentCandidate([...CATALOG_INITIAL_DRAFT], 42, cat), false);
+  assert.equal(isCurrentCandidate([...CATALOG_INITIAL_DRAFT], [null], cat), false);
+  assert.equal(isCurrentCandidate([...CATALOG_INITIAL_DRAFT], ['BIO-214', 'BIO-214'], cat), false);
+});
+
+test('isCurrentCandidate fails if draft has changed', () => {
+  const cat = getCatalogForScenario('main');
+  const [candidate] = enumerateRepairs([...CATALOG_INITIAL_DRAFT], cat);
+  // Student modified draft: removed CHEM-A
+  assert.equal(isCurrentCandidate(['STAT-A'], candidate.ids, cat), false);
+  // Student modified draft: added something else
+  assert.equal(isCurrentCandidate(['CHEM-A'], candidate.ids, cat), false);
+  // Student modified draft: completely different draft
+  assert.equal(isCurrentCandidate(['CHEM-B'], candidate.ids, cat), false);
+  // Empty draft
+  assert.equal(isCurrentCandidate([], candidate.ids, cat), false);
+});
+
+test('isCurrentCandidate fails if candidate IDs were mutated to an invalid or stale schedule', () => {
+  const cat = getCatalogForScenario('main');
+  // Revert swap: keep STAT-A instead of STAT-B, producing conflict
+  const corrupted = ['BIO-214', 'BIO-214L-B', 'CHEM-A', 'STAT-A'];
+  assert.equal(isCurrentCandidate([...CATALOG_INITIAL_DRAFT], corrupted, cat), false);
+  // Omit linked lab
+  const missingLab = ['BIO-214', 'CHEM-A', 'STAT-B'];
+  assert.equal(isCurrentCandidate([...CATALOG_INITIAL_DRAFT], missingLab, cat), false);
+  // Unknown section ID in candidate
+  const unknownSection = ['BIO-214', 'BIO-214L-B', 'CHEM-A', 'STAT-999'];
+  assert.equal(isCurrentCandidate([...CATALOG_INITIAL_DRAFT], unknownSection, cat), false);
+});
+
+test('isCurrentCandidate fails if candidate time was mutated in catalog to overlap', () => {
+  const [candidate] = enumerateRepairs([...CATALOG_INITIAL_DRAFT], getCatalogForScenario('main'));
+  // Mutate candidate section time in catalog so it overlaps with CHEM-A (Tue 600-660)
+  const mutatedCat = getCatalogForScenario('main').map((s) =>
+    s.id === 'STAT-B' ? { ...s, day: 'Tue', start: 600, end: 660 } : s
+  );
+  assert.equal(isCurrentCandidate([...CATALOG_INITIAL_DRAFT], candidate.ids, mutatedCat), false);
+});
+
+test('isCurrentCandidate fails if candidate seat was mutated in catalog to full', () => {
+  const [candidate] = enumerateRepairs([...CATALOG_INITIAL_DRAFT], getCatalogForScenario('main'));
+  const mutatedCat = getCatalogForScenario('main').map((s) =>
+    s.id === 'BIO-214L-B' ? { ...s, seat: 'full', enrolled: 30, capacity: 30 } : s
+  );
+  assert.equal(isCurrentCandidate([...CATALOG_INITIAL_DRAFT], candidate.ids, mutatedCat), false);
+});
+
+test('isCurrentCandidate fails if candidate seat counts are corrupted or missing', () => {
+  const [candidate] = enumerateRepairs([...CATALOG_INITIAL_DRAFT], getCatalogForScenario('main'));
+  const corruptedCat = getCatalogForScenario('main').map((s) =>
+    s.id === 'STAT-B' ? { ...s, enrolled: 35, capacity: 30 } : s
+  );
+  assert.equal(isCurrentCandidate([...CATALOG_INITIAL_DRAFT], candidate.ids, corruptedCat), false);
+});
+
+test('isCurrentCandidate fails if candidate link requirement was mutated or broken in catalog', () => {
+  const [candidate] = enumerateRepairs([...CATALOG_INITIAL_DRAFT], getCatalogForScenario('main'));
+  const mutatedCat = getCatalogForScenario('main').map((s) =>
+    s.id === 'BIO-214' ? { ...s, requires: [] } : s
+  );
+  assert.equal(isCurrentCandidate([...CATALOG_INITIAL_DRAFT], candidate.ids, mutatedCat), false);
+});
+
+test('isCurrentCandidate fails if catalog is invalid or corrupted', () => {
+  const [candidate] = enumerateRepairs([...CATALOG_INITIAL_DRAFT], getCatalogForScenario('main'));
+  assert.equal(isCurrentCandidate([...CATALOG_INITIAL_DRAFT], candidate.ids, null), false);
+  assert.equal(isCurrentCandidate([...CATALOG_INITIAL_DRAFT], candidate.ids, []), false);
+  assert.equal(isCurrentCandidate([...CATALOG_INITIAL_DRAFT], candidate.ids, [{ id: '' }]), false);
 });
 
