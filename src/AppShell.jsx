@@ -78,7 +78,7 @@ export default function AppShell({ state, dispatch, children }) {
       <MenuBar />
 
       {/* ── Desktop Area ─────────────────────────────────────── */}
-      <div className="nb-desktop" aria-label="Desktop" role="main">
+      <div className="nb-desktop fixed bottom-0 left-0 right-0 overflow-hidden bg-[var(--color-cream)] [top:calc(34px/var(--zoom-factor,1))]" aria-label="Desktop" role="main">
         {/* polite live region for screen-readers */}
         <div aria-live="polite" aria-atomic="true" className="sr-only" id="nb-live" />
 
@@ -87,7 +87,7 @@ export default function AppShell({ state, dispatch, children }) {
           <DesktopWindow
             {...scheduleWin}
             width={Math.min(1280, typeof window !== 'undefined' ? window.innerWidth - 40 : 1280)}
-            maxBodyHeight="calc(100vh - 153px)"
+            maxBodyHeight="calc(100vh - 141px)"
             onClose={closeWindow}
             onMinimize={minimizeWindow}
             onFocus={bringToFront}

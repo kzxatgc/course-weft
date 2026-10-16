@@ -101,22 +101,22 @@ export default function DesktopWindow({
       role="dialog"
       aria-label={title}
       aria-modal="false"
-      className="nb-window"
+      className="flex min-w-[280px] max-w-[calc(100vw-16px)] flex-col border-[3px] border-[var(--color-navy)] bg-[var(--color-cream)] shadow-[6px_6px_0_var(--color-navy)] [animation:nb-win-open_0.12s_steps(2,end)_both]"
       style={posStyle}
       onPointerDown={() => onFocus(id)}
     >
       {/* ── Title Bar ─────────────────────────────────────────── */}
       <div
-        className="nb-titlebar"
+        className="flex shrink-0 select-none items-center justify-between border-b-[3px] border-[var(--color-navy)] bg-[var(--color-yellow)] px-2.5 py-[5px]"
         onPointerDown={handleTitlePointerDown}
         style={{ cursor: 'grab' }}
       >
-        <span className="nb-title" aria-hidden="true">{title}</span>
+        <span className="max-w-[calc(100%-80px)] overflow-hidden text-ellipsis whitespace-nowrap font-['Archivo_Black',sans-serif] text-xs font-black tracking-[0.03em] text-[var(--color-navy)]" aria-hidden="true">{title}</span>
 
-        <div className="nb-win-buttons" role="group" aria-label="Window controls">
+        <div className="flex shrink-0 gap-1" role="group" aria-label="Window controls">
           <button
             type="button"
-            className="nb-win-btn"
+            className="grid h-5 w-5 place-items-center border-2 border-[var(--color-navy)] bg-[var(--color-cream)] text-[var(--color-navy)] hover:bg-[var(--color-blue)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-blue)]"
             aria-label={`Minimize ${title}`}
             onClick={(e) => { e.stopPropagation(); onMinimize(id); }}
             title="Minimize"
@@ -125,7 +125,7 @@ export default function DesktopWindow({
           </button>
           <button
             type="button"
-            className="nb-win-btn nb-win-btn--close"
+            className="grid h-5 w-5 place-items-center border-2 border-[var(--color-navy)] bg-[var(--color-navy)] text-[var(--color-yellow)] hover:bg-red-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-blue)]"
             aria-label={`Close ${title}`}
             onClick={(e) => { e.stopPropagation(); onClose(id); }}
             title="Close"
@@ -138,7 +138,7 @@ export default function DesktopWindow({
       {/* ── Window Body ───────────────────────────────────────── */}
       {!isMinimized && (
         <div
-          className="nb-win-body"
+          className="min-h-0 flex-1 overflow-y-auto bg-[var(--color-cream)] p-1.5 text-[var(--color-charcoal)]"
           style={{
             maxHeight: maxBodyHeight,
             overflowY: 'auto',

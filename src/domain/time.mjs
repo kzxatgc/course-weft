@@ -34,3 +34,29 @@ export function formatTime(minutes) {
 export function formatTimeRange(item) {
   return `${item.day} ${formatTime(item.start)}–${formatTime(item.end)}`;
 }
+
+/**
+ * Convert minute-of-day integer to 4-digit 24h time string (e.g. 600 -> "1000").
+ *
+ * @param {number} minutes - Minutes from midnight (0–1440)
+ * @returns {string} 4-digit 24h time string
+ */
+export function format24hTime(minutes) {
+  if (!Number.isInteger(minutes) || minutes < 0 || minutes > 1440) return '0000';
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return `${h < 10 ? '0' : ''}${h}${m < 10 ? '0' : ''}${m}`;
+}
+
+/**
+ * Format a section's meeting time into 24h format (e.g. "THU 1000 - 1100").
+ *
+ * @param {{ day?: string, start: number, end: number }} item - Section record
+ * @returns {string} Formatted 24h slot string
+ */
+export function formatCourseSlot(item) {
+  if (!item) return '';
+  const dayStr = item.day ? item.day.toUpperCase() : '';
+  return `${dayStr} ${format24hTime(item.start)} - ${format24hTime(item.end)}`;
+}
+

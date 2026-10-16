@@ -1,27 +1,14 @@
 import React from 'react';
 import Timetable from './components/Timetable.jsx';
+import AvailableCourses from './components/AvailableCourses.jsx';
 import { MAIN_CATALOG, INITIAL_DRAFT } from './domain/available-courses.mjs';
-import { formatTimeRange } from './domain/time.mjs';
 
 /**
  * EarlySchedulePreview — main schedule workspace.
  *
- * Renders the weekly Timetable (Task 25) and the Available Courses side panel.
- * Both panels are visible side-by-side on large screens; stacked on narrow widths.
- *
+ * Renders the weekly Timetable (Task 25) and the Available Courses strip (Task 26).
  * All data is synthetic sample data only (no live registration system).
  */
-function format24hTime(min) {
-  const h = Math.floor(min / 60);
-  const m = min % 60;
-  return `${h < 10 ? '0' : ''}${h}${m < 10 ? '0' : ''}${m}`;
-}
-
-function formatCourseSlot(item) {
-  const dayStr = item.day ? item.day.toUpperCase() : '';
-  return `${dayStr} ${format24hTime(item.start)} - ${format24hTime(item.end)}`;
-}
-
 export default function EarlySchedulePreview({ state, dispatch }) {
   const availableCourses = state?.availableCourses || MAIN_CATALOG;
   const draft = state?.draft || INITIAL_DRAFT;
@@ -30,7 +17,7 @@ export default function EarlySchedulePreview({ state, dispatch }) {
   const selectedSections = availableCourses.filter((item) => draft.includes(item.id));
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 px-1.5 py-1">
       {/* Fallback disclosure — shown only when rendered without AppShell (standalone/tests) */}
       {!state && (
         <div
@@ -53,54 +40,13 @@ export default function EarlySchedulePreview({ state, dispatch }) {
 
       {/* ── Main planning workspace: Available Courses (top) + Timetable (below) ── */}
       <div className="flex flex-col gap-3 w-full">
-
-        {/* ── Available Courses horizontal strip (Top) ──────────────── */}
-        <section
-          aria-labelledby="catalogue-heading"
-          className="nb-courses-panel"
-        >
-          {/* Neo-brutalist yellow header bar matching timetable */}
-          <div className="nb-courses-header">
-            <h2 id="catalogue-heading" className="nb-courses-title">
-              Available Courses
-            </h2>
-            <span className="nb-courses-hint">
-              {MAIN_CATALOG.filter((item) => !draft.includes(item.id)).length} COURSES AVAILABLE · SWIPE OR SCROLL SIDEWAYS
-            </span>
-          </div>
-
-          {/* Horizontally scrolling row of neo-brutalist course cards */}
-          <div className="nb-courses-track nb-courses-scroll">
-            {MAIN_CATALOG.filter((item) => !draft.includes(item.id)).map((item) => (
-              <article
-                key={item.id}
-                className="nb-course-card"
-              >
-                <div>
-                  <div className="flex items-center justify-between gap-1.5">
-                    <span className="nb-course-id">{item.id}</span>
-                    <span className="nb-course-badge">
-                      {item.component}
-                    </span>
-                  </div>
-
-                  <h3 className="nb-course-name" title={item.title}>
-                    {item.title}
-                  </h3>
-                </div>
-
-                <div className="nb-course-footer">
-                  <span className="nb-course-time">
-                    {formatCourseSlot(item)}
-                  </span>
-                  <span className="nb-course-seats">
-                    {item.enrolled}/{item.capacity}
-                  </span>
-                </div>
-              </article>
-            ))}
-          </div>
-        </section>
+        {/* ── Available Courses horizontal strip (Task 26) ─────────── */}
+        <AvailableCourses
+          availableCourses={availableCourses}
+          draft={draft}
+          dispatch={dispatch}
+          search={state?.search || ''}
+        />
 
         {/* ── Weekly Timetable (Task 25) — spans entire window width ── */}
         <div className="w-full min-w-0">

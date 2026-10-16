@@ -340,3 +340,71 @@ describe('Timetable — remove control (domain side)', () => {
     assert.equal(s1.notice?.kind, 'success');
   });
 });
+
+// ── Task 26 — Available Courses search, 24h slots, and cards ────────────────
+import { format24hTime, formatCourseSlot } from '../src/domain/time.mjs';
+
+describe('Task 26 — Available Courses and search', () => {
+  it('format24hTime formats minutes into 4-digit 24h time', () => {
+    assert.equal(format24hTime(480), '0800');
+    assert.equal(format24hTime(600), '1000');
+    assert.equal(format24hTime(660), '1100');
+    assert.equal(format24hTime(810), '1330');
+    assert.equal(format24hTime(1080), '1800');
+  });
+
+  it('formatCourseSlot produces uppercase day and 24h time range', () => {
+    const slot = { day: 'thu', start: 600, end: 660 };
+    assert.equal(formatCourseSlot(slot), 'THU 1000 - 1100');
+  });
+
+  it('filters available courses by course code (case-insensitive)', () => {
+    const draft = ['CHEM-A', 'CHEM-LAB-A'];
+    const nonDraft = MAIN_CATALOG.filter((c) => !draft.includes(c.id));
+    const query = 'chem';
+    const matches = nonDraft.filter((item) => {
+      const codeMatch =
+        item.id?.toLowerCase().includes(query) ||
+        item.course?.toLowerCase().includes(query);
+      const nameMatch = item.title?.toLowerCase().includes(query);
+      return Boolean(codeMatch || nameMatch);
+    });
+
+    assert.ok(matches.length > 0);
+    assert.ok(matches.every((m) => m.id.toLowerCase().includes('chem') || m.course?.toLowerCase().includes('chem')));
+  });
+
+  it('filters available courses by course title (case-insensitive)', () => {
+    const draft = [];
+    const nonDraft = MAIN_CATALOG.filter((c) => !draft.includes(c.id));
+    const query = 'statistics';
+    const matches = nonDraft.filter((item) => {
+      const codeMatch =
+        item.id?.toLowerCase().includes(query) ||
+        item.course?.toLowerCase().includes(query);
+      const nameMatch = item.title?.toLowerCase().includes(query);
+      return Boolean(codeMatch || nameMatch);
+    });
+
+    assert.ok(matches.length > 0);
+    assert.ok(matches.some((m) => m.title.toLowerCase().includes('statistics')));
+  });
+
+  it('calculates derived seats remaining with non-negative lower bound', () => {
+    for (const c of MAIN_CATALOG) {
+      const seatsRemaining = Math.max(0, c.capacity - c.enrolled);
+      assert.ok(typeof seatsRemaining === 'number');
+      assert.ok(seatsRemaining >= 0);
+      assert.equal(seatsRemaining, c.capacity - c.enrolled);
+    }
+  });
+
+  it('SET_SEARCH updates state.search without mutating draft', async () => {
+    const { initialState, reduce, ACTION } = await import('../src/state/draft-controller.mjs');
+    const s0 = initialState();
+    const s1 = reduce(s0, { type: ACTION.SET_SEARCH, payload: 'stat' });
+    assert.equal(s1.search, 'stat');
+    assert.deepEqual(s1.draft, s0.draft);
+  });
+});
+
