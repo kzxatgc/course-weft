@@ -5,6 +5,7 @@ import {
   Settings2,
   User,
   ClipboardList,
+  Info,
 } from 'lucide-react';
 
 const ICON_MAP = {
@@ -13,15 +14,17 @@ const ICON_MAP = {
   settings:      <Settings2     size={16} strokeWidth={2.1} />,
   profile:       <User          size={16} strokeWidth={2.1} />,
   courseDetails: <ClipboardList size={16} strokeWidth={2.1} />,
+  websiteInfo:   <Info          size={16} strokeWidth={2.1} />,
 };
 
 /**
- * Bottom Dock — centered floating pill dock with 5 app tiles:
+ * Bottom Dock — centered floating pill dock with 6 app tiles:
  *   1. Schedule
  *   2. Demo Scenarios
  *   3. Settings (Themes)
  *   4. Profile (Bill Andrew)
  *   5. Course Details
+ *   6. Website Info
  *
  * Each tile features:
  *   - 2.5px solid navy border, rounded corners

@@ -47,6 +47,15 @@ export const WINDOW_CONFIGS = [
     defaultPos: { x: 720, y: 126 },
     width: 480,
   },
+  {
+    id: 'websiteInfo',
+    title: 'Website Information',
+    icon: 'ℹ',
+    label: 'Info',
+    defaultOpen: false,
+    defaultPos: { x: 760, y: 150 },
+    width: 520,
+  },
 ];
 
 /**

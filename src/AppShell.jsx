@@ -15,6 +15,7 @@ import SettingsWindow from './windows/SettingsWindow.jsx';
 import ProfileWindow from './windows/ProfileWindow.jsx';
 import CourseDetailsWindow from './windows/CourseDetailsWindow.jsx';
 import ScenarioWindow from './windows/ScenarioWindow.jsx';
+import WebsiteInfo from './windows/WebsiteInfo.jsx';
 
 /**
  * AppShell — neo-brutalist desktop OS container for EnrollFix.
@@ -22,8 +23,8 @@ import ScenarioWindow from './windows/ScenarioWindow.jsx';
  * Provides:
  * - Fixed top MenuBar (brand + clock)
  * - Cream dot-grid desktop area
- * - Four draggable, resizable, closable DesktopWindows
- *   (Schedule, Settings, Profile, Course Details)
+ * - Five draggable, resizable, closable DesktopWindows
+ *   (Schedule, Settings, Profile, Course Details, Website Info)
  * - Fixed bottom Dock with open/focus/reopen per window
  * - Five-palette theme system (persisted to localStorage)
  * - Accessible: keyboard Skip link, role=dialog windows, aria-labels throughout
@@ -164,9 +165,22 @@ export default function AppShell({ state, dispatch, children }) {
             <CourseDetailsWindow />
           </DesktopWindow>
         )}
+
+        {/* —— Website Info Window ———————————————————————— */}
+        {windows.find((w) => w.id === 'websiteInfo') && (
+          <DesktopWindow
+            {...windows.find((w) => w.id === 'websiteInfo')}
+            onClose={closeWindow}
+            onMinimize={minimizeWindow}
+            onFocus={bringToFront}
+            onMove={moveWindow}
+          >
+            <WebsiteInfo />
+          </DesktopWindow>
+        )}
       </div>
 
-      {/* ── Bottom Dock (5 application tiles) ─────────────── */}
+      {/* ── Bottom Dock (6 application tiles) ─────────────── */}
       <BottomBar
         windows={windows}
         onDockClick={handleDockClick}

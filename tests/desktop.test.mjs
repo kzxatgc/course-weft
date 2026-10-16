@@ -1,10 +1,12 @@
 /**
  * Task 23 — Desktop dock and Settings color themes
+ * Task 24 — Website Info window
  * Tests cover the pure logic and data contracts:
  *   - Theme catalogue completeness and colour formats
  *   - Default theme identity
  *   - useWindowManager pure state transitions
  *   - No real-profile side-effects (no network, no mutation of student data)
+ *   - WebsiteInfo window config (synthetic data, no auth/network fields)
  */
 import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
@@ -70,8 +72,8 @@ describe('Theme catalogue', () => {
 import { WINDOW_CONFIGS } from '../src/hooks/useWindowManager.js';
 
 describe('WINDOW_CONFIGS', () => {
-  it('has exactly 5 window entries', () => {
-    assert.equal(WINDOW_CONFIGS.length, 5);
+  it('has exactly 6 window entries', () => {
+    assert.equal(WINDOW_CONFIGS.length, 6);
   });
 
   it('window IDs are unique', () => {
@@ -96,13 +98,66 @@ describe('WINDOW_CONFIGS', () => {
     }
   });
 
-  it('dock contains Schedule, Scenarios, Settings, Profile, and Course Details', () => {
+  it('dock contains Schedule, Scenarios, Settings, Profile, Course Details, and Website Info', () => {
     const ids = WINDOW_CONFIGS.map((w) => w.id);
     assert.ok(ids.includes('schedule'));
     assert.ok(ids.includes('scenarios'));
     assert.ok(ids.includes('settings'));
     assert.ok(ids.includes('profile'));
     assert.ok(ids.includes('courseDetails'));
+    assert.ok(ids.includes('websiteInfo'));
+  });
+});
+
+// ── Task 24 — Website Info window ────────────────────────────────────────────
+describe('WebsiteInfo window config', () => {
+  const infoCfg = WINDOW_CONFIGS.find((w) => w.id === 'websiteInfo');
+
+  it('websiteInfo entry exists in WINDOW_CONFIGS', () => {
+    assert.ok(infoCfg, 'websiteInfo must be present in WINDOW_CONFIGS');
+  });
+
+  it('websiteInfo is closed by default (not open on launch)', () => {
+    assert.equal(infoCfg.defaultOpen, false);
+  });
+
+  it('websiteInfo has label "Info"', () => {
+    assert.equal(infoCfg.label, 'Info');
+  });
+
+  it('websiteInfo has a defined width (not fluid)', () => {
+    assert.ok(typeof infoCfg.width === 'number', 'websiteInfo.width must be a number');
+    assert.ok(infoCfg.width > 0, 'websiteInfo.width must be positive');
+  });
+
+  it('websiteInfo config contains no auth/token/session/apiUrl fields', () => {
+    assert.ok(!('authToken'  in infoCfg), 'must not expose auth tokens');
+    assert.ok(!('sessionId'  in infoCfg), 'must not expose session IDs');
+    assert.ok(!('apiUrl'     in infoCfg), 'must not expose API URLs');
+    assert.ok(!('submitUrl'  in infoCfg), 'must not expose submit endpoints');
+    assert.ok(!('networkUrl' in infoCfg), 'must not expose network URLs');
+  });
+
+  it('websiteInfo title mentions information (not registration action)', () => {
+    // Title should NOT contain words that imply a real registration action.
+    const title = infoCfg.title.toLowerCase();
+    assert.ok(!title.includes('submit'), 'title must not imply submission');
+    assert.ok(!title.includes('register'), 'title must not imply registration action');
+  });
+});
+
+describe('WebsiteInfo — no network or submission side-effects', () => {
+  it('WINDOW_CONFIGS has no window with a submitUrl or apiEndpoint field', () => {
+    for (const cfg of WINDOW_CONFIGS) {
+      assert.ok(!('submitUrl'    in cfg), `${cfg.id}: must not expose submitUrl`);
+      assert.ok(!('apiEndpoint'  in cfg), `${cfg.id}: must not expose apiEndpoint`);
+    }
+  });
+
+  it('exactly one window opens by default (schedule) — websiteInfo stays closed', () => {
+    const defaultOpen = WINDOW_CONFIGS.filter((w) => w.defaultOpen);
+    assert.equal(defaultOpen.length, 1);
+    assert.equal(defaultOpen[0].id, 'schedule');
   });
 });
 

@@ -478,6 +478,53 @@ body {
   padding: 1px 5px;
 }
 
+/* ── Website Info window — disclosure + description blocks ───────────────── */
+.nb-info-disclosure {
+  border: 2.5px solid var(--color-navy);
+  background-color: var(--color-yellow);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-shadow: 3px 3px 0 var(--color-navy);
+}
+
+.nb-info-disclosure-heading {
+  font-family: 'Archivo Black', sans-serif;
+  font-size: 11px;
+  font-weight: 900;
+  color: var(--color-navy);
+  letter-spacing: 0.04em;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.nb-info-disclosure-body {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--color-navy);
+  line-height: 1.6;
+  margin: 0;
+}
+
+.nb-info-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-top: 2px solid var(--color-navy);
+  padding-top: 10px;
+}
+
+.nb-info-section-heading {
+  font-family: 'Archivo Black', sans-serif;
+  font-size: 11px;
+  font-weight: 900;
+  color: var(--color-navy);
+  letter-spacing: 0.04em;
+  margin: 0;
+  text-transform: uppercase;
+}
+
 /* ════════════════════════════════════════════════════════════════
    Demo Scenarios Window
    ════════════════════════════════════════════════════════════════ */
