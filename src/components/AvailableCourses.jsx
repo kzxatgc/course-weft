@@ -404,8 +404,11 @@ export default function AvailableCourses({
             >
               Available Courses
             </h2>
-            <span className="text-[9px] font-bold font-mono tracking-wider uppercase text-[var(--color-navy)]/80 hidden sm:inline">
-              ({filteredCourses.length} {filteredCourses.length === 1 ? 'course' : 'courses'})
+            <span
+              className="nb-courses-count"
+              aria-label={`${availableItems.length} ${availableItems.length === 1 ? 'course' : 'courses'} available`}
+            >
+              {availableItems.length}
             </span>
           </div>
 

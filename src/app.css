@@ -1534,6 +1534,25 @@ body {
   margin: 0;
 }
 
+.nb-courses-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-width: 20px;
+  height: 24px;
+  padding: 0 4px;
+  border: 2px solid var(--color-navy);
+  border-radius: 4px;
+  background-color: var(--color-cream);
+  color: var(--color-navy);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+  flex: 0 0 auto;
+}
+
 .nb-courses-hint {
   font-family: 'JetBrains Mono', monospace;
   font-size: 9px;
