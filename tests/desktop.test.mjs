@@ -1458,4 +1458,102 @@ describe('Available Courses drag, drop, and cancel', () => {
     });
   });
 
+  // ── Task 34: Animate BIO-214 and linked-lab outlines ────────────────────────
+  describe('Task 34: Animate BIO-214 and linked-lab outlines', () => {
+    it('no BIO-214 means no link outline', async () => {
+      const { getLinkedOutlineSectionIds } = await import('../src/domain/linked-labs.mjs');
+      const { MAIN_CATALOG, INITIAL_DRAFT } = await import('../src/domain/available-courses.mjs');
+      // INITIAL_DRAFT is ['CHEM-A', 'STAT-A'] — no BIO-214
+      const result = getLinkedOutlineSectionIds(INITIAL_DRAFT, MAIN_CATALOG);
+      assert.deepStrictEqual(result, []);
+    });
+
+    it('BIO-214 without lab outlines lecture plus available lab choices', async () => {
+      const { getLinkedOutlineSectionIds } = await import('../src/domain/linked-labs.mjs');
+      const { MAIN_CATALOG } = await import('../src/domain/available-courses.mjs');
+      // In main catalog, both BIO-214L-A and BIO-214L-B have available seats
+      const result = getLinkedOutlineSectionIds(['CHEM-A', 'BIO-214'], MAIN_CATALOG);
+      assert.deepStrictEqual(result, ['BIO-214', 'BIO-214L-A', 'BIO-214L-B']);
+    });
+
+    it('full lab omitted from outlines', async () => {
+      const { getLinkedOutlineSectionIds } = await import('../src/domain/linked-labs.mjs');
+      const { catalogForScenario } = await import('../src/domain/available-courses.mjs');
+      // In noRepair catalog, BIO-214L-B is full (30/30)
+      const noRepairCatalog = catalogForScenario('noRepair');
+      const result = getLinkedOutlineSectionIds(['CHEM-A', 'BIO-214'], noRepairCatalog);
+      assert.deepStrictEqual(result, ['BIO-214', 'BIO-214L-A']);
+      assert.ok(!result.includes('BIO-214L-B'), 'full lab BIO-214L-B must be omitted from outlines');
+    });
+
+    it('selected lab stops outlines', async () => {
+      const { getLinkedOutlineSectionIds } = await import('../src/domain/linked-labs.mjs');
+      const { MAIN_CATALOG } = await import('../src/domain/available-courses.mjs');
+      // Adding BIO-214L-A satisfies the requirement -> outlines stop
+      const result = getLinkedOutlineSectionIds(['CHEM-A', 'BIO-214', 'BIO-214L-A'], MAIN_CATALOG);
+      assert.deepStrictEqual(result, []);
+    });
+
+    it('removing lab restores them', async () => {
+      const { getLinkedOutlineSectionIds } = await import('../src/domain/linked-labs.mjs');
+      const { MAIN_CATALOG } = await import('../src/domain/available-courses.mjs');
+      const beforeRemoval = getLinkedOutlineSectionIds(['CHEM-A', 'BIO-214', 'BIO-214L-A'], MAIN_CATALOG);
+      assert.deepStrictEqual(beforeRemoval, []);
+
+      // Remove lab -> outlines restored immediately
+      const afterRemoval = getLinkedOutlineSectionIds(['CHEM-A', 'BIO-214'], MAIN_CATALOG);
+      assert.deepStrictEqual(afterRemoval, ['BIO-214', 'BIO-214L-A', 'BIO-214L-B']);
+    });
+
+    it('returns a randomized adjacent rainbow color pair from the spectrum', async () => {
+      const { getRandomAdjacentRainbowPair, RAINBOW_ADJACENT_PAIRS } = await import(
+        '../src/domain/linked-labs.mjs'
+      );
+      const pair = getRandomAdjacentRainbowPair();
+      assert.strictEqual(Array.isArray(pair), true);
+      assert.strictEqual(pair.length, 2);
+      assert.ok(RAINBOW_ADJACENT_PAIRS.some((p) => p[0] === pair[0] && p[1] === pair[1]));
+    });
+
+    it('moving outline follows pointer independently of fixed preview', async () => {
+      const { readFileSync } = await import('node:fs');
+      const availSrc = readFileSync(
+        new URL('../src/components/AvailableCourses.jsx', import.meta.url),
+        'utf8'
+      );
+      assert.ok(availSrc.includes('nb-linked-outline'), 'AvailableCourses applies nb-linked-outline');
+      assert.ok(
+        availSrc.includes('HeldCardContent') && availSrc.includes('hasLinkedOutline'),
+        'HeldCardContent receives hasLinkedOutline so outline travels with held card'
+      );
+
+      const timetableSrc = readFileSync(
+        new URL('../src/components/Timetable.jsx', import.meta.url),
+        'utf8'
+      );
+      assert.ok(timetableSrc.includes('data-linked-outline'), 'Timetable tracks data-linked-outline');
+      // Fixed preview must remain separate and not receive nb-linked-outline
+      const fixedPreviewBlockMatch = timetableSrc.match(/function FixedPreviewBlock[\s\S]*?return \([\s\S]*?\);/);
+      assert.ok(fixedPreviewBlockMatch, 'FixedPreviewBlock exists');
+      assert.ok(
+        !fixedPreviewBlockMatch[0].includes('nb-linked-outline'),
+        'FixedPreviewBlock remains separate and does not take nb-linked-outline'
+      );
+    });
+
+    it('app.css styles chasing rainbow outline and reduced-motion alternative', async () => {
+      const { readFileSync } = await import('node:fs');
+      const css = readFileSync(
+        new URL('../src/app.css', import.meta.url),
+        'utf8'
+      );
+      assert.ok(css.includes('.nb-linked-outline'), 'app.css has .nb-linked-outline');
+      assert.ok(css.includes('nb-rainbow-chase'), 'app.css defines nb-rainbow-chase animation');
+      assert.ok(
+        css.includes('prefers-reduced-motion') && css.includes('.nb-linked-outline'),
+        'app.css supports reduced-motion alternative for linked outline'
+      );
+    });
+  });
+
 });

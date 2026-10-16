@@ -64,11 +64,13 @@ export const MAIN_CATALOG = Object.freeze([
     sectionName: 'Lab A',
     linkedGroup: 'BIO-214-labs',
     requiredBy: 'BIO-214',
+    alternates: ['BIO-214L-B'],
   }),
   section('BIO-214L-B', 'BIO', 'Cell Biology Laboratory', 'lab', 'Wed', 840, 960, 22, 30, {
     sectionName: 'Lab B',
     linkedGroup: 'BIO-214-labs',
     requiredBy: 'BIO-214',
+    alternates: ['BIO-214L-A'],
   }),
 ]);
 

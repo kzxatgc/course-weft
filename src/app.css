@@ -1362,6 +1362,74 @@ body {
   }
 }
 
+/* ── Task 34: BIO-214 & Linked Lab Chasing Rainbow Outline ─────── */
+.nb-course-card.nb-linked-outline {
+  position: relative !important;
+  border-color: var(--rainbow-c1, #ec4899) !important;
+  box-shadow: 0 0 0 3.5px var(--rainbow-c1, #ec4899), 0 0 12px var(--rainbow-c2, #8b5cf6) !important;
+}
+
+.nb-tt-block.nb-linked-outline {
+  position: absolute !important;
+  top: 3px !important;
+  bottom: 3px !important;
+  height: calc(100% - 6px) !important;
+  overflow: visible !important;
+  z-index: 12 !important;
+  border-color: var(--rainbow-c1, #ec4899) !important;
+  box-shadow: 0 0 0 2.5px var(--rainbow-c1, #ec4899), 0 0 8px var(--rainbow-c2, #8b5cf6) !important;
+}
+
+.nb-linked-outline::after {
+  content: '';
+  position: absolute;
+  inset: -3.5px;
+  border-radius: inherit;
+  padding: 3.5px;
+  background: linear-gradient(
+    90deg,
+    var(--rainbow-c1, #ec4899),
+    var(--rainbow-c2, #8b5cf6),
+    var(--rainbow-c1, #ec4899),
+    var(--rainbow-c2, #8b5cf6)
+  );
+  background-size: 300% 300%;
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  z-index: 25;
+  animation: nb-rainbow-chase 2s linear infinite;
+}
+
+.nb-tt-block.nb-linked-outline::after {
+  inset: -2px;
+  padding: 2.5px;
+}
+
+@keyframes nb-rainbow-chase {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nb-linked-outline::after {
+    animation: none !important;
+    background: linear-gradient(
+      135deg,
+      var(--rainbow-c1, #ec4899),
+      var(--rainbow-c2, #8b5cf6)
+    ) !important;
+  }
+}
+
 
 
 /* ════════════════════════════════════════════════════════════════

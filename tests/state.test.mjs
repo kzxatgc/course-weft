@@ -439,14 +439,13 @@ describe('ADD_SECTION', () => {
     assert.match(next.notice.message, /meets on Thu/i);
   });
 
-  it('standalone lab gets explanatory refusal without mutating draft', () => {
+  it('adds standalone lab to draft and prompts for lecture', () => {
     const s = initialState();
     // Try adding lab BIO-214L-A while lecture BIO-214 is not in draft
     const next = reduce(s, { type: ACTION.ADD_SECTION, payload: 'BIO-214L-A' });
-    assert.deepEqual(next.draft, s.draft);
-    assert.equal(next.notice.kind, 'error');
-    assert.match(next.notice.title, /choose the lecture first/i);
-    assert.match(next.notice.message, /BIO-214/i);
+    assert.deepEqual(next.draft, [...s.draft, 'BIO-214L-A']);
+    assert.equal(next.notice.kind, 'info');
+    assert.match(next.notice.title, /lecture required/i);
   });
 
   it('rejects duplicate course and suggests switch without mutating draft', () => {
@@ -468,14 +467,14 @@ describe('ADD_SECTION', () => {
     assert.match(next.notice.title, /clashes with your timetable/i);
   });
 
-  it('rejects missing linked lab without mutating draft and records request', () => {
+  it('adds BIO-214 to draft when no clash and prompts for linked lab', () => {
     // Draft without clash: remove STAT-A so BIO-214 has no time overlap
     const s1 = reduce(initialState(), { type: ACTION.REMOVE_SECTION, payload: 'STAT-A' });
-    // But BIO-214 requires a linked lab from BIO-214-labs
+    // Adding BIO-214 places it on the draft so the linked lab outline can guide the user
     const s2 = reduce(s1, { type: ACTION.ADD_SECTION, payload: 'BIO-214' });
-    assert.deepEqual(s2.draft, ['CHEM-A']);
-    assert.equal(s2.request, 'BIO-214');
-    assert.equal(s2.notice.kind, 'error');
+    assert.deepEqual(s2.draft, ['CHEM-A', 'BIO-214']);
+    assert.equal(s2.request, null);
+    assert.equal(s2.notice.kind, 'info');
     assert.match(nextNoticeTitleOrMessage(s2), /lab/i);
   });
 });
@@ -571,13 +570,13 @@ describe('REMOVE_SECTION', () => {
     assert.deepEqual(next.draft, ['CHEM-A']);
   });
 
-  it('removing child lab cascades removal of parent lecture', () => {
+  it('removing child lab keeps parent lecture in draft to restore link outlines', () => {
     const s = {
       ...initialState(),
       draft: Object.freeze(['CHEM-A', 'BIO-214', 'BIO-214L-A']),
     };
     const next = reduce(s, { type: ACTION.REMOVE_SECTION, payload: 'BIO-214L-A' });
-    assert.deepEqual(next.draft, ['CHEM-A']);
+    assert.deepEqual(next.draft, ['CHEM-A', 'BIO-214']);
   });
 });
 
@@ -602,7 +601,7 @@ describe('RESET_DRAFT', () => {
     assert.equal(reset.request, null);
     assert.equal(reset.snapshot, null);
     assert.equal(reset.search, '');
-    assert.equal(reset.notice.kind, 'info');
+    assert.equal(reset.notice, null);
   });
 });
 
@@ -691,8 +690,7 @@ describe('suggestion, apply, exact undo, dismiss', () => {
     assert.equal(s3.candidate, null, 'applied preview cleared');
     assert.equal(s3.snapshot, null);
     assert.equal(s3.isApplied, false);
-    assert.equal(s3.notice.kind, 'success');
-    assert.match(s3.notice.title, /restored/i);
+    assert.equal(s3.notice, null);
   });
 
   it('stale Apply is rejected and does not mutate draft', () => {

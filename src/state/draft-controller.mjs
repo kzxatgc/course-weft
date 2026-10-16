@@ -227,19 +227,7 @@ export function reduce(state, action) {
         });
       }
 
-      // Standalone lab refusal: cannot add lab if linked lecture is not in draft
-      if (item.requiredBy && !state.draft.includes(item.requiredBy)) {
-        const parent = state.availableCourses.find((c) => c.id === item.requiredBy);
-        const parentLabel = parent ? `${parent.title} (${item.requiredBy})` : item.requiredBy;
-        return Object.freeze({
-          ...state,
-          notice: Object.freeze({
-            kind: 'error',
-            title: 'Choose the lecture first',
-            message: `This lab is linked to ${parentLabel}. Add the lecture and a lab together. Your timetable has not changed.`,
-          }),
-        });
-      }
+
 
       // Duplicate course/component check: user already has another section of this course/component
       const byId = new Map(state.availableCourses.map((c) => [c.id, c]));
@@ -280,12 +268,31 @@ export function reduce(state, action) {
       const validation = validateDraft(nextDraft, state.availableCourses);
       if (!validation.ok) {
         const hasRequiredLab = Array.isArray(item.requires) && item.requires.length > 0;
+        const isLinkedLab = Boolean(item.requiredBy || item.linkedGroup);
+        if (
+          hasRequiredLab ||
+          isLinkedLab ||
+          validation.reason === 'linked-group-invalid' ||
+          validation.reason === 'orphan-linked-section'
+        ) {
+          const parent = item.requiredBy ? state.availableCourses.find((c) => c.id === item.requiredBy) : null;
+          const parentLabel = parent ? `${parent.title} (${item.requiredBy})` : 'its lecture';
+          return Object.freeze({
+            ...state,
+            draft: Object.freeze(nextDraft),
+            notice: Object.freeze({
+              kind: 'info',
+              title: item.requiredBy ? 'Lab added — lecture required' : 'Class added — lab required',
+              message: item.requiredBy
+                ? `${item.title} is now on your timetable. Please choose the linked lecture (${parentLabel}).`
+                : `${item.title} is now on your timetable. Please choose a linked lab from Available Courses.`,
+            }),
+          });
+        }
+
         let title = 'This class cannot be added yet';
         let message = 'It needs a linked course or another section choice. Your current timetable has not changed.';
-        if (hasRequiredLab || validation.reason === 'linked-group-invalid') {
-          title = 'A lab section is also required';
-          message = `${item.title} needs one linked lab. Choose both sections together so their times fit your timetable.`;
-        } else if (validation.reason === 'seat-not-certified-open') {
+        if (validation.reason === 'seat-not-certified-open') {
           title = 'Section is full';
           message = `${item.title} (${item.id}) has no open seats.`;
         }
@@ -381,6 +388,37 @@ export function reduce(state, action) {
       // Whole-draft validation
       const validation = validateDraft(nextDraft, state.availableCourses);
       if (!validation.ok) {
+        const isLabSwapWithoutLecture =
+          validation.reason === 'orphan-linked-section' &&
+          fromItem.requiredBy &&
+          toItem.requiredBy &&
+          fromItem.requiredBy === toItem.requiredBy;
+        const isUnrelatedSwapWithMissingLinkedCourse =
+          (validation.reason === 'linked-group-invalid' || validation.reason === 'orphan-linked-section') &&
+          !fromItem.requires &&
+          !toItem.requires &&
+          !fromItem.requiredBy &&
+          !toItem.requiredBy;
+
+        if (isLabSwapWithoutLecture || isUnrelatedSwapWithMissingLinkedCourse) {
+          const clash = nextDraft
+            .filter((id) => id !== toId)
+            .map((id) => byId.get(id))
+            .find((c) => c && overlaps(toItem, c));
+          const hasSeat = toItem.capacity > toItem.enrolled;
+          if (!clash && hasSeat) {
+            return Object.freeze({
+              ...state,
+              draft: Object.freeze(nextDraft),
+              notice: Object.freeze({
+                kind: 'success',
+                title: 'Section updated',
+                message: `Switched from ${fromItem.title} (${fromId}) to ${toItem.title} (${toId}).`,
+              }),
+            });
+          }
+        }
+
         let title = 'This section cannot be selected';
         let message = 'Choosing this section would make your timetable incomplete or create another conflict. Your current selection has been kept.';
         if (validation.reason === 'time-conflict') {
@@ -430,9 +468,8 @@ export function reduce(state, action) {
       const item = byId.get(sectionId);
       const idsToRemove = new Set([sectionId]);
 
-      if (item?.requiredBy) {
-        idsToRemove.add(item.requiredBy);
-      }
+      // Do not cascade-remove parent lecture when removing child lab;
+      // this allows BIO-214 to remain on the timetable and re-trigger missing lab outlines.
       for (const draftId of state.draft) {
         const sec = byId.get(draftId);
         if (sec?.requiredBy === sectionId) {

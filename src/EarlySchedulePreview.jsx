@@ -9,6 +9,10 @@ import {
   evaluateSwap,
   getEffectiveSwapDuration,
 } from './domain/drop-preview.mjs';
+import {
+  getRandomAdjacentRainbowPair,
+  getLinkedOutlineSectionIds,
+} from './domain/linked-labs.mjs';
 
 /**
  * EarlySchedulePreview — main schedule workspace.
@@ -25,6 +29,10 @@ export default function EarlySchedulePreview({ state, dispatch }) {
   const [animatingSwap, setAnimatingSwap] = useState(null);
   const [returningCard, setReturningCard] = useState(null);
   const [returningCardId, setReturningCardId] = useState(null);
+  const rainbowPair = getRandomAdjacentRainbowPair();
+
+  // Task 34: Sections that should show the chasing rainbow outline
+  const linkedOutlineIds = getLinkedOutlineSectionIds(draft, availableCourses);
 
   // Fully hydrated section records for sections currently in the draft
   const selectedSections = availableCourses.filter((item) => draft.includes(item.id));
@@ -187,6 +195,8 @@ export default function EarlySchedulePreview({ state, dispatch }) {
             onRequestSwap={handleRequestSwap}
             animatingReturnId={returningCardId}
             returningCardId={returningCardId}
+            linkedOutlineIds={linkedOutlineIds}
+            rainbowPair={rainbowPair}
           />
 
           {/* ── Weekly Timetable — spans entire window width ── */}
@@ -199,6 +209,8 @@ export default function EarlySchedulePreview({ state, dispatch }) {
               fixedPreviewSectionId={previewSectionId}
               animatingSwap={animatingSwap}
               onRequestSwap={handleRequestSwap}
+              linkedOutlineIds={linkedOutlineIds}
+              rainbowPair={rainbowPair}
             />
           </div>
         </div>

@@ -51,6 +51,8 @@ export default function Timetable({
   previewSectionId = null,
   animatingSwap = null,
   onRequestSwap = null,
+  linkedOutlineIds = [],
+  rainbowPair = null,
 }) {
   function handleRemove(id) {
     dispatch({ type: ACTION.REMOVE_SECTION, payload: id });
@@ -78,7 +80,7 @@ export default function Timetable({
     selectedSections.forEach((sec) => {
       if (
         sec.id !== targetSection.id &&
-        (sec.course === targetSection.course ||
+        ((sec.course === targetSection.course && sec.component === targetSection.component) ||
           (Array.isArray(targetSection.alternates) && targetSection.alternates.includes(sec.id)) ||
           (Array.isArray(sec.alternates) && sec.alternates.includes(targetSection.id)))
       ) {
@@ -325,6 +327,8 @@ export default function Timetable({
                 heldSectionId={heldSection?.sec.id}
                 incomingSwapSection={incomingSwapSection}
                 replacedSectionIds={replacedSectionIds}
+                linkedOutlineIds={linkedOutlineIds}
+                rainbowPair={rainbowPair}
                 onDragOver={handleDayDragOver}
                 onDragLeave={clearGhost}
                 onDrop={clearGhost}
@@ -383,6 +387,8 @@ function DayRow({
   heldSectionId,
   incomingSwapSection,
   replacedSectionIds,
+  linkedOutlineIds,
+  rainbowPair,
   onDragOver,
   onDragLeave,
   onDrop,
@@ -457,6 +463,8 @@ function DayRow({
               sec={sec}
               isOutgoing={isOutgoing}
               isReplaced={isReplaced}
+              linkedOutlineIds={linkedOutlineIds}
+              rainbowPair={rainbowPair}
               onRemove={onRemove}
               onPointerDown={(e) => onSectionPointerDown?.(e, sec)}
             />
@@ -543,22 +551,43 @@ function format24h(minute) {
   return `${hStr}${mStr}`;
 }
 
-function SectionBlock({ sec, isOutgoing = false, isReplaced = false, onRemove, onPointerDown }) {
+function SectionBlock({
+  sec,
+  isOutgoing = false,
+  isReplaced = false,
+  linkedOutlineIds = [],
+  rainbowPair = null,
+  onRemove,
+  onPointerDown,
+}) {
   const leftPct = toPercent(sec.start);
   const widthPct = ((sec.end - sec.start) / TOTAL_MINUTES) * 100;
   const timeLabel = `${format24h(sec.start)} - ${format24h(sec.end)}`;
+  const hasLinkedOutline = Boolean(linkedOutlineIds?.includes(sec.id));
 
   return (
     <article
       className={`nb-tt-block cursor-grab select-none touch-none ${
         isOutgoing ? 'nb-tt-swap-outgoing' : ''
-      } ${isReplaced ? 'nb-tt-block--swapping-out' : ''}`}
-      style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
+      } ${isReplaced ? 'nb-tt-block--swapping-out' : ''} ${
+        hasLinkedOutline ? 'nb-linked-outline' : ''
+      }`}
+      style={{
+        left: `${leftPct}%`,
+        width: `${widthPct}%`,
+        ...(hasLinkedOutline && rainbowPair
+          ? {
+              '--rainbow-c1': rainbowPair[0],
+              '--rainbow-c2': rainbowPair[1],
+            }
+          : {}),
+      }}
       aria-label={`${sec.title} (${sec.id}), ${sec.day} ${timeLabel}`}
       title={`${sec.title} (${sec.id})\n${sec.day} ${timeLabel}`}
       onPointerDown={onPointerDown}
       data-testid={`timetable-block-${sec.id}`}
       data-is-replaced={isReplaced ? 'true' : 'false'}
+      data-linked-outline={hasLinkedOutline ? 'true' : 'false'}
     >
       <span className="nb-tt-block-id">{sec.id}</span>
     </article>

@@ -12,7 +12,7 @@
  * The DataTransfer payload written by AvailableCourses on dragStart is just
  * the section ID string. Timetable reads it via event.dataTransfer.getData().
  */
-import { validateDraft } from './validate.mjs';
+import { validateDraft, overlaps } from './validate.mjs';
 
 export const SNAP_MINUTES   = 15;
 export const DAY_START_MIN  = 8  * 60;  // 480
@@ -323,6 +323,33 @@ export function evaluateSwap({ draft, availableCourses, fromId, toId }) {
   const validation = validateDraft(nextDraft, availableCourses);
 
   if (!validation.ok) {
+    const isLabSwapWithoutLecture =
+      validation.reason === 'orphan-linked-section' &&
+      fromItem.requiredBy &&
+      toItem.requiredBy &&
+      fromItem.requiredBy === toItem.requiredBy;
+    const isUnrelatedSwapWithMissingLinkedCourse =
+      (validation.reason === 'linked-group-invalid' || validation.reason === 'orphan-linked-section') &&
+      !fromItem.requires &&
+      !toItem.requires &&
+      !fromItem.requiredBy &&
+      !toItem.requiredBy;
+
+    if (isLabSwapWithoutLecture || isUnrelatedSwapWithMissingLinkedCourse) {
+      const clash = nextDraft
+        .filter((id) => id !== toId)
+        .map((id) => byId.get(id))
+        .find((c) => c && overlaps(toItem, c));
+      const hasSeat = toItem.capacity > toItem.enrolled;
+      if (!clash && hasSeat) {
+        return {
+          valid: true,
+          reason: 'ok',
+          nextDraft,
+        };
+      }
+    }
+
     return {
       valid: false,
       reason: validation.reason,

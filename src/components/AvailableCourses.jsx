@@ -52,6 +52,8 @@ export default function AvailableCourses({
   onRequestSwap,
   animatingReturnId = null,
   returningCardId = null,
+  linkedOutlineIds = [],
+  rainbowPair = null,
 }) {
   const [localSearch, setLocalSearch] = useState(controlledSearch);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
@@ -128,12 +130,12 @@ export default function AvailableCourses({
   function handleCardClick(item, dropInfo = null) {
     if (!dispatch) return;
 
-    // Check if another section of this course (or an alternate) is already in the draft
+    // Check if another section of this course component (or declared alternate) is already in the draft
     const draftedAlternate = draft.find((draftId) => {
       const drafted = availableCourses.find((c) => c.id === draftId);
       if (!drafted) return false;
       return (
-        drafted.course === item.course ||
+        (drafted.course === item.course && drafted.component === item.component) ||
         (Array.isArray(item.alternates) && item.alternates.includes(draftId)) ||
         (Array.isArray(drafted.alternates) && drafted.alternates.includes(item.id))
       );
@@ -440,8 +442,14 @@ export default function AvailableCourses({
               const seatsRemaining = Math.max(0, item.capacity - item.enrolled);
               const isSwitch = draft.some((draftId) => {
                 const drafted = availableCourses.find((c) => c.id === draftId);
-                return drafted && (drafted.course === item.course || item.alternates?.includes(draftId));
+                return (
+                  drafted &&
+                  ((drafted.course === item.course && drafted.component === item.component) ||
+                    item.alternates?.includes(draftId))
+                );
               });
+
+              const hasLinkedOutline = Boolean(linkedOutlineIds?.includes(item.id));
 
               return (
                 <button
@@ -462,7 +470,18 @@ export default function AvailableCourses({
                   onFocus={() => onPreviewSectionChange?.(item.id)}
                   onBlur={() => onPreviewSectionChange?.(null)}
                   onPointerDown={(e) => handlePointerDown(e, item)}
-                  className="nb-course-card w-[195px] min-w-[195px] shrink-0 bg-[var(--color-cream)] border-2 border-[var(--color-navy)] rounded p-2 flex flex-col justify-between gap-1.5 cursor-grab text-left transition-colors duration-75 hover:bg-[var(--color-yellow)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-blue)] touch-none"
+                  className={`nb-course-card w-[195px] min-w-[195px] shrink-0 bg-[var(--color-cream)] border-2 border-[var(--color-navy)] rounded p-2 flex flex-col justify-between gap-1.5 cursor-grab text-left transition-colors duration-75 hover:bg-[var(--color-yellow)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-blue)] touch-none ${
+                    hasLinkedOutline ? 'nb-linked-outline' : ''
+                  }`}
+                  style={
+                    hasLinkedOutline && rainbowPair
+                      ? {
+                          '--rainbow-c1': rainbowPair[0],
+                          '--rainbow-c2': rainbowPair[1],
+                        }
+                      : undefined
+                  }
+                  data-linked-outline={hasLinkedOutline ? 'true' : 'false'}
                   role="listitem"
                   aria-label={`${item.title} (${item.id}), ${formatCourseSlot(item)}, ${seatsRemaining} seats remaining — drag onto timetable to add`}
                 >
@@ -662,9 +681,15 @@ export default function AvailableCourses({
                 item={heldCard.item}
                 isSwitch={draft.some((draftId) => {
                   const drafted = availableCourses.find((c) => c.id === draftId);
-                  return drafted && (drafted.course === heldCard.item.course || heldCard.item.alternates?.includes(draftId));
+                  return (
+                    drafted &&
+                    ((drafted.course === heldCard.item.course && drafted.component === heldCard.item.component) ||
+                      heldCard.item.alternates?.includes(draftId))
+                  );
                 })}
                 formatCourseSlot={formatCourseSlot}
+                hasLinkedOutline={Boolean(linkedOutlineIds?.includes(heldCard.item.id))}
+                rainbowPair={rainbowPair}
               />
             </div>,
             document.body
@@ -677,12 +702,23 @@ export default function AvailableCourses({
 
 // ── Held card floating content───────────────────────────────────
 
-function HeldCardContent({ item, isSwitch, formatCourseSlot }) {
+function HeldCardContent({ item, isSwitch, formatCourseSlot, hasLinkedOutline = false, rainbowPair = null }) {
   const seatsRemaining = Math.max(0, item.capacity - item.enrolled);
 
   return (
     <div
-      className="nb-course-card nb-course-card--lifted w-full h-full bg-[var(--color-cream)] border-2 border-[var(--color-navy)] rounded p-2 flex flex-col justify-between gap-1.5 text-left shadow-[6px_6px_0px_var(--color-navy)] bg-[var(--color-yellow)] cursor-grabbing"
+      className={`nb-course-card nb-course-card--lifted w-full h-full bg-[var(--color-cream)] border-2 border-[var(--color-navy)] rounded p-2 flex flex-col justify-between gap-1.5 text-left shadow-[6px_6px_0px_var(--color-navy)] bg-[var(--color-yellow)] cursor-grabbing ${
+        hasLinkedOutline ? 'nb-linked-outline' : ''
+      }`}
+      style={
+        hasLinkedOutline && rainbowPair
+          ? {
+              '--rainbow-c1': rainbowPair[0],
+              '--rainbow-c2': rainbowPair[1],
+            }
+          : undefined
+      }
+      data-linked-outline={hasLinkedOutline ? 'true' : 'false'}
       aria-hidden="true"
     >
       <div>
