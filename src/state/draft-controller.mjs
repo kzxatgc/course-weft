@@ -267,6 +267,7 @@ export function reduce(state, action) {
             kind: 'error',
             title: 'This class clashes with your timetable',
             message: `${item.title} (${item.id}) conflicts with ${clash.title} (${clash.id}). The class has not been added.`,
+            action: 'suggest',
           }),
         });
       }
@@ -292,6 +293,7 @@ export function reduce(state, action) {
             kind: 'error',
             title,
             message,
+            action: 'suggest',
           }),
         });
       }
@@ -571,7 +573,7 @@ export function reduce(state, action) {
         notice: Object.freeze({
           kind: 'success',
           title: 'Timetable updated',
-          message: 'These changes are saved in this demo only. You have not enrolled at your university.',
+          message: 'The changes are saved.',
         }),
       });
     }

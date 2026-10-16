@@ -6,10 +6,12 @@ import {
   User,
   ClipboardList,
   Info,
+  Wrench,
 } from 'lucide-react';
 
 const ICON_MAP = {
   schedule:      <CalendarDays  size={16} strokeWidth={2.1} />,
+  repair:        <Wrench        size={16} strokeWidth={2.1} />,
   scenarios:     <FlaskConical  size={16} strokeWidth={2.1} />,
   settings:      <Settings2     size={16} strokeWidth={2.1} />,
   profile:       <User          size={16} strokeWidth={2.1} />,
@@ -33,10 +35,13 @@ const ICON_MAP = {
  *   - Thick rectangular underline bar indicator pinned flush inside bottom edge
  */
 export default function BottomBar({ windows, onDockClick }) {
+  const staticWindows = windows.filter((w) => !w.isDynamic);
+  const dynamicWindows = windows.filter((w) => w.isDynamic && w.isOpen);
+
   return (
     <nav className="nb-dock" aria-label="Application dock">
       <div className="nb-dock-inner">
-        {windows.map((win) => {
+        {staticWindows.map((win) => {
           const isActive = win.isOpen && !win.isMinimized;
           const isMinimized = win.isOpen && win.isMinimized;
           return (
@@ -61,6 +66,37 @@ export default function BottomBar({ windows, onDockClick }) {
             </button>
           );
         })}
+
+        {/* Dynamic window tiles (e.g. Repair) separated by divider, visible only when open */}
+        {dynamicWindows.length > 0 && (
+          <>
+            <div className="nb-dock-divider" aria-hidden="true" />
+            {dynamicWindows.map((win) => {
+              const isActive = win.isOpen && !win.isMinimized;
+              const isMinimized = win.isOpen && win.isMinimized;
+              return (
+                <button
+                  key={win.id}
+                  type="button"
+                  id={`dock-${win.id}`}
+                  className={`nb-dock-item nb-dock-item--active${isMinimized ? ' nb-dock-item--minimized' : ''}`}
+                  style={{ backgroundColor: 'var(--color-yellow)' }}
+                  onClick={() => onDockClick(win.id)}
+                  aria-label={isActive ? `Focus ${win.label}` : isMinimized ? `Restore ${win.label}` : `Open ${win.label}`}
+                  title={win.label}
+                >
+                  <span className="nb-dock-icon" aria-hidden="true">
+                    {ICON_MAP[win.id] ?? win.icon}
+                  </span>
+                  <span
+                    className={`nb-dock-dot${isMinimized ? ' nb-dock-dot--minimized' : ''}`}
+                    aria-hidden="true"
+                  />
+                </button>
+              );
+            })}
+          </>
+        )}
       </div>
     </nav>
   );

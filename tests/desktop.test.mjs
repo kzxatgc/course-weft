@@ -408,3 +408,70 @@ describe('Task 26 — Available Courses and search', () => {
   });
 });
 
+// ── Task 27: Add/Swap/Keep Repair Preview ─────────────────────────────────────
+describe('Task 27 — Repair Preview impact groups and controller wiring', () => {
+  it('package.json includes motion in dependencies', async () => {
+    const { readFileSync } = await import('node:fs');
+    const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+    assert.ok(pkg.dependencies?.motion, 'motion must be listed in dependencies');
+  });
+
+  it('ADD_SECTION clash sets notice.action to suggest', async () => {
+    const { initialState, reduce, ACTION } = await import('../src/state/draft-controller.mjs');
+    const s0 = initialState();
+    // BIO-214 clashes with STAT-A in initial draft
+    const s1 = reduce(s0, { type: ACTION.ADD_SECTION, payload: 'BIO-214' });
+    assert.equal(s1.notice?.kind, 'error');
+    assert.equal(s1.notice?.action, 'suggest', 'clash notice must have action: "suggest" for Find valid repair button');
+    assert.equal(s1.request, 'BIO-214');
+    assert.deepEqual(s1.draft, s0.draft, 'draft is preserved until user applies repair');
+  });
+
+  it('SUGGEST_REPAIR populates candidate with valid Add/Swap/Keep groups', async () => {
+    const { initialState, reduce, ACTION } = await import('../src/state/draft-controller.mjs');
+    const s0 = initialState();
+    const s1 = reduce(s0, { type: ACTION.SUGGEST_REPAIR, payload: 'BIO-214' });
+    assert.ok(s1.candidate !== null, 'candidate must be populated');
+    assert.ok(s1.candidate.validation?.ok, 'candidate must be independently validated');
+
+    // Derivation of groups:
+    const swap = s1.candidate.swap;
+    assert.deepEqual(swap, { old: 'STAT-A', replacement: 'STAT-B' });
+
+    // Added sections excluding the swap replacement:
+    const addIds = (s1.candidate.added || []).filter(
+      (id) => !swap || id !== swap.replacement
+    );
+    assert.deepEqual(addIds, ['BIO-214', 'BIO-214L-B']);
+
+    // Kept sections:
+    const keepIds = s1.candidate.kept || [];
+    assert.deepEqual(keepIds, ['CHEM-A']);
+
+    // Total post-repair draft matches full candidate ids:
+    const finalSet = [...addIds, swap.replacement, ...keepIds].sort();
+    assert.deepEqual(finalSet, s1.candidate.ids.slice().sort());
+  });
+
+  it('DISMISS_REPAIR clears candidate without mutating draft', async () => {
+    const { initialState, reduce, ACTION } = await import('../src/state/draft-controller.mjs');
+    const s0 = initialState();
+    const s1 = reduce(s0, { type: ACTION.SUGGEST_REPAIR, payload: 'BIO-214' });
+    assert.ok(s1.candidate !== null);
+
+    const s2 = reduce(s1, { type: ACTION.DISMISS_REPAIR });
+    assert.equal(s2.candidate, null, 'candidate must be cleared on dismiss');
+    assert.deepEqual(s2.draft, s0.draft, 'draft must remain unchanged');
+    assert.equal(s2.isApplied, false);
+  });
+
+  it('DYNAMIC_WINDOW_CONFIGS contains repair window with spanner icon and isDynamic flag', async () => {
+    const { DYNAMIC_WINDOW_CONFIGS } = await import('../src/hooks/useWindowManager.js');
+    const repairCfg = DYNAMIC_WINDOW_CONFIGS.find((w) => w.id === 'repair');
+    assert.ok(repairCfg, 'repair window must be in DYNAMIC_WINDOW_CONFIGS');
+    assert.equal(repairCfg.isDynamic, true);
+    assert.equal(repairCfg.label, 'Repair');
+    assert.equal(repairCfg.icon, '🔧');
+  });
+});
+

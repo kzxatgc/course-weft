@@ -342,6 +342,15 @@ body {
   to   { opacity: 1; transform: translateY(0)   scale(1); }
 }
 
+.nb-dock-divider {
+  width: 1.5px;
+  height: 26px;
+  background-color: var(--color-navy);
+  opacity: 0.35;
+  margin: 0 3px;
+  align-self: center;
+}
+
 .nb-dock-item {
   display: flex;
   flex-direction: column;

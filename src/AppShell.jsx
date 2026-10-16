@@ -1,6 +1,7 @@
 import React from 'react';
 
 import Notice from './Notice.jsx';
+import RepairPreview from './components/RepairPreview.jsx';
 import { ACTION } from './state/draft-controller.mjs';
 
 import { useTheme } from './hooks/useTheme.js';
@@ -94,16 +95,39 @@ export default function AppShell({ state, dispatch, children }) {
             onMove={moveWindow}
           >
             <div id="schedule-workspace">
-              {/* Notice banner (conflict alerts, repair prompts) */}
+              {/* Notice banner (conflict alerts, repair prompts, success popups) */}
               <Notice
                 notice={notice}
-                onDismiss={() => dispatch({ type: ACTION.CLEAR_NOTICE })}
-                onAction={() => dispatch({ type: ACTION.SUGGEST_REPAIR })}
+                onDismiss={() => {
+                  dispatch({ type: ACTION.CLEAR_NOTICE });
+                  closeWindow('repair');
+                }}
+                onAction={() => {
+                  dispatch({ type: ACTION.SUGGEST_REPAIR });
+                  openWindow('repair');
+                }}
               />
 
               {/* Schedule workspace content (EarlySchedulePreview) */}
               {children}
             </div>
+          </DesktopWindow>
+        )}
+
+        {/* ── Schedule Repair Window (Task 27) ─────────────── */}
+        {windows.find((w) => w.id === 'repair') && (
+          <DesktopWindow
+            {...windows.find((w) => w.id === 'repair')}
+            onClose={() => closeWindow('repair')}
+            onMinimize={minimizeWindow}
+            onFocus={bringToFront}
+            onMove={moveWindow}
+          >
+            <RepairPreview
+              state={state}
+              dispatch={dispatch}
+              onClose={() => closeWindow('repair')}
+            />
           </DesktopWindow>
         )}
 

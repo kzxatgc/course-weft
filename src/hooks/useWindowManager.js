@@ -58,6 +58,20 @@ export const WINDOW_CONFIGS = [
   },
 ];
 
+/** Dynamic windows that appear in the dock only when open/active. */
+export const DYNAMIC_WINDOW_CONFIGS = [
+  {
+    id: 'repair',
+    title: 'Schedule Repair',
+    icon: '🔧',
+    label: 'Repair',
+    defaultOpen: false,
+    defaultPos: { x: 260, y: 70 },
+    width: 720,
+    isDynamic: true,
+  },
+];
+
 /**
  * Manages open/closed, minimized, position, and z-index for all desktop windows.
  * Window positions are stored in React state; drag commits on pointer-up.
@@ -66,7 +80,7 @@ export function useWindowManager() {
   const hasMovedSchedule = useRef(false);
 
   const [windows, setWindows] = useState(() =>
-    WINDOW_CONFIGS.map((cfg, i) => {
+    [...WINDOW_CONFIGS, ...DYNAMIC_WINDOW_CONFIGS].map((cfg, i) => {
       let initialPos = cfg.defaultPos;
       if (typeof window !== 'undefined') {
         if (cfg.id === 'schedule') {
