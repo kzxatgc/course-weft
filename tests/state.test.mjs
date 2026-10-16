@@ -662,14 +662,14 @@ describe('case-insensitive search and card preservation on refusal', () => {
 // ---------------------------------------------------------------------------
 
 describe('suggestion, apply, exact undo, dismiss', () => {
-  it('main flow: suggest finds repair, apply updates draft and snapshots, undo restores exact pre-apply state', () => {
+  it('main flow: suggest finds first repair step, apply updates draft and snapshots, undo restores exact pre-apply state', () => {
     const s0 = initialState();
     assert.deepEqual(s0.draft, ['CHEM-A', 'STAT-A']);
 
     // 1. Suggest repair for BIO-214
     const s1 = reduce(s0, { type: ACTION.SUGGEST_REPAIR, payload: 'BIO-214' });
     assert.ok(s1.candidate !== null, 'candidate was generated');
-    assert.deepEqual(s1.candidate.ids, ['BIO-214', 'BIO-214L-B', 'CHEM-A', 'STAT-B']);
+    assert.deepEqual(s1.candidate.ids, ['BIO-214', 'CHEM-A', 'STAT-B']);
     assert.deepEqual(s1.candidate.swap, { old: 'STAT-A', replacement: 'STAT-B' });
     assert.equal(s1.notice.kind, 'info');
     assert.equal(s1.isApplied, false);
@@ -678,7 +678,7 @@ describe('suggestion, apply, exact undo, dismiss', () => {
 
     // 2. Apply repair
     const s2 = reduce(s1, { type: ACTION.APPLY_REPAIR });
-    assert.deepEqual(s2.draft, ['BIO-214', 'BIO-214L-B', 'CHEM-A', 'STAT-B']);
+    assert.deepEqual(s2.draft, ['BIO-214', 'CHEM-A', 'STAT-B']);
     assert.equal(s2.isApplied, true);
     assert.ok(s2.snapshot !== null, 'snapshot created');
     assert.deepEqual(s2.snapshot.draft, ['CHEM-A', 'STAT-A']);
@@ -738,7 +738,7 @@ describe('suggestion, apply, exact undo, dismiss', () => {
       assert.ok(s.candidate !== null);
 
       s = reduce(s, { type: ACTION.APPLY_REPAIR });
-      assert.deepEqual(s.draft, ['BIO-214', 'BIO-214L-B', 'CHEM-A', 'STAT-B']);
+      assert.deepEqual(s.draft, ['BIO-214', 'CHEM-A', 'STAT-B']);
 
       s = reduce(s, { type: ACTION.UNDO_REPAIR });
       assert.deepEqual(s.draft, ['CHEM-A', 'STAT-A']);
@@ -800,4 +800,3 @@ describe('suggestion, apply, exact undo, dismiss', () => {
     assert.deepEqual(sSuggested.draft, ['CHEM-A', 'STAT-A']);
   });
 });
-

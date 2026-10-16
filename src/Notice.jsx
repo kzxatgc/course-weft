@@ -4,11 +4,9 @@ import { AlertCircle, AlertTriangle, CheckCircle2, Info, X, Wrench } from 'lucid
 import { playSound } from './audio/optional-sounds.js';
 
 /**
- * Accessible notification banner, screen-reader live announcer, and centered desktop modal popups.
+ * Accessible notification banner, screen-reader live announcer, and conflict modal.
  *
- * Modal popups:
- *  - Timetable updated success confirmation with OK button
- *  - Timetable conflict alert with Cancel and Find valid repair buttons
+ * Conflict alerts use a modal; successful updates remain non-modal banners.
  *
  * Uses createPortal to document.body with z-[9999] so the dialogs always render
  * directly above all desktop windows, including the Schedule Repair window.
@@ -22,13 +20,11 @@ import { playSound } from './audio/optional-sounds.js';
 export default function Notice({ notice, onDismiss, onAction }) {
   const [announcement, setAnnouncement] = useState('');
 
-  // Update polite live region text whenever notice changes and play modal popup cue
+  // Update polite live region text whenever notice changes and cue conflict alerts.
   useEffect(() => {
     if (notice) {
       setAnnouncement(`${notice.title}. ${notice.message}`);
-      if (notice.title === 'Timetable updated' || notice.action === 'suggest') {
-        playSound('popup');
-      }
+      if (notice.action === 'suggest') playSound('popup');
     }
   }, [notice]);
 
@@ -52,93 +48,11 @@ export default function Notice({ notice, onDismiss, onAction }) {
 
   const currentStyle = notice ? kindStyles[notice.kind] || kindStyles.info : kindStyles.info;
 
-  // Render centered modal popup content if applicable
+  // Render centered conflict alert when repair is available.
   function renderModalContent() {
     if (!notice) return null;
 
-    // 1. Success confirmation dialog after Apply repair
-    if (notice.title === 'Timetable updated') {
-      return (
-        <div
-          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-[1.5px] p-4 select-none"
-          onPointerDown={(e) => e.stopPropagation()}
-          onMouseDown={(e) => e.stopPropagation()}
-          onTouchStart={(e) => e.stopPropagation()}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div
-            role="dialog"
-            aria-labelledby="success-dialog-title"
-            aria-describedby="success-dialog-desc"
-            onPointerDown={(e) => e.stopPropagation()}
-            onMouseDown={(e) => e.stopPropagation()}
-            onTouchStart={(e) => e.stopPropagation()}
-            onClick={(e) => e.stopPropagation()}
-            className="nb-success-dialog w-full max-w-md rounded-none border-[3px] border-[var(--color-navy)] bg-[#fffdf8] shadow-[6px_6px_0px_0px_var(--color-navy)] overflow-hidden font-mono"
-          >
-            {/* Window title bar */}
-            <div className="flex items-center justify-between px-4 py-2.5 bg-emerald-600 text-white border-b-[3px] border-[var(--color-navy)] select-none">
-              <div className="flex items-center gap-1.5">
-                <CheckCircle2 className="w-4 h-4 text-white" aria-hidden="true" />
-                <span className="font-['Archivo_Black',sans-serif] text-[11px] uppercase tracking-wider font-black">
-                  Timetable Updated
-                </span>
-              </div>
-              {onDismiss && (
-                <button
-                  type="button"
-                  onClick={onDismiss}
-                  aria-label="Close dialog"
-                  className="text-white/80 hover:text-white p-1 hover:bg-black/10 rounded-none cursor-pointer transition-colors"
-                >
-                  <X className="w-4 h-4" aria-hidden="true" />
-                </button>
-              )}
-            </div>
-
-            {/* Dialog Body */}
-            <div className="p-4 sm:p-5">
-              <div className="flex items-start gap-3.5">
-                {/* Green checkmark box */}
-                <div className="shrink-0 flex items-center justify-center w-11 h-11 rounded-none bg-emerald-100 border-2 border-emerald-600 text-emerald-700 shadow-xs mt-0.5">
-                  <CheckCircle2 className="w-7 h-7 stroke-emerald-950 stroke-[2] fill-emerald-300" aria-hidden="true" />
-                </div>
-
-                <div className="flex-1 min-w-0">
-                  <h3
-                    id="success-dialog-title"
-                    className="font-['Archivo_Black',sans-serif] text-xs sm:text-sm text-[var(--color-navy)] uppercase tracking-tight m-0"
-                  >
-                    {notice.title}
-                  </h3>
-                  <p
-                    id="success-dialog-desc"
-                    className="mt-1.5 text-xs text-slate-800 leading-relaxed font-sans"
-                  >
-                    {notice.message}
-                  </p>
-                </div>
-              </div>
-
-              {/* Single OK button */}
-              <div className="mt-5 pt-3.5 border-t border-[var(--color-navy)]/15 flex items-center justify-end">
-                {onDismiss && (
-                  <button
-                    type="button"
-                    onClick={onDismiss}
-                    className="px-6 py-1.5 text-xs font-black font-mono uppercase rounded-none border-2 border-[var(--color-navy)] bg-[var(--color-navy)] text-[var(--color-cream)] hover:opacity-90 active:translate-x-0.5 active:translate-y-0.5 transition-all cursor-pointer shadow-xs"
-                  >
-                    OK
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    // 2. Conflict alert dialog
+    // Conflict alert dialog
     if (notice.action === 'suggest') {
       return (
         <div
@@ -250,7 +164,7 @@ export default function Notice({ notice, onDismiss, onAction }) {
         {announcement}
       </div>
 
-      {/* Render modal popups portaled to document.body with z-[9999] so they appear above all windows */}
+      {/* Render conflict alerts above all desktop windows */}
       {modalContent && typeof document !== 'undefined'
         ? createPortal(modalContent, document.body)
         : modalContent}

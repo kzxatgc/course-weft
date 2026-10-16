@@ -80,7 +80,7 @@ export const MAIN_CATALOG = Object.freeze([
  *
  * Scenarios:
  * - 'main'     : successful-repair scenario; all sections have counts; BIO-214L-B has seats (22/30).
- * - 'noRepair' : known-data no-repair scenario; all sections have counts; BIO-214L-B is 30/30 (full).
+ * - 'noRepair' : known-data no-repair scenario; BIO-214L-B and STAT-B are full.
  *
  * @param {'main' | 'noRepair'} scenario
  * @returns {Array<object>}
@@ -94,6 +94,9 @@ export function catalogForScenario(scenario = 'main') {
     };
 
     if (scenario === 'noRepair' && item.id === 'BIO-214L-B') {
+      return { ...base, enrolled: 30, capacity: 30, seat: 'full' };
+    }
+    if (scenario === 'noRepair' && item.id === 'STAT-B') {
       return { ...base, enrolled: 30, capacity: 30, seat: 'full' };
     }
 

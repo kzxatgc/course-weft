@@ -34,6 +34,9 @@ export default function DesktopWindow({
   children,
   width = 520,
   maxBodyHeight = 'calc(100vh - 180px)',
+  locked = false,
+  allowDragWhenLocked = false,
+  inert = false,
 }) {
   const windowRef = useRef(null);
   const dragOffset = useRef({ x: 0, y: 0 });
@@ -46,6 +49,7 @@ export default function DesktopWindow({
 
   const handleTitlePointerDown = useCallback(
     (e) => {
+      if (locked && !allowDragWhenLocked) return;
       if (e.target.closest('button')) return;
       e.preventDefault();
 
@@ -81,7 +85,7 @@ export default function DesktopWindow({
       document.addEventListener('pointermove', onMove_);
       document.addEventListener('pointerup', onUp_);
     },
-    [id, onFocus, onMove]
+    [id, locked, allowDragWhenLocked, onFocus, onMove]
   );
 
   if (!isOpen) return null;
@@ -100,7 +104,8 @@ export default function DesktopWindow({
       id={`window-${id}`}
       role="dialog"
       aria-label={title}
-      aria-modal="false"
+      aria-modal={locked ? 'true' : 'false'}
+      inert={inert}
       className="flex min-w-[280px] max-w-[calc(100vw-16px)] flex-col border-[3px] border-[var(--color-navy)] bg-[var(--color-cream)] shadow-[6px_6px_0_var(--color-navy)] [animation:nb-win-open_0.12s_steps(2,end)_both]"
       style={posStyle}
       onPointerDown={() => onFocus(id)}
@@ -109,14 +114,15 @@ export default function DesktopWindow({
       <div
         className="flex shrink-0 select-none items-center justify-between border-b-[3px] border-[var(--color-navy)] bg-[var(--color-yellow)] px-2.5 py-[5px]"
         onPointerDown={handleTitlePointerDown}
-        style={{ cursor: 'grab' }}
+        style={{ cursor: locked && !allowDragWhenLocked ? 'default' : 'grab' }}
       >
         <span className="max-w-[calc(100%-80px)] overflow-hidden text-ellipsis whitespace-nowrap font-['Archivo_Black',sans-serif] text-xs font-black tracking-[0.03em] text-[var(--color-navy)]" aria-hidden="true">{title}</span>
 
         <div className="flex shrink-0 gap-1" role="group" aria-label="Window controls">
           <button
             type="button"
-            className="grid h-5 w-5 place-items-center border-2 border-[var(--color-navy)] bg-[var(--color-cream)] text-[var(--color-navy)] hover:bg-[var(--color-blue)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-blue)]"
+            disabled={locked}
+            className={`grid h-5 w-5 place-items-center border-2 border-[var(--color-navy)] bg-[var(--color-cream)] text-[var(--color-navy)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-blue)] ${locked ? 'opacity-40 cursor-not-allowed' : 'hover:bg-[var(--color-blue)]'}`}
             aria-label={`Minimize ${title}`}
             onClick={(e) => { e.stopPropagation(); onMinimize(id); }}
             title="Minimize"
@@ -125,7 +131,8 @@ export default function DesktopWindow({
           </button>
           <button
             type="button"
-            className="grid h-5 w-5 place-items-center border-2 border-[var(--color-navy)] bg-[var(--color-navy)] text-[var(--color-yellow)] hover:bg-red-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-blue)]"
+            disabled={locked}
+            className={`grid h-5 w-5 place-items-center border-2 border-[var(--color-navy)] bg-[var(--color-navy)] text-[var(--color-yellow)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-blue)] ${locked ? 'opacity-40 cursor-not-allowed' : 'hover:bg-red-700'}`}
             aria-label={`Close ${title}`}
             onClick={(e) => { e.stopPropagation(); onClose(id); }}
             title="Close"
@@ -138,7 +145,8 @@ export default function DesktopWindow({
       {/* ── Window Body ───────────────────────────────────────── */}
       {!isMinimized && (
         <div
-          className="min-h-0 flex-1 overflow-y-auto bg-[var(--color-cream)] p-1.5 text-[var(--color-charcoal)]"
+          className={`nb-win-body min-h-0 flex-1 overflow-y-auto bg-[var(--color-cream)] ${id === 'repair' ? 'p-[24px]' : 'p-1.5'} text-[var(--color-charcoal)]`}
+          onPointerDown={locked ? (event) => event.stopPropagation() : undefined}
           style={{
             maxHeight: maxBodyHeight,
             overflowY: 'auto',

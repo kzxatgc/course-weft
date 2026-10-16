@@ -408,7 +408,7 @@ describe('Available Courses and search', () => {
   });
 });
 
-// ── Add/Swap/Keep Repair Preview ─────────────────────────────────────
+// ── Add/Swap Repair Preview ─────────────────────────────────────────
 describe('Repair Preview impact groups and controller wiring', () => {
   it('package.json includes motion in dependencies', async () => {
     const { readFileSync } = await import('node:fs');
@@ -427,7 +427,7 @@ describe('Repair Preview impact groups and controller wiring', () => {
     assert.deepEqual(s1.draft, s0.draft, 'draft is preserved until user applies repair');
   });
 
-  it('SUGGEST_REPAIR populates candidate with valid Add/Swap/Keep groups', async () => {
+  it('SUGGEST_REPAIR populates candidate with valid Add/Swap groups', async () => {
     const { initialState, reduce, ACTION } = await import('../src/state/draft-controller.mjs');
     const s0 = initialState();
     const s1 = reduce(s0, { type: ACTION.SUGGEST_REPAIR, payload: 'BIO-214' });
@@ -442,15 +442,27 @@ describe('Repair Preview impact groups and controller wiring', () => {
     const addIds = (s1.candidate.added || []).filter(
       (id) => !swap || id !== swap.replacement
     );
-    assert.deepEqual(addIds, ['BIO-214', 'BIO-214L-B']);
+    assert.deepEqual(addIds, ['BIO-214']);
 
-    // Kept sections:
+    // Unchanged sections remain part of the candidate without a Keep panel:
     const keepIds = s1.candidate.kept || [];
     assert.deepEqual(keepIds, ['CHEM-A']);
 
     // Total post-repair draft matches full candidate ids:
     const finalSet = [...addIds, swap.replacement, ...keepIds].sort();
     assert.deepEqual(finalSet, s1.candidate.ids.slice().sort());
+  });
+
+  it('RepairPreview shows only added and swapped sections with a vertical arrow', async () => {
+    const { readFileSync } = await import('node:fs');
+    const source = readFileSync(
+      new URL('../src/components/RepairPreview.jsx', import.meta.url),
+      'utf8'
+    );
+    assert.ok(source.includes('ArrowDown'));
+    assert.ok(source.includes('formatCourseSlot(oldSection)'));
+    assert.ok(source.includes('formatCourseSlot(replacementSection)'));
+    assert.ok(!source.includes('Keep ('));
   });
 
   it('DISMISS_REPAIR clears candidate without mutating draft', async () => {
@@ -546,13 +558,20 @@ describe('Apply / Undo / Dismiss / Reset wiring', () => {
     assert.equal(canUndo(s2), false, 'canUndo must remain false after dismiss without prior apply');
   });
 
-  it('APPLY_REPAIR sets notice title to "Timetable updated" for success popup', async () => {
+  it('APPLY_REPAIR keeps a success notice for the non-modal timetable banner', async () => {
     const { initialState, reduce, ACTION } = await import('../src/state/draft-controller.mjs');
     const s0 = initialState();
     const s1 = reduce(s0, { type: ACTION.SUGGEST_REPAIR });
     const s2 = reduce(s1, { type: ACTION.APPLY_REPAIR });
     assert.equal(s2.notice?.title, 'Timetable updated');
     assert.equal(s2.notice?.kind, 'success');
+  });
+
+  it('Notice does not render timetable success as a modal dialog', async () => {
+    const { readFileSync } = await import('node:fs');
+    const source = readFileSync(new URL('../src/Notice.jsx', import.meta.url), 'utf8');
+    assert.ok(!source.includes('success-dialog-title'));
+    assert.ok(source.includes('notice && !modalContent'));
   });
 
   it('AvailableCourses includes inline Undo, Redo, and Reset icon buttons wired to correct actions', async () => {

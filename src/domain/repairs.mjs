@@ -1,9 +1,10 @@
 /**
  * Repair enumeration for EnrollFix course registration.
  *
- * Enumerates valid schedule repairs as direct add or combinations of explicitly
- * declared same-course/component swaps. Linked courses support exactly one
- * child requirement (min:1, max:1). Multiple linked requirements are unsupported
+ * Enumerates valid schedule repairs as a direct add or explicitly declared
+ * same-course/component swaps, preferring plans with at most one swap and
+ * searching for two-swap plans only when no simpler plan is valid. Linked
+ * courses support exactly one child requirement (min:1, max:1). Multiple linked requirements are unsupported
  * and yield no candidates.
  *
  * All complete schedules are independently validated before inclusion. Results
@@ -87,8 +88,8 @@ function linkedOptionSets(requested, byId) {
  *
  * A repair is either:
  * - A direct add (no swap): requestedId + any linked children added to the current draft.
- * - A swap + add: one or more sections in the draft are replaced by their declared
- *   alternates, then requestedId + any linked children are added.
+ * - A swap + add: one section is replaced by its declared alternate, with a
+ *   two-section swap considered only when no valid direct/single-swap plan exists.
  *
  * All combinations are fully validated by validateDraft before inclusion.
  * Results are deduplicated and ordered by fewest swaps, then lexically by IDs.
@@ -131,56 +132,63 @@ export function enumerateRepairs(
   const swapChoices = draftIds.map((oldId) =>
     getValidSwaps([oldId], byId).filter((choice) => choice.old)
   );
-  const swapCombinations = [];
-  function enumerateSwapCombinations(index, selectedSwaps) {
-    if (index === swapChoices.length) {
-      swapCombinations.push(selectedSwaps);
-      return;
-    }
-
-    enumerateSwapCombinations(index + 1, selectedSwaps);
-    for (const choice of swapChoices[index]) {
-      enumerateSwapCombinations(index + 1, [...selectedSwaps, choice]);
-    }
-  }
-  enumerateSwapCombinations(0, []);
-
-  const results = [];
-
-  for (const swaps of swapCombinations) {
-    for (const linkedIds of optionSets) {
-      const swappedOutIds = new Set(swaps.map((swap) => swap.old));
-      const next = draftIds.filter((id) => !swappedOutIds.has(id));
-      next.push(...swaps.map((swap) => swap.replacement));
-      if (!next.includes(requestedId)) next.push(requestedId);
-      for (const linkedId of linkedIds) {
-        if (!next.includes(linkedId)) next.push(linkedId);
+  function findCandidates(maxSwaps) {
+    const swapCombinations = [];
+    function enumerateSwapCombinations(index, selectedSwaps) {
+      if (index === swapChoices.length) {
+        swapCombinations.push(selectedSwaps);
+        return;
       }
 
-      // Dedup within this candidate (guards against edge cases)
-      const uniqueIds = [...new Set(next)];
-      if (uniqueIds.length !== next.length) continue;
-
-      // A complete valid schedule must be reachable from this step.
-      const validation = validateDraft(uniqueIds, catalog);
-      if (!validation.ok) continue;
-
-      const linkedIdsToAdd = new Set(linkedIds.filter((id) => !draftIds.includes(id)));
-      const stepIds = uniqueIds.filter((id) => !linkedIdsToAdd.has(id));
-      const candidateIds = firstStep ? stepIds : uniqueIds;
-      results.push({
-        ids: candidateIds.slice().sort((a, b) => a.localeCompare(b)),
-        swap: swaps[0] || null,
-        swaps,
-        added: candidateIds.filter((id) => !draftIds.includes(id)).sort((a, b) => a.localeCompare(b)),
-        kept: draftIds.filter((id) => !swappedOutIds.has(id)).slice().sort((a, b) => a.localeCompare(b)),
-        validation: Object.freeze({
-          ...validation,
-          stagedLinkedRequirement: firstStep && linkedIdsToAdd.size > 0,
-        }),
-      });
+      enumerateSwapCombinations(index + 1, selectedSwaps);
+      if (selectedSwaps.length >= maxSwaps) return;
+      for (const choice of swapChoices[index]) {
+        enumerateSwapCombinations(index + 1, [...selectedSwaps, choice]);
+      }
     }
+    enumerateSwapCombinations(0, []);
+
+    const candidates = [];
+    for (const swaps of swapCombinations) {
+      for (const linkedIds of optionSets) {
+        const swappedOutIds = new Set(swaps.map((swap) => swap.old));
+        const next = draftIds.filter((id) => !swappedOutIds.has(id));
+        next.push(...swaps.map((swap) => swap.replacement));
+        if (!next.includes(requestedId)) next.push(requestedId);
+        for (const linkedId of linkedIds) {
+          if (!next.includes(linkedId)) next.push(linkedId);
+        }
+
+        const uniqueIds = [...new Set(next)];
+        if (uniqueIds.length !== next.length) continue;
+
+        // A complete valid schedule must be reachable from this step.
+        const validation = validateDraft(uniqueIds, catalog);
+        if (!validation.ok) continue;
+
+        const linkedIdsToAdd = new Set(linkedIds.filter((id) => !draftIds.includes(id)));
+        const stepIds = uniqueIds.filter((id) => !linkedIdsToAdd.has(id));
+        const candidateIds = firstStep ? stepIds : uniqueIds;
+        candidates.push({
+          ids: candidateIds.slice().sort((a, b) => a.localeCompare(b)),
+          swap: swaps[0] || null,
+          swaps,
+          added: candidateIds.filter((id) => !draftIds.includes(id)).sort((a, b) => a.localeCompare(b)),
+          kept: draftIds.filter((id) => !swappedOutIds.has(id)).slice().sort((a, b) => a.localeCompare(b)),
+          validation: Object.freeze({
+            ...validation,
+            stagedLinkedRequirement: firstStep && linkedIdsToAdd.size > 0,
+          }),
+        });
+      }
+    }
+    return candidates;
   }
+
+  const singleSwapCandidates = findCandidates(1);
+  const results = singleSwapCandidates.length > 0
+    ? singleSwapCandidates
+    : findCandidates(2);
 
   // Deduplicate by final sorted ID key
   const deduplicated = new Map();

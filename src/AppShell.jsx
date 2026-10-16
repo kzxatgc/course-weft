@@ -67,6 +67,10 @@ export default function AppShell({ state, dispatch, children }) {
   }
 
   const scheduleWin = windows.find((w) => w.id === 'schedule');
+  const repairWin = windows.find((w) => w.id === 'repair');
+  const isRepairFlowLocked = Boolean(
+    state.candidate && !state.isApplied && repairWin?.isOpen && !repairWin.isMinimized
+  );
 
   return (
     <>
@@ -93,6 +97,7 @@ export default function AppShell({ state, dispatch, children }) {
             onMinimize={minimizeWindow}
             onFocus={bringToFront}
             onMove={moveWindow}
+            inert={isRepairFlowLocked}
           >
             <div id="schedule-workspace">
               {/* Notice banner (conflict alerts, repair prompts, success popups) */}
@@ -115,9 +120,21 @@ export default function AppShell({ state, dispatch, children }) {
         )}
 
         {/* Schedule Repair Window */}
-        {windows.find((w) => w.id === 'repair') && (
+        {repairWin && (
+          isRepairFlowLocked && (
+            <div
+              className="fixed inset-0 z-[1000]"
+              style={{ backgroundColor: 'color-mix(in srgb, var(--color-yellow) 22%, transparent)' }}
+              aria-hidden="true"
+            />
+          )
+        )}
+        {repairWin && (
           <DesktopWindow
-            {...windows.find((w) => w.id === 'repair')}
+            {...repairWin}
+            zIndex={isRepairFlowLocked ? 1001 : repairWin.zIndex}
+            locked={isRepairFlowLocked}
+            allowDragWhenLocked
             onClose={() => closeWindow('repair')}
             onMinimize={minimizeWindow}
             onFocus={bringToFront}
@@ -139,6 +156,7 @@ export default function AppShell({ state, dispatch, children }) {
             onMinimize={minimizeWindow}
             onFocus={bringToFront}
             onMove={moveWindow}
+            inert={isRepairFlowLocked}
           >
             <ScenarioWindow
               scenario={scenario}
@@ -155,6 +173,7 @@ export default function AppShell({ state, dispatch, children }) {
             onMinimize={minimizeWindow}
             onFocus={bringToFront}
             onMove={moveWindow}
+            inert={isRepairFlowLocked}
           >
             <SettingsWindow
               themes={themes}
@@ -172,6 +191,7 @@ export default function AppShell({ state, dispatch, children }) {
             onMinimize={minimizeWindow}
             onFocus={bringToFront}
             onMove={moveWindow}
+            inert={isRepairFlowLocked}
           >
             <ProfileWindow />
           </DesktopWindow>
@@ -185,6 +205,7 @@ export default function AppShell({ state, dispatch, children }) {
             onMinimize={minimizeWindow}
             onFocus={bringToFront}
             onMove={moveWindow}
+            inert={isRepairFlowLocked}
           >
             <CourseDetailsWindow />
           </DesktopWindow>
@@ -208,6 +229,7 @@ export default function AppShell({ state, dispatch, children }) {
       <BottomBar
         windows={windows}
         onDockClick={handleDockClick}
+        disabled={isRepairFlowLocked}
       />
     </>
   );

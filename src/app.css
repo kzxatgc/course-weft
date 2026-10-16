@@ -292,15 +292,8 @@ body {
   background-color: var(--color-cream);
   color: var(--color-charcoal);
   overflow-y: auto;
-  /* Custom scrollbar */
   scrollbar-width: thin;
-  scrollbar-color: var(--color-navy) var(--color-cream);
-}
-.nb-win-body::-webkit-scrollbar       { width: 8px; }
-.nb-win-body::-webkit-scrollbar-track { background: var(--color-cream); }
-.nb-win-body::-webkit-scrollbar-thumb {
-  background-color: var(--color-navy);
-  border: 2px solid var(--color-cream);
+  scrollbar-color: color-mix(in srgb, var(--color-navy) 55%, transparent) var(--color-cream);
 }
 
 /* ════════════════════════════════════════════════════════════════

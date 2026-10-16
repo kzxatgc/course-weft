@@ -34,7 +34,7 @@ const ICON_MAP = {
  *   - Yellow fill when window is open
  *   - Thick rectangular underline bar indicator pinned flush inside bottom edge
  */
-export default function BottomBar({ windows, onDockClick }) {
+export default function BottomBar({ windows, onDockClick, disabled = false }) {
   const staticWindows = windows.filter((w) => !w.isDynamic);
   const dynamicWindows = windows.filter((w) => w.isDynamic && w.isOpen);
 
@@ -48,6 +48,7 @@ export default function BottomBar({ windows, onDockClick }) {
             <button
               key={win.id}
               type="button"
+              disabled={disabled}
               id={`dock-${win.id}`}
               className={`nb-dock-item${isActive ? ' nb-dock-item--active' : ''}${isMinimized ? ' nb-dock-item--minimized' : ''}`}
               onClick={() => onDockClick(win.id)}
@@ -78,6 +79,7 @@ export default function BottomBar({ windows, onDockClick }) {
                 <button
                   key={win.id}
                   type="button"
+                  disabled={disabled}
                   id={`dock-${win.id}`}
                   className={`nb-dock-item nb-dock-item--active${isMinimized ? ' nb-dock-item--minimized' : ''}`}
                   style={{ backgroundColor: 'var(--color-yellow)' }}

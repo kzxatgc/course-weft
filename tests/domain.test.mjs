@@ -616,6 +616,69 @@ test('enumerateRepairs: main scenario candidate has correct added and kept sets'
   assert.deepEqual(candidate.kept, ['CHEM-A']);
 });
 
+test('enumerateRepairs stops after finding a valid single-swap plan', () => {
+  const cat = getCatalogForScenario('main');
+  const candidates = enumerateRepairs(
+    [...CATALOG_INITIAL_DRAFT],
+    cat,
+    'BIO-214',
+    { firstStep: true }
+  );
+  assert.ok(candidates.length > 0, 'at least one repair plan should be available');
+  assert.ok(candidates.every((candidate) => candidate.swaps.length <= 1));
+});
+
+test('enumerateRepairs falls back to two swaps only when no single-swap plan works', () => {
+  const cat = getCatalogForScenario('main').map((section) => {
+    if (section.id === 'BIO-214') {
+      return { ...section, day: 'Mon', start: 780, end: 840 };
+    }
+    if (section.id === 'BIO-214L-A') {
+      return { ...section, day: 'Tue', start: 600, end: 720 };
+    }
+    if (section.id === 'BIO-214L-B') {
+      return { ...section, enrolled: 30, capacity: 30, seat: 'full' };
+    }
+    return section;
+  });
+  const candidates = enumerateRepairs(
+    [...CATALOG_INITIAL_DRAFT],
+    cat,
+    'BIO-214',
+    { firstStep: true }
+  );
+
+  assert.equal(candidates.length, 1);
+  assert.equal(candidates[0].swaps.length, 2);
+  assert.deepEqual(
+    candidates[0].swaps.map(({ old, replacement }) => [old, replacement]),
+    [
+      ['CHEM-A', 'CHEM-B'],
+      ['STAT-A', 'STAT-B'],
+    ]
+  );
+});
+
+test('enumerateRepairs finds a two-swap course-section change after single swaps fail', () => {
+  const draft = ['BIO-214', 'BIO-214L-A', 'CHEM-B', 'STAT-B'];
+  const candidates = enumerateRepairs(
+    draft,
+    getCatalogForScenario('main'),
+    'CHEM-A',
+    { firstStep: true }
+  );
+
+  assert.ok(candidates.length > 0);
+  assert.equal(candidates[0].swaps.length, 2);
+  assert.deepEqual(
+    candidates[0].swaps.map(({ old, replacement }) => [old, replacement]),
+    [
+      ['BIO-214L-A', 'BIO-214L-B'],
+      ['CHEM-B', 'CHEM-A'],
+    ]
+  );
+});
+
 test('enumerateRepairs rejects undeclared alternate (alternate not in section.alternates)', () => {
   // Patch STAT-A so its alternates point to CHEM-B instead of STAT-B
   const cat = getCatalogForScenario('main').map((s) =>
@@ -721,32 +784,38 @@ test('known-data no-repair scenario (BIO-214L-B full at 30/30) yields zero candi
   assert.equal(candidates.length, 0, 'no-repair scenario must yield zero candidates');
 });
 
-test('missing availability counts (seat unknown) produces zero candidates', () => {
+test('missing availability counts excludes that linked section but permits a valid alternate repair', () => {
   const cat = getCatalogForScenario('main').map((s) =>
     s.id === 'BIO-214L-B'
       ? { ...s, enrolled: undefined, capacity: undefined, seat: 'unknown' }
       : s
   );
   const candidates = enumerateRepairs([...CATALOG_INITIAL_DRAFT], cat);
-  assert.equal(candidates.length, 0, 'unknown seat must yield zero candidates');
+  assert.ok(candidates.length > 0, 'the available linked-lab alternative should still be considered');
+  assert.ok(candidates.every((candidate) => !candidate.ids.includes('BIO-214L-B')));
+  assert.ok(candidates.every((candidate) => candidate.validation.ok));
 });
 
-test('malformed availability counts (enrolled > capacity) produces zero candidates', () => {
+test('malformed availability counts excludes that linked section but permits a valid alternate repair', () => {
   const cat = getCatalogForScenario('main').map((s) =>
     s.id === 'BIO-214L-B'
       ? { ...s, enrolled: 31, capacity: 30, seat: 'open' }
       : s
   );
   const candidates = enumerateRepairs([...CATALOG_INITIAL_DRAFT], cat);
-  assert.equal(candidates.length, 0, 'malformed counts must yield zero candidates');
+  assert.ok(candidates.length > 0, 'the available linked-lab alternative should still be considered');
+  assert.ok(candidates.every((candidate) => !candidate.ids.includes('BIO-214L-B')));
+  assert.ok(candidates.every((candidate) => candidate.validation.ok));
 });
 
-test('full section seat cannot become a candidate even if listed in metadata', () => {
+test('full linked section cannot become a candidate when another valid repair exists', () => {
   const cat = getCatalogForScenario('main').map((s) =>
     s.id === 'BIO-214L-B' ? { ...s, seat: 'full' } : s
   );
   const candidates = enumerateRepairs([...CATALOG_INITIAL_DRAFT], cat);
-  assert.equal(candidates.length, 0, 'full seat must reject candidate');
+  assert.ok(candidates.length > 0, 'the available linked-lab alternative should still be considered');
+  assert.ok(candidates.every((candidate) => !candidate.ids.includes('BIO-214L-B')));
+  assert.ok(candidates.every((candidate) => candidate.validation.ok));
 });
 
 test('independent validation rejects candidate with corrupted time on swap target', () => {
@@ -1122,11 +1191,14 @@ test('Gate A verification: confirms all 7 correctness and safety thresholds pass
     assert.equal(verdict.ok, true);
   }
 
-  // 4. Malformed or unknown critical data fail closed
+  // 4. Malformed linked-section data is excluded while valid alternatives remain usable
   const corruptSeatCat = mainCat.map((s) =>
     s.id === 'BIO-214L-B' ? { ...s, seat: 'unknown', enrolled: undefined, capacity: undefined } : s
   );
-  assert.equal(enumerateRepairs(initialDraft, corruptSeatCat).length, 0);
+  const alternatives = enumerateRepairs(initialDraft, corruptSeatCat);
+  assert.ok(alternatives.length > 0);
+  assert.ok(alternatives.every((candidate) => !candidate.ids.includes('BIO-214L-B')));
+  assert.ok(alternatives.every((candidate) => candidate.validation.ok));
 
   // 5. Stable order and deduplication
   const secondRun = enumerateRepairs(initialDraft, mainCat);
@@ -1141,5 +1213,3 @@ test('Gate A verification: confirms all 7 correctness and safety thresholds pass
   // 7. Click-time Apply revalidation rejects candidate corrupted after preview
   assert.equal(isCurrentCandidate(initialDraft, mutatedIds, mainCat), false);
 });
-
-
