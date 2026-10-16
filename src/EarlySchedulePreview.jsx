@@ -31,7 +31,7 @@ export default function EarlySchedulePreview({ state, dispatch }) {
   const [returningCardId, setReturningCardId] = useState(null);
   const rainbowPair = getRandomAdjacentRainbowPair();
 
-  // Task 34: Sections that should show the chasing rainbow outline
+  // Sections that should show the chasing rainbow outline
   const linkedOutlineIds = getLinkedOutlineSectionIds(draft, availableCourses);
 
   // Fully hydrated section records for sections currently in the draft

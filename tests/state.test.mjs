@@ -441,9 +441,9 @@ describe('ADD_SECTION', () => {
 
   it('adds standalone lab to draft and prompts for lecture', () => {
     const s = initialState();
-    // Try adding lab BIO-214L-A while lecture BIO-214 is not in draft
-    const next = reduce(s, { type: ACTION.ADD_SECTION, payload: 'BIO-214L-A' });
-    assert.deepEqual(next.draft, [...s.draft, 'BIO-214L-A']);
+    // Use BIO-214L-B (Wed 840-960) which does not conflict with CHEM-A (Tue) or STAT-A (Mon)
+    const next = reduce(s, { type: ACTION.ADD_SECTION, payload: 'BIO-214L-B' });
+    assert.deepEqual(next.draft, [...s.draft, 'BIO-214L-B']);
     assert.equal(next.notice.kind, 'info');
     assert.match(next.notice.title, /lecture required/i);
   });

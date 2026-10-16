@@ -1,7 +1,7 @@
 /**
  * linked-labs.mjs
  *
- * Logic and helpers for Task 34 — BIO-214 and linked lab relationship outlines.
+ * Logic and helpers — BIO-214 and linked lab relationship outlines.
  * While BIO-214 is selected in the timetable and lacks its required lab,
  * BIO-214 and each available non-full linked lab choice are highlighted with
  * an animated chasing border of two adjacent rainbow colors.

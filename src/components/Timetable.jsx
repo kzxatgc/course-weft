@@ -70,12 +70,8 @@ export default function Timetable({
   const targetSection = targetSectionId
     ? availableCourses.find((s) => s.id === targetSectionId)
     : null;
-  const fixedPreview = targetSection
-    ? buildFixedPreview(targetSection, selectedSections)
-    : null;
-
-  // Identify any currently enrolled section(s) that will be replaced if targetSection is swapped in
-  const replacedSectionIds = new Set();
+  // Identify candidate currently enrolled section(s) that would be replaced if targetSection is swapped in
+  const candidateReplacedIds = new Set();
   if (targetSection) {
     selectedSections.forEach((sec) => {
       if (
@@ -84,9 +80,26 @@ export default function Timetable({
           (Array.isArray(targetSection.alternates) && targetSection.alternates.includes(sec.id)) ||
           (Array.isArray(sec.alternates) && sec.alternates.includes(targetSection.id)))
       ) {
-        replacedSectionIds.add(sec.id);
+        candidateReplacedIds.add(sec.id);
       }
     });
+  }
+
+  // When previewing a section swap, the candidate section replaces the enrolled alternate,
+  // so time conflict is evaluated against the remaining enrolled sections
+  const conflictCheckSections = candidateReplacedIds.size > 0
+    ? selectedSections.filter((sec) => !candidateReplacedIds.has(sec.id))
+    : selectedSections;
+
+  const fixedPreview = targetSection
+    ? buildFixedPreview(targetSection, conflictCheckSections)
+    : null;
+
+  // Only fade the alternate section when the preview is green (no conflict).
+  // If preview is red (conflict), the alternate section should NOT be transparent.
+  const replacedSectionIds = new Set();
+  if (targetSection && fixedPreview && !fixedPreview.hasConflict) {
+    candidateReplacedIds.forEach((id) => replacedSectionIds.add(id));
   }
 
   // Incoming swap section metadata (for animating incoming alternate into slot)

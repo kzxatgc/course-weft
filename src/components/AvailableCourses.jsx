@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useId, useRef } from 'react';
+import React, { useState, useEffect, useId, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { Search, X, Users, Undo2, Redo2, RotateCcw } from 'lucide-react';
 import { ACTION, canUndo, canRedo } from '../state/draft-controller.mjs';
@@ -60,6 +60,10 @@ export default function AvailableCourses({
   const searchInputId = useId();
   const draggedCardIdRef = useRef(null);
 
+  // Shaking card id (briefly set on full-lab drag attempt)
+  const [shakingId, setShakingId] = useState(null);
+  const shakeTimerRef = useRef(null);
+
   // Pointer drag-and-drop state
   const [heldCard, setHeldCard] = useState(null);
   const pointerStateRef = useRef(null);
@@ -77,8 +81,27 @@ export default function AvailableCourses({
       if (isRestoringTimeoutRef.current) {
         clearTimeout(isRestoringTimeoutRef.current);
       }
+      if (shakeTimerRef.current) {
+        clearTimeout(shakeTimerRef.current);
+      }
     };
   }, []);
+
+  /**
+   * Trigger shake on a full-lab card (e.g. when drag is attempted).
+   * Removes the class after the animation completes (420 ms).
+   * No-op when prefers-reduced-motion is active (CSS handles it already,
+   * but we still want the class added so screen readers get the aria-live ping).
+   */
+  const triggerShake = useCallback((itemId) => {
+    if (shakingId === itemId) return; // already shaking
+    if (shakeTimerRef.current) clearTimeout(shakeTimerRef.current);
+    setShakingId(itemId);
+    shakeTimerRef.current = setTimeout(() => {
+      setShakingId(null);
+      shakeTimerRef.current = null;
+    }, 450); // slightly longer than 420 ms animation
+  }, [shakingId]);
 
   // Undo / Redo / Reset derivations (only when state is wired in)
   const canUndoRepair = state ? canUndo(state) : false;
@@ -163,6 +186,18 @@ export default function AvailableCourses({
 
   function handlePointerDown(e, item) {
     if (e.button !== 0) return; // Only primary button
+
+    // Block drag entirely for full lab sections
+    const isFullLab =
+      (item.seat === 'full' ||
+        (typeof item.capacity === 'number' && item.enrolled >= item.capacity)) &&
+      (item.linkedGroup === 'BIO-214-labs' || item.requiredBy === 'BIO-214');
+    if (isFullLab) {
+      e.preventDefault();
+      triggerShake(item.id);
+      return;
+    }
+
     if (heldCard && heldCard.isSticky) return; // Sticky drop is handled by window listener
 
     if (isRestoringTimeoutRef.current) {
@@ -449,14 +484,26 @@ export default function AvailableCourses({
                 );
               });
 
+              // Setect full linked-lab sections
+              const isFullLab =
+                (item.seat === 'full' ||
+                  (typeof item.capacity === 'number' && item.enrolled >= item.capacity)) &&
+                (item.linkedGroup === 'BIO-214-labs' || item.requiredBy === 'BIO-214');
+
               const hasLinkedOutline = Boolean(linkedOutlineIds?.includes(item.id));
+              const isShaking = shakingId === item.id;
 
               return (
                 <button
                   key={item.id}
                   type="button"
-                  draggable={true}
+                  draggable={!isFullLab}
                   onDragStart={(e) => {
+                    if (isFullLab) {
+                      e.preventDefault();
+                      triggerShake(item.id);
+                      return;
+                    }
                     e.preventDefault();
                     draggedCardIdRef.current = item.id;
                     e.dataTransfer?.setData(DT_SECTION_ID, item.id);
@@ -467,11 +514,17 @@ export default function AvailableCourses({
                     draggedCardIdRef.current = null;
                     onPreviewSectionChange?.(null);
                   }}
-                  onFocus={() => onPreviewSectionChange?.(item.id)}
+                  onFocus={() => !isFullLab && onPreviewSectionChange?.(item.id)}
                   onBlur={() => onPreviewSectionChange?.(null)}
                   onPointerDown={(e) => handlePointerDown(e, item)}
-                  className={`nb-course-card w-[195px] min-w-[195px] shrink-0 bg-[var(--color-cream)] border-2 border-[var(--color-navy)] rounded p-2 flex flex-col justify-between gap-1.5 cursor-grab text-left transition-colors duration-75 hover:bg-[var(--color-yellow)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-blue)] touch-none ${
+                  className={`nb-course-card w-[195px] min-w-[195px] shrink-0 bg-[var(--color-cream)] border-2 border-[var(--color-navy)] rounded p-2 flex flex-col justify-between gap-1.5 text-left transition-colors duration-75 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-blue)] touch-none ${
+                    isFullLab
+                      ? 'nb-full-lab'
+                      : 'cursor-grab hover:bg-[var(--color-yellow)]'
+                  } ${
                     hasLinkedOutline ? 'nb-linked-outline' : ''
+                  } ${
+                    isShaking ? 'nb-shake' : ''
                   }`}
                   style={
                     hasLinkedOutline && rainbowPair
@@ -482,8 +535,14 @@ export default function AvailableCourses({
                       : undefined
                   }
                   data-linked-outline={hasLinkedOutline ? 'true' : 'false'}
+                  data-full-lab={isFullLab ? 'true' : 'false'}
                   role="listitem"
-                  aria-label={`${item.title} (${item.id}), ${formatCourseSlot(item)}, ${seatsRemaining} seats remaining — drag onto timetable to add`}
+                  aria-label={
+                    isFullLab
+                      ? `${item.title} (${item.id}), ${formatCourseSlot(item)}, FULL — no seats available`
+                      : `${item.title} (${item.id}), ${formatCourseSlot(item)}, ${seatsRemaining} seats remaining — drag onto timetable to add`
+                  }
+                  aria-disabled={isFullLab ? 'true' : undefined}
                 >
                   <div>
                     <div className="flex items-center justify-between gap-1.5">
@@ -508,14 +567,32 @@ export default function AvailableCourses({
                       {formatCourseSlot(item)}
                     </span>
                     <div className="flex items-center gap-1">
-                      <span className="nb-course-seats font-mono text-[9px] font-extrabold text-[var(--color-charcoal)] whitespace-nowrap">
-                        {item.enrolled}/{item.capacity}
-                      </span>
-                      <Users size={9} strokeWidth={2.5} className="text-[var(--color-charcoal)]/60 shrink-0" aria-hidden="true" />
+                      {isFullLab ? (
+                        <span className="nb-full-badge" aria-hidden="true">FULL</span>
+                      ) : (
+                        <>
+                          <span className="nb-course-seats font-mono text-[9px] font-extrabold text-[var(--color-charcoal)] whitespace-nowrap">
+                            {item.enrolled}/{item.capacity}
+                          </span>
+                          <Users size={9} strokeWidth={2.5} className="text-[var(--color-charcoal)]/60 shrink-0" aria-hidden="true" />
+                        </>
+                      )}
                     </div>
                   </div>
+
+                  {/* Live region for shake announcement */}
+                  {isShaking && (
+                    <span
+                      role="alert"
+                      aria-live="assertive"
+                      className="sr-only"
+                    >
+                      {item.id} lab section is full. No seats available.
+                    </span>
+                  )}
                 </button>
               );
+
             })
           ) : (
             <div className="flex items-center w-full gap-3 px-1 py-0 text-[var(--color-navy)] font-mono text-[10px] font-bold">

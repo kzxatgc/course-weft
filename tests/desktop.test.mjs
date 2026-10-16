@@ -828,7 +828,10 @@ describe('drop-preview domain', () => {
         'utf8'
       );
       assert.ok(src.includes('DT_SECTION_ID'), 'AvailableCourses must import DT_SECTION_ID');
-      assert.ok(src.includes('draggable={true}'), 'AvailableCourses must mark cards as draggable');
+      assert.ok(
+        src.includes('draggable={true}') || src.includes('draggable={!isFullLab}'),
+        'AvailableCourses must mark cards as draggable (or conditionally non-draggable for full labs)'
+      );
     });
 
     it('Timetable imports from drop-preview and handles drag events', async () => {
@@ -1458,8 +1461,8 @@ describe('Available Courses drag, drop, and cancel', () => {
     });
   });
 
-  // ── Task 34: Animate BIO-214 and linked-lab outlines ────────────────────────
-  describe('Task 34: Animate BIO-214 and linked-lab outlines', () => {
+  // ── Animate BIO-214 and linked-lab outlines ────────────────────────
+  describe('Animate BIO-214 and linked-lab outlines', () => {
     it('no BIO-214 means no link outline', async () => {
       const { getLinkedOutlineSectionIds } = await import('../src/domain/linked-labs.mjs');
       const { MAIN_CATALOG, INITIAL_DRAFT } = await import('../src/domain/available-courses.mjs');
