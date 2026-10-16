@@ -7,6 +7,7 @@ import { MAIN_CATALOG, INITIAL_DRAFT } from './domain/available-courses.mjs';
  * EarlySchedulePreview — main schedule workspace.
  *
  * Renders the weekly Timetable (Task 25) and the Available Courses strip (Task 26).
+ * Undo / Reset icon controls live inline in the AvailableCourses header (Task 28).
  * All data is synthetic sample data only (no live registration system).
  */
 export default function EarlySchedulePreview({ state, dispatch }) {
@@ -41,11 +42,13 @@ export default function EarlySchedulePreview({ state, dispatch }) {
       {/* ── Main planning workspace: Available Courses (top) + Timetable (below) ── */}
       <div className="flex flex-col gap-3 w-full">
         {/* ── Available Courses horizontal strip (Task 26) ─────────── */}
+        {/* state is passed so AvailableCourses can show inline Undo / Reset icons (Task 28) */}
         <AvailableCourses
           availableCourses={availableCourses}
           draft={draft}
           dispatch={dispatch}
           search={state?.search || ''}
+          state={state}
         />
 
         {/* ── Weekly Timetable (Task 25) — spans entire window width ── */}
@@ -59,3 +62,5 @@ export default function EarlySchedulePreview({ state, dispatch }) {
     </div>
   );
 }
+
+

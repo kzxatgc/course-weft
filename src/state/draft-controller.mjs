@@ -42,6 +42,7 @@ export function initialState() {
     request: null,
     candidate: null,
     snapshot: null,
+    redoSnapshot: null,
     search: '',
     isApplied: false,
   });
@@ -72,6 +73,8 @@ export const ACTION = Object.freeze({
   APPLY_SUGGESTION: 'APPLY_SUGGESTION',
   UNDO_REPAIR: 'UNDO_REPAIR',
   UNDO_SUGGESTION: 'UNDO_SUGGESTION',
+  REDO_REPAIR: 'REDO_REPAIR',
+  REDO_SUGGESTION: 'REDO_SUGGESTION',
   DISMISS_REPAIR: 'DISMISS_REPAIR',
   DISMISS_SUGGESTION: 'DISMISS_SUGGESTION',
 });
@@ -460,13 +463,10 @@ export function reduce(state, action) {
         candidate: null,
         request: null,
         snapshot: null,
+        redoSnapshot: null,
         search: '',
         isApplied: false,
-        notice: Object.freeze({
-          kind: 'info',
-          title: 'Timetable reset',
-          message: 'Timetable reset to the starting selections.',
-        }),
+        notice: null,
       });
     }
 
@@ -569,6 +569,7 @@ export function reduce(state, action) {
         ...state,
         draft: Object.freeze([...candidate.ids]),
         snapshot,
+        redoSnapshot: null,
         isApplied: true,
         notice: Object.freeze({
           kind: 'success',
@@ -583,6 +584,10 @@ export function reduce(state, action) {
     case ACTION.UNDO_SUGGESTION: {
       if (!state.snapshot) return state;
       const { draft, scenario } = state.snapshot;
+      const redoSnapshot = Object.freeze({
+        draft: Object.freeze([...state.draft]),
+        scenario: state.scenario,
+      });
       return Object.freeze({
         ...state,
         draft: Object.freeze([...draft]),
@@ -590,12 +595,31 @@ export function reduce(state, action) {
         availableCourses: Object.freeze(catalogForScenario(scenario)),
         candidate: null,
         snapshot: null,
+        redoSnapshot,
         isApplied: false,
-        notice: Object.freeze({
-          kind: 'success',
-          title: 'Previous timetable restored',
-          message: 'Your selected classes are back to how they were before the change.',
-        }),
+        notice: null,
+      });
+    }
+
+    // Redo repair: reapply undone repair timetable
+    case ACTION.REDO_REPAIR:
+    case ACTION.REDO_SUGGESTION: {
+      if (!state.redoSnapshot) return state;
+      const { draft, scenario } = state.redoSnapshot;
+      const snapshot = Object.freeze({
+        draft: Object.freeze([...state.draft]),
+        scenario: state.scenario,
+      });
+      return Object.freeze({
+        ...state,
+        draft: Object.freeze([...draft]),
+        scenario,
+        availableCourses: Object.freeze(catalogForScenario(scenario)),
+        candidate: null,
+        snapshot,
+        redoSnapshot: null,
+        isApplied: true,
+        notice: null,
       });
     }
 
@@ -652,5 +676,15 @@ export function filteredAvailableCourses(state) {
  * @returns {boolean}
  */
 export function canUndo(state) {
-  return state.snapshot !== null;
+  return Boolean(state && state.snapshot !== null && state.snapshot !== undefined);
+}
+
+/**
+ * Returns true when the state has a valid redo snapshot available for Redo.
+ *
+ * @param {object} state
+ * @returns {boolean}
+ */
+export function canRedo(state) {
+  return Boolean(state && state.redoSnapshot !== null && state.redoSnapshot !== undefined);
 }

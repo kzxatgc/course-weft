@@ -475,3 +475,137 @@ describe('Task 27 — Repair Preview impact groups and controller wiring', () =>
   });
 });
 
+// ── Task 28: Wire Apply/Undo/dismiss/reset ────────────────────────────────────
+describe('Task 28 — Apply / Undo / Dismiss / Reset wiring', () => {
+  it('canUndo returns false on initial state', async () => {
+    const { initialState, canUndo } = await import('../src/state/draft-controller.mjs');
+    const s0 = initialState();
+    assert.equal(canUndo(s0), false, 'canUndo must be false when no snapshot exists');
+  });
+
+  it('canUndo returns true after APPLY_REPAIR creates a snapshot', async () => {
+    const { initialState, reduce, ACTION, canUndo } = await import('../src/state/draft-controller.mjs');
+    const s0 = initialState();
+    const s1 = reduce(s0, { type: ACTION.SUGGEST_REPAIR });
+    assert.ok(s1.candidate !== null, 'candidate must be populated after SUGGEST_REPAIR');
+    const s2 = reduce(s1, { type: ACTION.APPLY_REPAIR });
+    assert.equal(s2.isApplied, true, 'isApplied must be true after APPLY_REPAIR');
+    assert.ok(s2.snapshot !== null, 'snapshot must be set after APPLY_REPAIR');
+    assert.equal(canUndo(s2), true, 'canUndo must be true after applying a repair');
+  });
+
+  it('UNDO_REPAIR restores the exact pre-apply draft and clears snapshot', async () => {
+    const { initialState, reduce, ACTION, canUndo } = await import('../src/state/draft-controller.mjs');
+    const s0 = initialState();
+    const s1 = reduce(s0, { type: ACTION.SUGGEST_REPAIR });
+    const s2 = reduce(s1, { type: ACTION.APPLY_REPAIR });
+    const draftBeforeApply = [...s0.draft].sort();
+
+    const s3 = reduce(s2, { type: ACTION.UNDO_REPAIR });
+    assert.deepEqual(
+      [...s3.draft].sort(),
+      draftBeforeApply,
+      'UNDO_REPAIR must restore the exact pre-apply draft'
+    );
+    assert.equal(s3.snapshot, null, 'snapshot must be cleared after undo');
+    assert.equal(s3.isApplied, false, 'isApplied must be false after undo');
+    assert.equal(canUndo(s3), false, 'canUndo must be false after undo');
+    assert.equal(s3.candidate, null, 'candidate must be cleared after undo');
+    assert.equal(s3.notice, null, 'undo notice must be null');
+  });
+
+  it('RESET_DRAFT restores INITIAL_DRAFT and clears all transient state', async () => {
+    const { initialState, reduce, ACTION, canUndo } = await import('../src/state/draft-controller.mjs');
+    const { INITIAL_DRAFT } = await import('../src/domain/available-courses.mjs');
+    const s0 = initialState();
+    // Apply a repair to get a non-initial state with snapshot
+    const s1 = reduce(s0, { type: ACTION.SUGGEST_REPAIR });
+    const s2 = reduce(s1, { type: ACTION.APPLY_REPAIR });
+    assert.equal(canUndo(s2), true);
+
+    const s3 = reduce(s2, { type: ACTION.RESET_DRAFT });
+    assert.deepEqual([...s3.draft].sort(), [...INITIAL_DRAFT].sort(), 'RESET_DRAFT must restore INITIAL_DRAFT');
+    assert.equal(s3.candidate, null, 'candidate must be null after reset');
+    assert.equal(s3.snapshot, null, 'snapshot must be null after reset');
+    assert.equal(s3.isApplied, false, 'isApplied must be false after reset');
+    assert.equal(canUndo(s3), false, 'canUndo must be false after reset');
+    assert.equal(s3.notice, null, 'reset notice must be null');
+  });
+
+  it('DISMISS_REPAIR does not mutate draft and clears candidate without undo', async () => {
+    const { initialState, reduce, ACTION, canUndo } = await import('../src/state/draft-controller.mjs');
+    const s0 = initialState();
+    const s1 = reduce(s0, { type: ACTION.SUGGEST_REPAIR });
+    assert.ok(s1.candidate, 'candidate must exist before dismiss');
+
+    const s2 = reduce(s1, { type: ACTION.DISMISS_REPAIR });
+    assert.equal(s2.candidate, null, 'candidate must be null after dismiss');
+    assert.deepEqual(s2.draft, s0.draft, 'draft must be unchanged after dismiss');
+    assert.equal(s2.isApplied, false);
+    // dismiss before apply never creates a snapshot, so canUndo stays false
+    assert.equal(canUndo(s2), false, 'canUndo must remain false after dismiss without prior apply');
+  });
+
+  it('APPLY_REPAIR sets notice title to "Timetable updated" for success popup', async () => {
+    const { initialState, reduce, ACTION } = await import('../src/state/draft-controller.mjs');
+    const s0 = initialState();
+    const s1 = reduce(s0, { type: ACTION.SUGGEST_REPAIR });
+    const s2 = reduce(s1, { type: ACTION.APPLY_REPAIR });
+    assert.equal(s2.notice?.title, 'Timetable updated');
+    assert.equal(s2.notice?.kind, 'success');
+  });
+
+  it('AvailableCourses includes inline Undo, Redo, and Reset icon buttons wired to correct actions', async () => {
+    const { readFileSync } = await import('node:fs');
+    const src = readFileSync(
+      new URL('../src/components/AvailableCourses.jsx', import.meta.url),
+      'utf8'
+    );
+    assert.ok(src.includes('ACTION.UNDO_REPAIR'), 'AvailableCourses must dispatch UNDO_REPAIR for undo button');
+    assert.ok(src.includes('ACTION.REDO_REPAIR'), 'AvailableCourses must dispatch REDO_REPAIR for redo button');
+    assert.ok(src.includes('ACTION.RESET_DRAFT'), 'AvailableCourses must dispatch RESET_DRAFT for reset button');
+    assert.ok(src.includes('canUndo'), 'AvailableCourses must use the canUndo selector');
+    assert.ok(src.includes('canRedo'), 'AvailableCourses must use the canRedo selector');
+    assert.ok(src.includes('undo-repair-button'), 'Undo button must have id="undo-repair-button"');
+    assert.ok(src.includes('redo-repair-button'), 'Redo button must have id="redo-repair-button"');
+    assert.ok(src.includes('reset-timetable-button'), 'Reset button must have id="reset-timetable-button"');
+    assert.ok(src.includes('confirm-reset-button'), 'Reset dialog must contain confirm-reset-button');
+    assert.ok(src.includes('Undo2'), 'AvailableCourses must import Undo2 icon');
+    assert.ok(src.includes('Redo2'), 'AvailableCourses must import Redo2 icon');
+    assert.ok(src.includes('RotateCcw'), 'AvailableCourses must import RotateCcw icon');
+  });
+
+  it('REDO_REPAIR reapplies undone repair timetable and restores canUndo state', async () => {
+    const { initialState, reduce, ACTION, canUndo, canRedo } = await import('../src/state/draft-controller.mjs');
+    const s0 = initialState();
+    assert.equal(canRedo(s0), false);
+
+    const s1 = reduce(s0, { type: ACTION.SUGGEST_REPAIR });
+    const s2 = reduce(s1, { type: ACTION.APPLY_REPAIR });
+    assert.equal(canUndo(s2), true);
+    assert.equal(canRedo(s2), false);
+
+    const s3 = reduce(s2, { type: ACTION.UNDO_REPAIR });
+    assert.equal(canUndo(s3), false);
+    assert.equal(canRedo(s3), true);
+
+    const s4 = reduce(s3, { type: ACTION.REDO_REPAIR });
+    assert.equal(canUndo(s4), true);
+    assert.equal(canRedo(s4), false);
+    assert.equal(s4.notice, null, 'REDO_REPAIR must not trigger a popup dialog (notice must be null)');
+    assert.deepEqual(s4.draft, s2.draft, 'draft after redo must match draft after apply');
+  });
+
+  it('EarlySchedulePreview passes state prop to AvailableCourses for inline controls', async () => {
+    const { readFileSync } = await import('node:fs');
+    const src = readFileSync(
+      new URL('../src/EarlySchedulePreview.jsx', import.meta.url),
+      'utf8'
+    );
+    assert.ok(!src.includes('TimetableControls'), 'EarlySchedulePreview must not use a standalone TimetableControls bar');
+    assert.ok(src.includes('state={state}'), 'EarlySchedulePreview must pass state to AvailableCourses');
+  });
+});
+
+
+

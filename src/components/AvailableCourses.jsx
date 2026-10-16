@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useId } from 'react';
-import { Search, X, Users } from 'lucide-react';
-import { ACTION } from '../state/draft-controller.mjs';
+import { Search, X, Users, Undo2, Redo2, RotateCcw } from 'lucide-react';
+import { ACTION, canUndo, canRedo } from '../state/draft-controller.mjs';
+import { INITIAL_DRAFT } from '../domain/available-courses.mjs';
 
 import { format24hTime, formatCourseSlot } from '../domain/time.mjs';
 
@@ -32,14 +33,23 @@ export default function AvailableCourses({
   draft = [],
   dispatch,
   search: controlledSearch = '',
+  state = null,
 }) {
   const [localSearch, setLocalSearch] = useState(controlledSearch);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
   const searchInputId = useId();
 
   // Keep local search in sync when controlled search changes
   useEffect(() => {
     setLocalSearch(controlledSearch);
   }, [controlledSearch]);
+
+  // Undo / Redo / Reset derivations (only when state is wired in)
+  const canUndoRepair = state ? canUndo(state) : false;
+  const canRedoRepair = state ? canRedo(state) : false;
+  const isDraftChanged = state
+    ? !arraysEqual(draft, INITIAL_DRAFT)
+    : false;
 
   const query = localSearch.trim().toLowerCase();
 
@@ -108,10 +118,12 @@ export default function AvailableCourses({
   }
 
   return (
-    <section
-      aria-labelledby="catalogue-heading"
-      className="nb-courses-panel w-full border-[2.5px] border-[var(--color-navy)] bg-[var(--color-cream)] overflow-hidden font-mono shadow-none"
-    >
+    <div className="flex items-stretch gap-2 w-full font-mono">
+      {/* ── Available Courses section box ── */}
+      <section
+        aria-labelledby="catalogue-heading"
+        className="nb-courses-panel flex-1 min-w-0 border-[2.5px] border-[var(--color-navy)] bg-[var(--color-cream)] overflow-hidden shadow-none"
+      >
       {/* ── Header Bar: Heading on Left, Search on Right ─────────── */}
       <div className="nb-courses-header flex items-center justify-between min-h-[32px] px-2.5 py-1 bg-[var(--color-yellow)] border-b-2 border-[var(--color-navy)] gap-2">
         <div className="flex items-center gap-2 shrink-0">
@@ -166,12 +178,12 @@ export default function AvailableCourses({
         </form>
       </div>
 
-      {/* ── Horizontally scrolling row of Neo-Brutalist cards ─────── */}
-      <div
-        className="nb-courses-track nb-courses-scroll flex items-stretch gap-2 p-2 overflow-x-auto min-h-[90px]"
-        role="list"
-        aria-label="Available course sections list"
-      >
+        {/* ── Horizontally scrolling row of Neo-Brutalist cards ─────── */}
+        <div
+          className="nb-courses-track nb-courses-scroll flex items-stretch gap-2 p-2 overflow-x-auto min-h-[90px]"
+          role="list"
+          aria-label="Available course sections list"
+        >
         {filteredCourses.length > 0 ? (
           filteredCourses.map((item) => {
             const seatsRemaining = Math.max(0, item.capacity - item.enrolled);
@@ -233,7 +245,144 @@ export default function AvailableCourses({
             </button>
           </div>
         )}
+        </div>
+      </section>
+
+      {/* ── Outside vertical toolbar on right: Undo, Redo, Reset ── */}
+      <div
+        className="flex flex-col items-center justify-center gap-2 px-1.5 py-2 bg-[var(--color-cream)] border-[2.5px] border-[var(--color-navy)] shrink-0 shadow-none"
+        aria-label="Timetable history controls"
+      >
+        <button
+          id="undo-repair-button"
+          type="button"
+          disabled={!canUndoRepair}
+          onClick={() => dispatch && dispatch({ type: ACTION.UNDO_REPAIR })}
+          aria-label="Undo last repair — restore previous timetable"
+          title={canUndoRepair ? 'Undo repair' : 'Nothing to undo'}
+          className={`flex items-center justify-center w-6 h-6 rounded-none border-2 transition-colors ${
+            canUndoRepair
+              ? 'border-[var(--color-navy)] bg-[var(--color-navy)] text-[var(--color-yellow)] hover:bg-[var(--color-yellow)] hover:text-[var(--color-navy)] cursor-pointer'
+              : 'border-[var(--color-navy)]/30 bg-transparent text-[var(--color-navy)]/35 cursor-not-allowed'
+          }`}
+        >
+          <Undo2 size={12} strokeWidth={2.5} aria-hidden="true" />
+        </button>
+
+        <button
+          id="redo-repair-button"
+          type="button"
+          disabled={!canRedoRepair}
+          onClick={() => dispatch && dispatch({ type: ACTION.REDO_REPAIR })}
+          aria-label="Redo repair — reapply timetable repair"
+          title={canRedoRepair ? 'Redo repair' : 'Nothing to redo'}
+          className={`flex items-center justify-center w-6 h-6 rounded-none border-2 transition-colors ${
+            canRedoRepair
+              ? 'border-[var(--color-navy)] bg-[var(--color-navy)] text-[var(--color-yellow)] hover:bg-[var(--color-yellow)] hover:text-[var(--color-navy)] cursor-pointer'
+              : 'border-[var(--color-navy)]/30 bg-transparent text-[var(--color-navy)]/35 cursor-not-allowed'
+          }`}
+        >
+          <Redo2 size={12} strokeWidth={2.5} aria-hidden="true" />
+        </button>
+
+        <button
+          id="reset-timetable-button"
+          type="button"
+          disabled={!isDraftChanged}
+          onClick={() => setShowResetConfirm(true)}
+          aria-label="Reset timetable to starting selections"
+          title={isDraftChanged ? 'Reset timetable' : 'Timetable is already at starting selections'}
+          className={`flex items-center justify-center w-6 h-6 rounded-none border-2 transition-colors ${
+            isDraftChanged
+              ? 'border-[var(--color-navy)] bg-white text-[var(--color-navy)] hover:bg-slate-100 cursor-pointer'
+              : 'border-[var(--color-navy)]/30 bg-transparent text-[var(--color-navy)]/35 cursor-not-allowed'
+          }`}
+        >
+          <RotateCcw size={12} strokeWidth={2.5} aria-hidden="true" />
+        </button>
       </div>
-    </section>
+
+      {/* ── Reset Confirmation Dialog ── */}
+      {showResetConfirm && (
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-[1.5px] p-4 select-none font-mono"
+          onPointerDown={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
+          onClick={() => setShowResetConfirm(false)}
+        >
+          <div
+            role="alertdialog"
+            aria-labelledby="reset-dialog-title"
+            aria-describedby="reset-dialog-desc"
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-sm rounded-none border-[3px] border-[var(--color-navy)] bg-[#fffdf8] shadow-[6px_6px_0px_0px_var(--color-navy)] overflow-hidden"
+          >
+            {/* Title Bar */}
+            <div className="flex items-center justify-between px-3.5 py-2 bg-[var(--color-yellow)] text-[var(--color-navy)] border-b-[3px] border-[var(--color-navy)]">
+              <div className="flex items-center gap-1.5">
+                <RotateCcw size={13} strokeWidth={2.5} aria-hidden="true" />
+                <span id="reset-dialog-title" className="font-['Archivo_Black',sans-serif] text-[11px] uppercase tracking-wider font-black">
+                  Confirm Reset
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowResetConfirm(false)}
+                aria-label="Close dialog"
+                className="text-[var(--color-navy)] hover:bg-black/10 p-0.5 cursor-pointer transition-colors"
+              >
+                <X size={14} strokeWidth={2.5} aria-hidden="true" />
+              </button>
+            </div>
+
+            {/* Dialog Content */}
+            <div className="p-4">
+              <p id="reset-dialog-desc" className="text-xs text-[var(--color-navy)] leading-relaxed font-sans font-medium">
+                Are you sure you want to reset your timetable? All added or repaired courses will return to the starting selections.
+              </p>
+
+              {/* Actions: Cancel vs Confirm Reset */}
+              <div className="mt-4 pt-3 border-t border-[var(--color-navy)]/15 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowResetConfirm(false)}
+                  className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider border-2 border-[var(--color-navy)] bg-white text-[var(--color-navy)] hover:bg-slate-100 transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  id="confirm-reset-button"
+                  type="button"
+                  onClick={() => {
+                    setShowResetConfirm(false);
+                    if (dispatch) {
+                      dispatch({ type: ACTION.RESET_DRAFT });
+                    }
+                  }}
+                  className="px-3.5 py-1.5 text-[10px] font-black uppercase tracking-wider border-2 border-[var(--color-navy)] bg-[var(--color-navy)] text-[var(--color-yellow)] hover:bg-[var(--color-yellow)] hover:text-[var(--color-navy)] transition-colors cursor-pointer"
+                >
+                  Reset Timetable
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/** Shallow array equality (order-sensitive). */
+function arraysEqual(a, b) {
+  if (!Array.isArray(a) || !Array.isArray(b)) return false;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
 }
