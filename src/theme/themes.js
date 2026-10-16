@@ -32,6 +32,16 @@ export const THEMES = [
     cream: '#F8F9FA',
     charcoal: '#1E293B',
   },
+  {
+    id: 'custard',
+    name: 'Custard Cream',
+    description: 'Soft custard cream headers with clean gallery white body and deep navy borders',
+    yellow: '#FDF0D5',
+    navy: '#003049',
+    blue: '#4361EE',
+    cream: '#F8F9FA',
+    charcoal: '#1E293B',
+  },
 ];
 
 export const DEFAULT_THEME_ID = 'coastal';

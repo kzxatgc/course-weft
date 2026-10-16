@@ -15,8 +15,8 @@ import assert from 'node:assert/strict';
 import { THEMES, DEFAULT_THEME_ID } from '../src/theme/themes.js';
 
 describe('Theme catalogue', () => {
-  it('contains exactly 2 themes', () => {
-    assert.equal(THEMES.length, 2);
+  it('contains 3 themes', () => {
+    assert.equal(THEMES.length, 3);
   });
 
   it('first theme is Coastal (user-supplied palette)', () => {
@@ -207,4 +207,136 @@ describe('Theme colour contrast', () => {
       );
     });
   }
+});
+
+// ── Task 25 — Timetable pure-logic tests ──────────────────────────────────────
+import { MAIN_CATALOG, INITIAL_DRAFT } from '../src/domain/available-courses.mjs';
+import { formatTime, formatTimeRange } from '../src/domain/time.mjs';
+
+const START_MINUTE  = 8 * 60;   // 480
+const END_MINUTE    = 18 * 60;  // 1080
+const TOTAL_MINUTES = END_MINUTE - START_MINUTE;
+
+/** Replicate Timetable.toPercent() pure logic for test validation. */
+function toPercent(minute) {
+  return ((minute - START_MINUTE) / TOTAL_MINUTES) * 100;
+}
+
+describe('Timetable — section positioning math', () => {
+  it('8 AM (480) maps to 0% (start of timeline)', () => {
+    assert.equal(toPercent(480), 0);
+  });
+
+  it('6 PM (1080) maps to 100% (end of timeline)', () => {
+    assert.equal(toPercent(1080), 100);
+  });
+
+  it('12 PM (720) maps to 40%', () => {
+    assert.equal(toPercent(720), 40);
+  });
+
+  it('CHEM-A (Tue 10:00–11:00 AM) left = 20%, width = 10%', () => {
+    const sec = MAIN_CATALOG.find((s) => s.id === 'CHEM-A');
+    assert.equal(toPercent(sec.start), 20);
+    const widthPct = ((sec.end - sec.start) / TOTAL_MINUTES) * 100;
+    assert.equal(widthPct, 10);
+  });
+
+  it('STAT-A (Mon 1:00–2:00 PM) left = 50%, width = 10%', () => {
+    const sec = MAIN_CATALOG.find((s) => s.id === 'STAT-A');
+    assert.equal(toPercent(sec.start), 50);
+    const widthPct = ((sec.end - sec.start) / TOTAL_MINUTES) * 100;
+    assert.equal(widthPct, 10);
+  });
+
+  it('section left + width never exceeds 100% for catalog entries', () => {
+    for (const sec of MAIN_CATALOG) {
+      const left  = toPercent(sec.start);
+      const width = ((sec.end - sec.start) / TOTAL_MINUTES) * 100;
+      assert.ok(left >= 0 && left <= 100, `${sec.id}: left=${left}% must be 0–100`);
+      assert.ok(width > 0,                `${sec.id}: width=${width}% must be > 0`);
+      assert.ok(left + width <= 100,      `${sec.id}: left+width=${left+width}% must be ≤ 100`);
+    }
+  });
+});
+
+describe('Timetable — empty state', () => {
+  it('INITIAL_DRAFT is non-empty (no empty state at startup)', () => {
+    assert.ok(INITIAL_DRAFT.length > 0, 'INITIAL_DRAFT must have at least one section');
+  });
+
+  it('filtering draft=[] against catalog produces zero selectedSections (empty state)', () => {
+    const selected = MAIN_CATALOG.filter((s) => [].includes(s.id));
+    assert.equal(selected.length, 0);
+  });
+
+  it('filtering draft=INITIAL_DRAFT produces the correct number of sections', () => {
+    const selected = MAIN_CATALOG.filter((s) => INITIAL_DRAFT.includes(s.id));
+    assert.equal(selected.length, INITIAL_DRAFT.length);
+  });
+});
+
+describe('Timetable — section display data', () => {
+  it('every catalog section has fields required by SectionBlock (id, title, day, start, end, component)', () => {
+    for (const sec of MAIN_CATALOG) {
+      assert.ok(typeof sec.id        === 'string' && sec.id.length > 0,   `${sec.id}: id required`);
+      assert.ok(typeof sec.title     === 'string' && sec.title.length > 0, `${sec.id}: title required`);
+      assert.ok(typeof sec.day       === 'string' && sec.day.length > 0,   `${sec.id}: day required`);
+      assert.ok(typeof sec.start     === 'number',                         `${sec.id}: start required`);
+      assert.ok(typeof sec.end       === 'number' && sec.end > sec.start,  `${sec.id}: end > start required`);
+      assert.ok(typeof sec.component === 'string',                         `${sec.id}: component required`);
+    }
+  });
+
+  it('formatTimeRange produces a non-empty string including the day for every catalog section', () => {
+    for (const sec of MAIN_CATALOG) {
+      const range = formatTimeRange(sec);
+      assert.ok(typeof range === 'string' && range.length > 0, `${sec.id}: formatTimeRange must return non-empty string`);
+      assert.ok(range.includes(sec.day), `${sec.id}: formatTimeRange must include the day`);
+    }
+  });
+
+  it('enrolled/capacity fields are numeric and non-negative on every catalog section', () => {
+    for (const sec of MAIN_CATALOG) {
+      assert.ok(typeof sec.enrolled === 'number' && sec.enrolled >= 0, `${sec.id}: enrolled must be >= 0`);
+      assert.ok(typeof sec.capacity === 'number' && sec.capacity > 0,  `${sec.id}: capacity must be > 0`);
+      assert.ok(sec.enrolled <= sec.capacity, `${sec.id}: enrolled must be <= capacity`);
+    }
+  });
+
+  it('no catalog section exposes liveData or apiUrl fields', () => {
+    for (const sec of MAIN_CATALOG) {
+      assert.ok(!('liveData' in sec), `${sec.id}: must not expose liveData`);
+      assert.ok(!('apiUrl'   in sec), `${sec.id}: must not expose apiUrl`);
+    }
+  });
+});
+
+describe('Timetable — remove control (domain side)', () => {
+  it('REMOVE_SECTION action type is exported from draft-controller', async () => {
+    const { ACTION } = await import('../src/state/draft-controller.mjs');
+    assert.equal(ACTION.REMOVE_SECTION, 'REMOVE_SECTION');
+  });
+
+  it('dispatching REMOVE_SECTION for a draft section removes it', async () => {
+    const { initialState, reduce, ACTION } = await import('../src/state/draft-controller.mjs');
+    const s0 = initialState();
+    assert.ok(s0.draft.includes('CHEM-A'), 'CHEM-A must be in initial draft');
+    const s1 = reduce(s0, { type: ACTION.REMOVE_SECTION, payload: 'CHEM-A' });
+    assert.ok(!s1.draft.includes('CHEM-A'), 'CHEM-A must be removed after REMOVE_SECTION');
+  });
+
+  it('dispatching REMOVE_SECTION for a non-draft section leaves draft unchanged', async () => {
+    const { initialState, reduce, ACTION } = await import('../src/state/draft-controller.mjs');
+    const s0 = initialState();
+    const s1 = reduce(s0, { type: ACTION.REMOVE_SECTION, payload: 'BIO-214' });
+    assert.deepEqual([...s1.draft], [...s0.draft]);
+  });
+
+  it('REMOVE_SECTION produces a notice with kind="success"', async () => {
+    const { initialState, reduce, ACTION } = await import('../src/state/draft-controller.mjs');
+    const s0 = initialState();
+    const s1 = reduce(s0, { type: ACTION.REMOVE_SECTION, payload: 'CHEM-A' });
+    assert.equal(s1.notice?.kind, 'success');
+  });
 });

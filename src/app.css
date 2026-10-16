@@ -894,10 +894,354 @@ body {
 }
 
 /* ════════════════════════════════════════════════════════════════
+   Task 25 — Weekly Timetable (Timetable.jsx)
+   ════════════════════════════════════════════════════════════════ */
+
+/* Outer section wrapper */
+.nb-tt {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* Grid wrapper — perfectly fits space without scrolling */
+.nb-tt-grid-wrap {
+  position: relative;
+  width: 100%;
+  border: 2.5px solid var(--color-navy);
+  box-shadow: none;
+  background-color: var(--color-cream);
+  overflow: hidden;
+}
+
+/* ── Top Header Row: X-axis (10 distinct hour columns) ───── */
+.nb-tt-header-row {
+  display: flex;
+  border-bottom: 2px solid var(--color-navy);
+  background-color: var(--color-yellow);
+  height: 26px;
+  align-items: stretch;
+}
+.nb-tt-corner-cell {
+  width: 80px;
+  min-width: 80px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-right: 2px solid var(--color-navy);
+  background-color: var(--color-yellow);
+}
+.nb-tt-corner-text {
+  font-family: 'Archivo Black', sans-serif;
+  font-size: 9.5px;
+  font-weight: 900;
+  color: var(--color-navy);
+  letter-spacing: 0.08em;
+}
+.nb-tt-hour-cols {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  height: 100%;
+}
+.nb-tt-hour-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-right: 1.5px solid color-mix(in srgb, var(--color-navy) 35%, transparent);
+  padding: 0 2px;
+}
+.nb-tt-hour-cell:last-child {
+  border-right: none;
+}
+.nb-tt-hour-text {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  font-weight: 800;
+  color: var(--color-navy);
+  white-space: nowrap;
+  letter-spacing: -0.01em;
+}
+
+/* ── Body: Y-axis (Monday to Friday rows) ───────────────── */
+.nb-tt-rows-body {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  width: 100%;
+}
+.nb-tt-row {
+  display: flex;
+  height: 42px;
+  border-bottom: 1.5px solid color-mix(in srgb, var(--color-navy) 18%, transparent);
+}
+.nb-tt-row:last-child {
+  border-bottom: none;
+}
+.nb-tt-day-label {
+  width: 80px;
+  min-width: 80px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 6px;
+  border-right: 2px solid var(--color-navy);
+  background-color: var(--color-yellow);
+}
+.nb-tt-day-badge {
+  font-family: 'Archivo Black', sans-serif;
+  font-size: 11px;
+  font-weight: 900;
+  color: var(--color-navy);
+  letter-spacing: 0.06em;
+}
+
+/* Day track with 10 column background lines & section blocks */
+.nb-tt-row-track {
+  flex: 1;
+  position: relative;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* Background grid columns matching header */
+.nb-tt-track-grid {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  pointer-events: none;
+}
+.nb-tt-grid-col {
+  border-right: 1px solid color-mix(in srgb, var(--color-navy) 12%, transparent);
+  height: 100%;
+}
+.nb-tt-grid-col:last-child {
+  border-right: none;
+}
+.nb-tt-grid-col:nth-child(even) {
+  background-color: color-mix(in srgb, var(--color-navy) 1.5%, transparent);
+}
+
+/* Section block positioned by official time on horizontal axis */
+.nb-tt-block {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  border: 2px solid var(--color-navy);
+  background-color: var(--color-blue);
+  box-shadow: none;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 6px;
+  overflow: hidden;
+  z-index: 10;
+  cursor: default;
+}
+.nb-tt-block-id {
+  font-family: 'Archivo Black', sans-serif;
+  font-size: 11.5px;
+  font-weight: 900;
+  color: var(--color-cream);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: center;
+  letter-spacing: 0.04em;
+}
+
+/* Empty state */
+.nb-tt-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  background-color: color-mix(in srgb, var(--color-cream) 92%, transparent);
+  pointer-events: none;
+}
+.nb-tt-empty-icon {
+  font-size: 24px;
+  line-height: 1;
+}
+.nb-tt-empty-msg {
+  font-family: 'Archivo Black', sans-serif;
+  font-size: 12px;
+  color: var(--color-navy);
+  margin: 0;
+  text-align: center;
+}
+.nb-tt-empty-hint {
+  font-size: 10px;
+  color: var(--color-charcoal);
+  opacity: 0.75;
+  margin: 0;
+  text-align: center;
+  padding: 0 16px;
+}
+
+/* ════════════════════════════════════════════════════════════════
+   Available Courses Neo-Brutalist Strip (matching Timetable)
+   ════════════════════════════════════════════════════════════════ */
+.nb-courses-panel {
+  width: 100%;
+  border: 2.5px solid var(--color-navy);
+  box-shadow: none;
+  background-color: var(--color-cream);
+  overflow: hidden;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.nb-courses-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 28px;
+  padding: 0 10px;
+  background-color: var(--color-yellow);
+  border-bottom: 2px solid var(--color-navy);
+}
+
+.nb-courses-title {
+  font-family: 'Archivo Black', sans-serif;
+  font-size: 10.5px;
+  font-weight: 900;
+  color: var(--color-navy);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin: 0;
+}
+
+.nb-courses-hint {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--color-navy);
+  opacity: 0.85;
+  letter-spacing: 0.02em;
+}
+
+.nb-courses-track {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 8px;
+  padding: 6px 8px;
+  overflow-x: auto;
+}
+
+.nb-course-card {
+  width: 195px;
+  min-width: 195px;
+  flex-shrink: 0;
+  background-color: var(--color-cream);
+  border: 2px solid var(--color-navy);
+  border-radius: 4px;
+  padding: 6px 9px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 4px;
+  cursor: pointer;
+  box-shadow: none;
+  transition: transform 0.08s steps(1), box-shadow 0.08s steps(1), background-color 0.08s;
+}
+
+.nb-course-card:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 2px 2px 0 var(--color-navy);
+  background-color: var(--color-yellow);
+}
+
+.nb-course-id {
+  font-family: 'Archivo Black', sans-serif;
+  font-size: 10.5px;
+  font-weight: 900;
+  color: var(--color-navy);
+  letter-spacing: 0.02em;
+}
+
+.nb-course-badge {
+  font-size: 8px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background-color: var(--color-navy);
+  color: var(--color-cream);
+  padding: 1px 3.5px;
+  border-radius: 2px;
+  line-height: 1.2;
+}
+
+.nb-course-name {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--color-charcoal);
+  margin: 2px 0 0 0;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nb-course-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid color-mix(in srgb, var(--color-navy) 16%, transparent);
+  padding-top: 4px;
+  margin-top: 2px;
+}
+
+.nb-course-time {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--color-navy);
+  white-space: nowrap;
+}
+
+.nb-course-seats {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  font-weight: 800;
+  color: var(--color-charcoal);
+  white-space: nowrap;
+}
+
+/* Horizontal scrollbar for available courses row */
+.nb-courses-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--color-navy) 40%, transparent) transparent;
+}
+.nb-courses-scroll::-webkit-scrollbar {
+  height: 6px;
+}
+.nb-courses-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.nb-courses-scroll::-webkit-scrollbar-thumb {
+  background-color: color-mix(in srgb, var(--color-navy) 40%, transparent);
+  border-radius: 3px;
+}
+.nb-courses-scroll::-webkit-scrollbar-thumb:hover {
+  background-color: var(--color-navy);
+}
+
+/* ════════════════════════════════════════════════════════════════
    Schedule workspace inner padding
    ════════════════════════════════════════════════════════════════ */
-#schedule-workspace > .space-y-6 {
-  padding: 12px;
+#schedule-workspace > .space-y-6,
+#schedule-workspace > .space-y-3 {
+  padding: 8px 12px;
 }
 
 /* ════════════════════════════════════════════════════════════════
