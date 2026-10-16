@@ -257,7 +257,7 @@ export default function Notice({ notice, onDismiss, onAction }) {
 
       {/* Standard non-modal notification banner */}
       <div id="notice-region" role="region" aria-label="Notifications" className="empty:hidden">
-        {notice && !modalContent ? (
+        {notice && !modalContent && notice.title !== 'Section changed' ? (
           <aside
             className={`rounded-xl border p-4 sm:p-5 flex items-start justify-between gap-3 transition-all ${currentStyle.container}`}
             aria-live="polite"

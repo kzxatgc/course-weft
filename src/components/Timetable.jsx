@@ -1,12 +1,17 @@
 import React, { useState, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { formatTime } from '../domain/time.mjs';
 import { ACTION } from '../state/draft-controller.mjs';
+import { playSound } from '../audio/optional-sounds.js';
 import {
   DT_SECTION_ID,
   pointerXToMinute,
   computeEndMinute,
   clampToDayBounds,
   buildFixedPreview,
+  POINTER_DRAG_THRESHOLD,
+  hasExceededDragThreshold,
+  isCardTouchingAvailableCourses,
 } from '../domain/drop-preview.mjs';
 
 /**
@@ -20,6 +25,8 @@ import {
  *  - Vertical grid lines that align between header and day rows
  *  - 52px rows with comfortable breathing room for course blocks
  *  - Signature blue course blocks with 2-line detail and remove (×) control
+ *  - Dragging selected timetable courses onto Available Courses to remove or swap
+ *  - Animated section swap: outgoing slides toward tray, incoming moves into slot
  *  - Fits the entire width cleanly without scrolling
  *  - Drag/drop ghost preview: dashed ghost card follows pointer at 15-min snap
  *  - Fixed-slot preview: official scheduled slot colored green (ok) or red (conflict)
@@ -27,17 +34,23 @@ import {
  * @param {{
  *   selectedSections: object[],
  *   availableCourses: object[],
+ *   draft?: string[],
  *   dispatch: function,
  *   fixedPreviewSectionId?: string | null,
- *   previewSectionId?: string | null
+ *   previewSectionId?: string | null,
+ *   animatingSwap?: { outgoingId: string, incomingId: string } | null,
+ *   onRequestSwap?: function
  * }} props
  */
 export default function Timetable({
   selectedSections = [],
   availableCourses = [],
+  draft = [],
   dispatch,
   fixedPreviewSectionId = null,
   previewSectionId = null,
+  animatingSwap = null,
+  onRequestSwap = null,
 }) {
   function handleRemove(id) {
     dispatch({ type: ACTION.REMOVE_SECTION, payload: id });
@@ -58,6 +71,182 @@ export default function Timetable({
   const fixedPreview = targetSection
     ? buildFixedPreview(targetSection, selectedSections)
     : null;
+
+  // Identify any currently enrolled section(s) that will be replaced if targetSection is swapped in
+  const replacedSectionIds = new Set();
+  if (targetSection) {
+    selectedSections.forEach((sec) => {
+      if (
+        sec.id !== targetSection.id &&
+        (sec.course === targetSection.course ||
+          (Array.isArray(targetSection.alternates) && targetSection.alternates.includes(sec.id)) ||
+          (Array.isArray(sec.alternates) && sec.alternates.includes(targetSection.id)))
+      ) {
+        replacedSectionIds.add(sec.id);
+      }
+    });
+  }
+
+  // Incoming swap section metadata (for animating incoming alternate into slot)
+  const incomingSwapSection = animatingSwap?.incomingId
+    ? availableCourses.find((s) => s.id === animatingSwap.incomingId)
+    : null;
+
+  // ── Pointer drag for timetable course blocks ────────────────────
+  const [heldSection, setHeldSection] = useState(null);
+  const pointerStateRef = useRef(null);
+  const isRestoringTimeoutRef = useRef(null);
+
+  function handleSectionPointerDown(e, sec) {
+    if (e.button !== 0) return;
+    if (e.target.closest('button')) return; // Ignore clicks on non-drag remove button
+
+    if (isRestoringTimeoutRef.current) {
+      clearTimeout(isRestoringTimeoutRef.current);
+      isRestoringTimeoutRef.current = null;
+    }
+
+    const targetEl = e.currentTarget;
+    const rect = targetEl.getBoundingClientRect();
+
+    pointerStateRef.current = {
+      sec,
+      startX: e.clientX,
+      startY: e.clientY,
+      offsetX: e.clientX - rect.left,
+      offsetY: e.clientY - rect.top,
+      origRect: {
+        left: rect.left,
+        top: rect.top,
+        width: rect.width,
+        height: rect.height,
+      },
+      pointerId: e.pointerId,
+      isDragging: false,
+    };
+
+    function onPointerMove(moveEvent) {
+      if (!pointerStateRef.current) return;
+      const cur = pointerStateRef.current;
+      const dx = moveEvent.clientX - cur.startX;
+      const dy = moveEvent.clientY - cur.startY;
+
+      if (!cur.isDragging) {
+        if (hasExceededDragThreshold(dx, dy, POINTER_DRAG_THRESHOLD)) {
+          cur.isDragging = true;
+          setHeldSection({
+            sec: cur.sec,
+            currentX: moveEvent.clientX,
+            currentY: moveEvent.clientY,
+            offsetX: cur.offsetX,
+            offsetY: cur.offsetY,
+            origRect: cur.origRect,
+            isRestoring: false,
+          });
+        }
+      }
+
+      if (cur.isDragging) {
+        setHeldSection({
+          sec: cur.sec,
+          currentX: moveEvent.clientX,
+          currentY: moveEvent.clientY,
+          offsetX: cur.offsetX,
+          offsetY: cur.offsetY,
+          origRect: cur.origRect,
+          isRestoring: false,
+        });
+      }
+    }
+
+    function cleanupListeners() {
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+      window.removeEventListener('pointercancel', onPointerCancel);
+      window.removeEventListener('keydown', onKeyDown);
+    }
+
+    function cancelAndRestore() {
+      cleanupListeners();
+      if (!pointerStateRef.current) return;
+      const cur = pointerStateRef.current;
+
+      if (cur.isDragging) {
+        setHeldSection({
+          sec: cur.sec,
+          currentX: cur.origRect.left + cur.offsetX,
+          currentY: cur.origRect.top + cur.offsetY,
+          offsetX: cur.offsetX,
+          offsetY: cur.offsetY,
+          origRect: cur.origRect,
+          isRestoring: true,
+        });
+
+        isRestoringTimeoutRef.current = setTimeout(() => {
+          setHeldSection(null);
+          pointerStateRef.current = null;
+          isRestoringTimeoutRef.current = null;
+        }, 220);
+      } else {
+        pointerStateRef.current = null;
+      }
+    }
+
+    function onPointerCancel() {
+      cancelAndRestore();
+    }
+
+    function onKeyDown(keyEvent) {
+      if (keyEvent.key === 'Escape') {
+        cancelAndRestore();
+      }
+    }
+
+    function onPointerUp(upEvent) {
+      cleanupListeners();
+      if (!pointerStateRef.current) return;
+      const cur = pointerStateRef.current;
+
+      if (!cur.isDragging) {
+        pointerStateRef.current = null;
+        return;
+      }
+
+      // Check if dropped into the Available Courses area
+      const panelEl = document.querySelector('.nb-courses-panel');
+      const panelRect = panelEl?.getBoundingClientRect();
+      const timetableEl = document.querySelector('.nb-tt');
+      const timetableRect = timetableEl?.getBoundingClientRect();
+
+      const cardRect = {
+        left: upEvent.clientX - cur.offsetX,
+        top: upEvent.clientY - cur.offsetY,
+        right: upEvent.clientX - cur.offsetX + cur.origRect.width,
+        bottom: upEvent.clientY - cur.offsetY + cur.origRect.height,
+        width: cur.origRect.width,
+        height: cur.origRect.height,
+      };
+
+      const touchesPanel = isCardTouchingAvailableCourses(cardRect, panelRect);
+      const isAboveTimetable = timetableRect ? cardRect.top < timetableRect.top : false;
+      const releasedInAvailableArea = Boolean(touchesPanel || isAboveTimetable);
+
+      if (releasedInAvailableArea) {
+        // Dropped into Available Courses tray: remove from timetable so it returns to Available Courses
+        setHeldSection(null);
+        pointerStateRef.current = null;
+        playSound?.('trash');
+        handleRemove(cur.sec.id);
+      } else {
+        cancelAndRestore();
+      }
+    }
+
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+    window.addEventListener('pointercancel', onPointerCancel);
+    window.addEventListener('keydown', onKeyDown);
+  }
 
   /**
    * Called by each day-row's onDragEnter / onDragOver.
@@ -94,7 +283,7 @@ export default function Timetable({
   const isEmpty = selectedSections.length === 0;
 
   return (
-    <section className="nb-tt" aria-label="Weekly schedule timetable" data-testid="timetable">
+    <section className="nb-tt relative" aria-label="Weekly schedule timetable" data-testid="timetable">
       <div className="nb-tt-grid-wrap">
         {/* ── Top Header Row: X-axis (10 distinct hour columns) ───── */}
         <div className="nb-tt-header-row">
@@ -132,9 +321,15 @@ export default function Timetable({
                 daySections={daySections}
                 ghost={isGhostDay ? ghost : null}
                 fixedPreview={isFixedPreviewDay ? fixedPreview : null}
+                animatingSwap={animatingSwap}
+                heldSectionId={heldSection?.sec.id}
+                incomingSwapSection={incomingSwapSection}
+                replacedSectionIds={replacedSectionIds}
                 onDragOver={handleDayDragOver}
                 onDragLeave={clearGhost}
                 onDrop={clearGhost}
+                onRemove={handleRemove}
+                onSectionPointerDown={handleSectionPointerDown}
               />
             );
           })}
@@ -149,13 +344,51 @@ export default function Timetable({
           )}
         </div>
       </div>
+
+      {/* ── Lifted/Held timetable block following pointer ── */}
+      {heldSection && (
+        typeof document !== 'undefined' && document.body
+          ? createPortal(
+              <div
+                className={`nb-tt-block nb-tt-block-held ${
+                  heldSection.isRestoring ? 'nb-tt-block-held--restoring' : ''
+                }`}
+                style={{
+                  left: `${heldSection.currentX - heldSection.offsetX}px`,
+                  top: `${heldSection.currentY - heldSection.offsetY}px`,
+                  width: `${heldSection.origRect.width}px`,
+                  height: `${heldSection.origRect.height}px`,
+                }}
+                data-testid={`timetable-held-${heldSection.sec.id}`}
+                aria-hidden="true"
+              >
+                <span className="nb-tt-block-id">{heldSection.sec.id}</span>
+              </div>,
+              document.body
+            )
+          : null
+      )}
     </section>
   );
 }
 
 // ── Day Row with drag-over support ────────────────────────────────────────────
 
-function DayRow({ day, daySections, ghost, fixedPreview, onDragOver, onDragLeave, onDrop }) {
+function DayRow({
+  day,
+  daySections,
+  ghost,
+  fixedPreview,
+  animatingSwap,
+  heldSectionId,
+  incomingSwapSection,
+  replacedSectionIds,
+  onDragOver,
+  onDragLeave,
+  onDrop,
+  onRemove,
+  onSectionPointerDown,
+}) {
   const trackRef = useRef(null);
 
   function handleDragOver(e) {
@@ -163,6 +396,13 @@ function DayRow({ day, daySections, ghost, fixedPreview, onDragOver, onDragLeave
       onDragOver(e, day.id, trackRef.current);
     }
   }
+
+  const isIncomingDay = Boolean(
+    incomingSwapSection && (
+      incomingSwapSection.day === day.id ||
+      (Array.isArray(incomingSwapSection.days) && incomingSwapSection.days.includes(day.id))
+    )
+  );
 
   return (
     <div className="nb-tt-row" aria-label={day.full}>
@@ -188,9 +428,55 @@ function DayRow({ day, daySections, ghost, fixedPreview, onDragOver, onDragLeave
         </div>
 
         {/* Section blocks on this day */}
-        {daySections.map((sec) => (
-          <SectionBlock key={`${sec.id}-${day.id}`} sec={sec} />
-        ))}
+        {daySections.map((sec) => {
+          const isHeld = heldSectionId === sec.id;
+          if (isHeld) {
+            const leftPct = toPercent(sec.start);
+            const widthPct = ((sec.end - sec.start) / TOTAL_MINUTES) * 100;
+            return (
+              <div
+                key={`placeholder-${sec.id}-${day.id}`}
+                className="nb-tt-block-placeholder"
+                style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
+                aria-hidden="true"
+                data-testid={`timetable-placeholder-${sec.id}`}
+              />
+            );
+          }
+
+          // If this section is the incoming swap target, skip the real block —
+          // the nb-tt-swap-incoming ghost overlay handles the slide-in animation
+          const isIncomingSwap = animatingSwap?.incomingId === sec.id;
+          if (isIncomingSwap) return null;
+
+          const isOutgoing = animatingSwap?.outgoingId === sec.id;
+          const isReplaced = Boolean(replacedSectionIds?.has(sec.id));
+          return (
+            <SectionBlock
+              key={`${sec.id}-${day.id}`}
+              sec={sec}
+              isOutgoing={isOutgoing}
+              isReplaced={isReplaced}
+              onRemove={onRemove}
+              onPointerDown={(e) => onSectionPointerDown?.(e, sec)}
+            />
+          );
+        })}
+
+        {/* Incoming swap preview on this day */}
+        {isIncomingDay && (
+          <div
+            className="nb-tt-block nb-tt-swap-incoming"
+            style={{
+              left: `${toPercent(incomingSwapSection.start)}%`,
+              width: `${((incomingSwapSection.end - incomingSwapSection.start) / TOTAL_MINUTES) * 100}%`,
+            }}
+            data-testid={`timetable-swap-incoming-${incomingSwapSection.id}`}
+            aria-hidden="true"
+          >
+            <span className="nb-tt-block-id">{incomingSwapSection.id}</span>
+          </div>
+        )}
 
         {/* Fixed preview (official slot time-conflict preview) */}
         {fixedPreview && (
@@ -257,17 +543,22 @@ function format24h(minute) {
   return `${hStr}${mStr}`;
 }
 
-function SectionBlock({ sec }) {
+function SectionBlock({ sec, isOutgoing = false, isReplaced = false, onRemove, onPointerDown }) {
   const leftPct = toPercent(sec.start);
   const widthPct = ((sec.end - sec.start) / TOTAL_MINUTES) * 100;
   const timeLabel = `${format24h(sec.start)} - ${format24h(sec.end)}`;
 
   return (
     <article
-      className="nb-tt-block"
+      className={`nb-tt-block cursor-grab select-none touch-none ${
+        isOutgoing ? 'nb-tt-swap-outgoing' : ''
+      } ${isReplaced ? 'nb-tt-block--swapping-out' : ''}`}
       style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
       aria-label={`${sec.title} (${sec.id}), ${sec.day} ${timeLabel}`}
       title={`${sec.title} (${sec.id})\n${sec.day} ${timeLabel}`}
+      onPointerDown={onPointerDown}
+      data-testid={`timetable-block-${sec.id}`}
+      data-is-replaced={isReplaced ? 'true' : 'false'}
     >
       <span className="nb-tt-block-id">{sec.id}</span>
     </article>

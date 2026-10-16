@@ -12,6 +12,7 @@
  * The DataTransfer payload written by AvailableCourses on dragStart is just
  * the section ID string. Timetable reads it via event.dataTransfer.getData().
  */
+import { validateDraft } from './validate.mjs';
 
 export const SNAP_MINUTES   = 15;
 export const DAY_START_MIN  = 8  * 60;  // 480
@@ -254,3 +255,85 @@ export function evaluateDrop({ touchesTimetable, hasConflict }) {
   }
   return { success: true, reason: 'ok' };
 }
+
+/**
+ * Axis-aligned bounding box test to check if a held card touches the Available Courses panel.
+ *
+ * @param {{ left: number, top: number, right: number, bottom: number } | DOMRect} cardRect
+ * @param {{ left: number, top: number, right: number, bottom: number } | DOMRect} panelRect
+ * @returns {boolean}
+ */
+export function isCardTouchingAvailableCourses(cardRect, panelRect) {
+  if (!cardRect || !panelRect) return false;
+  return !(
+    cardRect.right < panelRect.left ||
+    cardRect.left > panelRect.right ||
+    cardRect.bottom < panelRect.top ||
+    cardRect.top > panelRect.bottom
+  );
+}
+
+/**
+ * Standard duration in milliseconds for the section swap transition animation.
+ */
+export const SWAP_ANIMATION_DURATION_MS = 240;
+
+/**
+ * Return effective swap duration respecting prefers-reduced-motion.
+ *
+ * @param {{ prefersReducedMotion?: boolean }} [options={}]
+ * @returns {number} 0 if reduced motion is requested, else SWAP_ANIMATION_DURATION_MS
+ */
+export function getEffectiveSwapDuration({ prefersReducedMotion = false } = {}) {
+  return prefersReducedMotion ? 0 : SWAP_ANIMATION_DURATION_MS;
+}
+
+/**
+ * Validates a proposed section swap before animating or mutating state.
+ *
+ * @param {{
+ *   draft: string[],
+ *   availableCourses: object[],
+ *   fromId: string,
+ *   toId: string,
+ * }} params
+ * @returns {{
+ *   valid: boolean,
+ *   reason?: string,
+ *   nextDraft: string[]
+ * }}
+ */
+export function evaluateSwap({ draft, availableCourses, fromId, toId }) {
+  const byId = new Map(availableCourses.map((c) => [c.id, c]));
+  const fromItem = byId.get(fromId);
+  const toItem = byId.get(toId);
+
+  if (!fromItem || !toItem) {
+    return { valid: false, reason: 'section-not-found', nextDraft: draft };
+  }
+
+  // Ensure toId is a declared alternate for fromItem
+  const isDeclaredAlternate =
+    Array.isArray(fromItem.alternates) && fromItem.alternates.includes(toId);
+  if (!isDeclaredAlternate) {
+    return { valid: false, reason: 'not-declared-alternate', nextDraft: draft };
+  }
+
+  const nextDraft = draft.map((id) => (id === fromId ? toId : id));
+  const validation = validateDraft(nextDraft, availableCourses);
+
+  if (!validation.ok) {
+    return {
+      valid: false,
+      reason: validation.reason,
+      nextDraft: draft,
+    };
+  }
+
+  return {
+    valid: true,
+    reason: 'ok',
+    nextDraft,
+  };
+}
+

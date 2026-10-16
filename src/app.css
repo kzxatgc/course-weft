@@ -1227,6 +1227,142 @@ body {
   }
 }
 
+/* ── Timetable Section Drag & Animated Swaps ─────────────────── */
+
+/* Non-drag remove button on timetable course blocks */
+.nb-tt-block-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 4px;
+  width: 14px;
+  height: 14px;
+  border-radius: 2px;
+  background-color: var(--color-navy);
+  color: var(--color-cream);
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+  transition: background-color 0.1s ease, color 0.1s ease;
+}
+.nb-tt-block-remove:hover {
+  background-color: var(--color-yellow);
+  color: var(--color-navy);
+}
+
+/* Placeholder left on timetable while block is dragged */
+.nb-tt-block-placeholder {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  border: 2px dashed color-mix(in srgb, var(--color-navy) 45%, transparent);
+  background-color: color-mix(in srgb, var(--color-navy) 8%, transparent);
+  border-radius: 4px;
+  pointer-events: none;
+  box-sizing: border-box;
+  z-index: 5;
+}
+
+/* Floating held section block lifted from timetable */
+.nb-tt-block-held {
+  position: fixed;
+  pointer-events: none;
+  z-index: 9999;
+  box-sizing: border-box;
+  will-change: left, top;
+  cursor: grabbing;
+  box-shadow: 6px 6px 0px var(--color-navy);
+  bottom: auto !important;
+}
+
+.nb-tt-block-held--restoring {
+  transition: left 0.22s cubic-bezier(0.2, 0.9, 0.3, 1),
+              top 0.22s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+/* Swap outgoing: animates upward toward Available Courses tray */
+.nb-tt-swap-outgoing {
+  animation: nb-tt-swap-out 0.24s cubic-bezier(0.2, 0.9, 0.3, 1) forwards;
+  pointer-events: none;
+}
+
+@keyframes nb-tt-swap-out {
+  0% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-50px) scale(0.92);
+    opacity: 0;
+  }
+}
+
+/* Swap incoming: animates into timetable slot */
+.nb-tt-swap-incoming {
+  animation: nb-tt-swap-in 0.24s cubic-bezier(0.2, 0.9, 0.3, 1) forwards;
+}
+
+@keyframes nb-tt-swap-in {
+  0% {
+    transform: translateY(-40px) scale(0.95);
+    opacity: 0.3;
+  }
+  100% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nb-tt-swap-outgoing,
+  .nb-tt-swap-incoming,
+  .nb-tt-block-held--restoring {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* Outgoing section that will be replaced during section swap preview */
+.nb-tt-block--swapping-out {
+  opacity: 0.4;
+  transition: opacity 0.15s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nb-tt-block--swapping-out {
+    transition: none !important;
+  }
+}
+
+/* ── Section-swap returning card: flies from timetable slot → Available Courses tray ── */
+.nb-card-returning {
+  position: fixed;
+  pointer-events: none;
+  z-index: 9999;
+  box-sizing: border-box;
+  will-change: left, top, width, height, opacity, transform;
+  /* No transition on mount — first render is at fromRect (starting position) */
+}
+
+.nb-card-returning--moving {
+  transition:
+    left    0.28s cubic-bezier(0.25, 0.9, 0.3, 1),
+    top     0.28s cubic-bezier(0.25, 0.9, 0.3, 1),
+    width   0.28s cubic-bezier(0.25, 0.9, 0.3, 1),
+    height  0.28s cubic-bezier(0.25, 0.9, 0.3, 1),
+    opacity 0.2s  ease-in-out,
+    transform 0.28s cubic-bezier(0.25, 0.9, 0.3, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nb-card-returning,
+  .nb-card-returning--moving {
+    transition: none !important;
+  }
+}
+
+
 
 /* ════════════════════════════════════════════════════════════════
    Available Courses Neo-Brutalist Strip (matching Timetable)

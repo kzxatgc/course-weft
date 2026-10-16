@@ -1339,4 +1339,123 @@ describe('Available Courses drag, drop, and cancel', () => {
     });
   });
 
+  // ── Timetable Section Drag & Animated Section Swaps ──────────────────
+  describe('imetable section drag and animated section swaps', () => {
+    it('evaluateSwap validates valid swap and produces next draft', async () => {
+      const { evaluateSwap } = await import('../src/domain/drop-preview.mjs');
+      const { MAIN_CATALOG, INITIAL_DRAFT } = await import('../src/domain/available-courses.mjs');
+      // In INITIAL_DRAFT, STAT-A is enrolled, and STAT-B is a valid alternate
+      const result = evaluateSwap({
+        draft: INITIAL_DRAFT,
+        availableCourses: MAIN_CATALOG,
+        fromId: 'STAT-A',
+        toId: 'STAT-B',
+      });
+      assert.strictEqual(result.valid, true);
+      assert.strictEqual(result.reason, 'ok');
+      assert.ok(result.nextDraft.includes('STAT-B'));
+      assert.ok(!result.nextDraft.includes('STAT-A'));
+    });
+
+    it('evaluateSwap rejects non-alternate swap and leaves draft untouched', async () => {
+      const { evaluateSwap } = await import('../src/domain/drop-preview.mjs');
+      const { MAIN_CATALOG, INITIAL_DRAFT } = await import('../src/domain/available-courses.mjs');
+      // CHEM-A is not an alternate for STAT-A
+      const result = evaluateSwap({
+        draft: INITIAL_DRAFT,
+        availableCourses: MAIN_CATALOG,
+        fromId: 'STAT-A',
+        toId: 'CHEM-B',
+      });
+      assert.strictEqual(result.valid, false);
+      assert.strictEqual(result.reason, 'not-declared-alternate');
+      assert.deepStrictEqual(result.nextDraft, INITIAL_DRAFT);
+    });
+
+    it('getEffectiveSwapDuration respects prefers-reduced-motion', async () => {
+      const { getEffectiveSwapDuration, SWAP_ANIMATION_DURATION_MS } = await import('../src/domain/drop-preview.mjs');
+      assert.strictEqual(getEffectiveSwapDuration({ prefersReducedMotion: false }), SWAP_ANIMATION_DURATION_MS);
+      assert.strictEqual(getEffectiveSwapDuration({ prefersReducedMotion: true }), 0);
+    });
+
+    it('isCardTouchingAvailableCourses detects overlap with panel', async () => {
+      const { isCardTouchingAvailableCourses } = await import('../src/domain/drop-preview.mjs');
+      const panel = { left: 100, top: 100, right: 800, bottom: 250 };
+      const cardInside = { left: 150, top: 120, right: 345, bottom: 210 };
+      const cardOutside = { left: 150, top: 400, right: 345, bottom: 490 };
+
+      assert.strictEqual(isCardTouchingAvailableCourses(cardInside, panel), true);
+      assert.strictEqual(isCardTouchingAvailableCourses(cardOutside, panel), false);
+    });
+
+    it('Timetable wires removal handler to dispatch REMOVE_SECTION', async () => {
+      const { readFileSync } = await import('node:fs');
+      const src = readFileSync(
+        new URL('../src/components/Timetable.jsx', import.meta.url),
+        'utf8'
+      );
+      assert.ok(src.includes('handleRemove'), 'Timetable wires handleRemove to dispatch REMOVE_SECTION');
+    });
+
+    it('Timetable supports dragging course blocks and swap animations', async () => {
+      const { readFileSync } = await import('node:fs');
+      const src = readFileSync(
+        new URL('../src/components/Timetable.jsx', import.meta.url),
+        'utf8'
+      );
+      assert.ok(src.includes('handleSectionPointerDown'), 'Timetable implements handleSectionPointerDown');
+      assert.ok(src.includes('nb-tt-block-placeholder'), 'Timetable renders placeholder when dragging block');
+      assert.ok(src.includes('nb-tt-block-held'), 'Timetable renders held floating section overlay');
+      assert.ok(src.includes('nb-tt-swap-outgoing'), 'Timetable applies nb-tt-swap-outgoing to outgoing section');
+      assert.ok(src.includes('nb-tt-swap-incoming'), 'Timetable renders incoming swap preview');
+    });
+
+    it('app.css styles swap animation classes and reduced-motion fallback', async () => {
+      const { readFileSync } = await import('node:fs');
+      const css = readFileSync(
+        new URL('../src/app.css', import.meta.url),
+        'utf8'
+      );
+      assert.ok(css.includes('.nb-tt-swap-outgoing'), 'app.css has .nb-tt-swap-outgoing');
+      assert.ok(css.includes('.nb-tt-swap-incoming'), 'app.css has .nb-tt-swap-incoming');
+      assert.ok(css.includes('.nb-tt-block-remove'), 'app.css has .nb-tt-block-remove');
+      assert.ok(css.includes('.nb-tt-block-placeholder'), 'app.css has .nb-tt-block-placeholder');
+      assert.ok(css.includes('.nb-tt-block-held'), 'app.css has .nb-tt-block-held');
+      assert.ok(
+        css.includes('nb-tt-swap-out') && css.includes('prefers-reduced-motion'),
+        'app.css respects prefers-reduced-motion for swap animations'
+      );
+    });
+
+    it('EarlySchedulePreview coordinates animated section swap before dispatching state', async () => {
+      const { readFileSync } = await import('node:fs');
+      const src = readFileSync(
+        new URL('../src/EarlySchedulePreview.jsx', import.meta.url),
+        'utf8'
+      );
+      assert.ok(src.includes('handleRequestSwap'), 'EarlySchedulePreview defines handleRequestSwap');
+      assert.ok(src.includes('evaluateSwap'), 'EarlySchedulePreview validates swap before animating');
+      assert.ok(src.includes('setAnimatingSwap'), 'EarlySchedulePreview manages animatingSwap state');
+      assert.ok(src.includes('onRequestSwap={handleRequestSwap}'), 'EarlySchedulePreview passes swap callback to children');
+    });
+
+    it('Timetable highlights outgoing alternate section with nb-tt-block--swapping-out and 40% opacity', async () => {
+      const { readFileSync } = await import('node:fs');
+      const timetableSrc = readFileSync(
+        new URL('../src/components/Timetable.jsx', import.meta.url),
+        'utf8'
+      );
+      assert.ok(timetableSrc.includes('replacedSectionIds'), 'Timetable identifies replacedSectionIds');
+      assert.ok(timetableSrc.includes('nb-tt-block--swapping-out'), 'Timetable applies nb-tt-block--swapping-out');
+      assert.ok(timetableSrc.includes('data-is-replaced'), 'Timetable passes data-is-replaced attribute');
+
+      const css = readFileSync(
+        new URL('../src/app.css', import.meta.url),
+        'utf8'
+      );
+      assert.ok(css.includes('.nb-tt-block--swapping-out'), 'app.css styles .nb-tt-block--swapping-out');
+      assert.ok(css.includes('opacity: 0.4'), 'app.css sets opacity: 0.4 for outgoing section');
+    });
+  });
+
 });

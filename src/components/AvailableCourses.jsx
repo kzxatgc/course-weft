@@ -11,6 +11,7 @@ import {
   POINTER_DRAG_THRESHOLD,
   hasExceededDragThreshold,
   isCardTouchingTimetable,
+  isCardOutsidePanel,
   evaluateDrop,
   detectTimeConflict,
 } from '../domain/drop-preview.mjs';
@@ -48,6 +49,9 @@ export default function AvailableCourses({
   search: controlledSearch = '',
   state = null,
   onPreviewSectionChange,
+  onRequestSwap,
+  animatingReturnId = null,
+  returningCardId = null,
 }) {
   const [localSearch, setLocalSearch] = useState(controlledSearch);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
@@ -121,7 +125,7 @@ export default function AvailableCourses({
     }
   }
 
-  function handleCardClick(item) {
+  function handleCardClick(item, dropInfo = null) {
     if (!dispatch) return;
 
     // Check if another section of this course (or an alternate) is already in the draft
@@ -136,11 +140,15 @@ export default function AvailableCourses({
     });
 
     if (draftedAlternate) {
-      // Dispatches switch to replace currently drafted alternate with this section
-      dispatch({
-        type: ACTION.SWITCH_SECTION,
-        payload: { toId: item.id, fromId: draftedAlternate },
-      });
+      if (onRequestSwap) {
+        onRequestSwap({ toId: item.id, fromId: draftedAlternate, dropInfo });
+      } else {
+        // Dispatches switch to replace currently drafted alternate with this section
+        dispatch({
+          type: ACTION.SWITCH_SECTION,
+          payload: { toId: item.id, fromId: draftedAlternate },
+        });
+      }
     } else {
       // Dispatches add section
       dispatch({
@@ -293,10 +301,15 @@ export default function AvailableCourses({
 
       if (dropResult.success) {
         // Drop successful: add or switch section and close gap
+        // Capture drop coordinates BEFORE clearing held card (origRect will be gone after)
+        const dropInfo = {
+          dropPoint: { x: upEvent.clientX, y: upEvent.clientY },
+          origRect: { ...cur.origRect },  // Section B's original card position in the tray
+        };
         onPreviewSectionChange?.(null);
         setHeldCard(null);
         pointerStateRef.current = null;
-        handleCardClick(cur.item);
+        handleCardClick(cur.item, dropInfo);
       } else {
         // Red drop or outside timetable: animate back to original position
         onPreviewSectionChange?.(null);
@@ -345,59 +358,59 @@ export default function AvailableCourses({
           }
         }}
       >
-      {/* ── Header Bar: Heading on Left, Search on Right ─────────── */}
-      <div className="nb-courses-header flex items-center justify-between min-h-[32px] px-2.5 py-1 bg-[var(--color-yellow)] border-b-2 border-[var(--color-navy)] gap-2">
-        <div className="flex items-center gap-2 shrink-0">
-          <h2
-            id="catalogue-heading"
-            className="nb-courses-title font-['Archivo_Black',sans-serif] text-[11px] font-black uppercase text-[var(--color-navy)] tracking-wider m-0"
-          >
-            Available Courses
-          </h2>
-          <span className="text-[9px] font-bold font-mono tracking-wider uppercase text-[var(--color-navy)]/80 hidden sm:inline">
-            ({filteredCourses.length} {filteredCourses.length === 1 ? 'course' : 'courses'})
-          </span>
-        </div>
-
-        {/* Search bar on top right replacing static text */}
-        <form
-          onSubmit={handleSearchSubmit}
-          className="flex items-center gap-1.5 ml-auto"
-          role="search"
-          aria-label="Filter available courses"
-        >
-          <div className="relative flex items-center">
-            <input
-              id={searchInputId}
-              type="text"
-              value={localSearch}
-              onChange={handleSearchChange}
-              placeholder="Search..."
-              maxLength={50}
-              className="h-6 w-32 sm:w-44 pl-2 pr-6 text-[10px] font-mono font-bold bg-[#fffdf8] border-2 border-[var(--color-navy)] rounded text-[var(--color-navy)] placeholder:text-[var(--color-navy)]/50 focus:outline-none focus:ring-1 focus:ring-[var(--color-navy)]"
-              aria-label="Search courses by code or title"
-            />
-            {localSearch && (
-              <button
-                type="button"
-                onClick={handleClearSearch}
-                aria-label="Clear course search"
-                className="absolute right-1 text-[var(--color-navy)]/60 hover:text-[var(--color-navy)] p-0.5 cursor-pointer"
-              >
-                <X size={11} strokeWidth={2.5} aria-hidden="true" />
-              </button>
-            )}
+        {/* ── Header Bar: Heading on Left, Search on Right ─────────── */}
+        <div className="nb-courses-header flex items-center justify-between min-h-[32px] px-2.5 py-1 bg-[var(--color-yellow)] border-b-2 border-[var(--color-navy)] gap-2">
+          <div className="flex items-center gap-2 shrink-0">
+            <h2
+              id="catalogue-heading"
+              className="nb-courses-title font-['Archivo_Black',sans-serif] text-[11px] font-black uppercase text-[var(--color-navy)] tracking-wider m-0"
+            >
+              Available Courses
+            </h2>
+            <span className="text-[9px] font-bold font-mono tracking-wider uppercase text-[var(--color-navy)]/80 hidden sm:inline">
+              ({filteredCourses.length} {filteredCourses.length === 1 ? 'course' : 'courses'})
+            </span>
           </div>
 
-          <button
-            type="submit"
-            aria-label="Execute course search"
-            className="h-6 px-2 text-[9px] font-black font-mono uppercase bg-[var(--color-navy)] text-[var(--color-cream)] rounded hover:opacity-90 active:translate-x-0.5 active:translate-y-0.5 transition-all flex items-center gap-1 cursor-pointer shrink-0"
+          {/* Search bar on top right replacing static text */}
+          <form
+            onSubmit={handleSearchSubmit}
+            className="flex items-center gap-1.5 ml-auto"
+            role="search"
+            aria-label="Filter available courses"
           >
-            <Search size={10} strokeWidth={2.5} aria-hidden="true" />
-          </button>
-        </form>
-      </div>
+            <div className="relative flex items-center">
+              <input
+                id={searchInputId}
+                type="text"
+                value={localSearch}
+                onChange={handleSearchChange}
+                placeholder="Search..."
+                maxLength={50}
+                className="h-6 w-32 sm:w-44 pl-2 pr-6 text-[10px] font-mono font-bold bg-[#fffdf8] border-2 border-[var(--color-navy)] rounded text-[var(--color-navy)] placeholder:text-[var(--color-navy)]/50 focus:outline-none focus:ring-1 focus:ring-[var(--color-navy)]"
+                aria-label="Search courses by code or title"
+              />
+              {localSearch && (
+                <button
+                  type="button"
+                  onClick={handleClearSearch}
+                  aria-label="Clear course search"
+                  className="absolute right-1 text-[var(--color-navy)]/60 hover:text-[var(--color-navy)] p-0.5 cursor-pointer"
+                >
+                  <X size={11} strokeWidth={2.5} aria-hidden="true" />
+                </button>
+              )}
+            </div>
+
+            <button
+              type="submit"
+              aria-label="Execute course search"
+              className="h-6 px-2 text-[9px] font-black font-mono uppercase bg-[var(--color-navy)] text-[var(--color-cream)] rounded hover:opacity-90 active:translate-x-0.5 active:translate-y-0.5 transition-all flex items-center gap-1 cursor-pointer shrink-0"
+            >
+              <Search size={10} strokeWidth={2.5} aria-hidden="true" />
+            </button>
+          </form>
+        </div>
 
         {/* ── Horizontally scrolling row of Neo-Brutalist cards ─────── */}
         <div
@@ -405,94 +418,98 @@ export default function AvailableCourses({
           role="list"
           aria-label="Available course sections list"
         >
-        {filteredCourses.length > 0 ? (
-          filteredCourses.map((item) => {
-            const isHeld = Boolean(heldCard && heldCard.item.id === item.id);
-            if (isHeld) {
+          {filteredCourses.length > 0 ? (
+            filteredCourses.map((item) => {
+              const isHeld = Boolean(heldCard && heldCard.item.id === item.id);
+              const isReturning = Boolean((animatingReturnId || returningCardId) === item.id);
+
+              if (isHeld || isReturning) {
+                return (
+                  <div
+                    key={item.id}
+                    className="nb-course-placeholder w-[195px] min-w-[195px] shrink-0 border-2 border-dashed border-[var(--color-navy)]/35 rounded bg-[var(--color-navy)]/5 transition-opacity duration-150"
+                    style={{
+                      height: heldCard?.origRect?.height ? `${heldCard.origRect.height}px` : undefined,
+                    }}
+                    data-testid={isReturning ? `course-return-placeholder-${item.id}` : `course-placeholder-${item.id}`}
+                    aria-hidden="true"
+                  />
+                );
+              }
+
+              const seatsRemaining = Math.max(0, item.capacity - item.enrolled);
+              const isSwitch = draft.some((draftId) => {
+                const drafted = availableCourses.find((c) => c.id === draftId);
+                return drafted && (drafted.course === item.course || item.alternates?.includes(draftId));
+              });
+
               return (
-                <div
+                <button
                   key={item.id}
-                  className="nb-course-placeholder w-[195px] min-w-[195px] shrink-0 border-2 border-dashed border-[var(--color-navy)]/35 rounded bg-[var(--color-navy)]/5 transition-opacity duration-150"
-                  style={{
-                    height: heldCard?.origRect?.height ? `${heldCard.origRect.height}px` : undefined,
+                  type="button"
+                  draggable={true}
+                  onDragStart={(e) => {
+                    e.preventDefault();
+                    draggedCardIdRef.current = item.id;
+                    e.dataTransfer?.setData(DT_SECTION_ID, item.id);
+                    // Also store as plain text for fallback
+                    e.dataTransfer?.setData('text/plain', item.id);
                   }}
-                  data-testid={`course-placeholder-${item.id}`}
-                  aria-hidden="true"
-                />
+                  onDragEnd={() => {
+                    draggedCardIdRef.current = null;
+                    onPreviewSectionChange?.(null);
+                  }}
+                  onFocus={() => onPreviewSectionChange?.(item.id)}
+                  onBlur={() => onPreviewSectionChange?.(null)}
+                  onPointerDown={(e) => handlePointerDown(e, item)}
+                  className="nb-course-card w-[195px] min-w-[195px] shrink-0 bg-[var(--color-cream)] border-2 border-[var(--color-navy)] rounded p-2 flex flex-col justify-between gap-1.5 cursor-grab text-left transition-colors duration-75 hover:bg-[var(--color-yellow)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-blue)] touch-none"
+                  role="listitem"
+                  aria-label={`${item.title} (${item.id}), ${formatCourseSlot(item)}, ${seatsRemaining} seats remaining — drag onto timetable to add`}
+                >
+                  <div>
+                    <div className="flex items-center justify-between gap-1.5">
+                      <span className="nb-course-id font-['Archivo_Black',sans-serif] text-[11px] font-black text-[var(--color-navy)] tracking-wide">
+                        {item.id}
+                      </span>
+                      <span className="nb-course-badge text-[8px] font-black uppercase tracking-wider bg-[var(--color-navy)] text-[var(--color-cream)] px-1.5 py-0.5 rounded leading-none">
+                        {item.component}
+                      </span>
+                    </div>
+
+                    <h3
+                      className="nb-course-name font-mono text-[10.5px] font-bold text-[var(--color-charcoal)] truncate mt-1 text-left"
+                      title={item.title}
+                    >
+                      {item.title}
+                    </h3>
+                  </div>
+
+                  <div className="nb-course-footer flex items-center justify-between border-t border-[var(--color-navy)]/15 pt-1 mt-1 text-left w-full">
+                    <span className="nb-course-time font-mono text-[9px] font-bold text-[var(--color-navy)] whitespace-nowrap">
+                      {formatCourseSlot(item)}
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <span className="nb-course-seats font-mono text-[9px] font-extrabold text-[var(--color-charcoal)] whitespace-nowrap">
+                        {item.enrolled}/{item.capacity}
+                      </span>
+                      <Users size={9} strokeWidth={2.5} className="text-[var(--color-charcoal)]/60 shrink-0" aria-hidden="true" />
+                    </div>
+                  </div>
+                </button>
               );
-            }
-
-            const seatsRemaining = Math.max(0, item.capacity - item.enrolled);
-            const isSwitch = draft.some((draftId) => {
-              const drafted = availableCourses.find((c) => c.id === draftId);
-              return drafted && (drafted.course === item.course || item.alternates?.includes(draftId));
-            });
-
-            return (
+            })
+          ) : (
+            <div className="flex items-center w-full gap-3 px-1 py-0 text-[var(--color-navy)] font-mono text-[10px] font-bold">
+              <span className="opacity-70">No courses found matching &ldquo;{localSearch}&rdquo;.</span>
               <button
-                key={item.id}
                 type="button"
-                draggable={true}
-                onDragStart={(e) => {
-                  e.preventDefault();
-                  draggedCardIdRef.current = item.id;
-                  e.dataTransfer?.setData(DT_SECTION_ID, item.id);
-                  // Also store as plain text for fallback
-                  e.dataTransfer?.setData('text/plain', item.id);
-                }}
-                onDragEnd={() => {
-                  draggedCardIdRef.current = null;
-                  onPreviewSectionChange?.(null);
-                }}
-                onPointerDown={(e) => handlePointerDown(e, item)}
-                className="nb-course-card w-[195px] min-w-[195px] shrink-0 bg-[var(--color-cream)] border-2 border-[var(--color-navy)] rounded p-2 flex flex-col justify-between gap-1.5 cursor-grab text-left transition-all duration-75 hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[2px_2px_0px_var(--color-navy)] hover:bg-[var(--color-yellow)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-blue)] touch-none"
-                role="listitem"
-                aria-label={`${item.title} (${item.id}), ${formatCourseSlot(item)}, ${seatsRemaining} seats remaining — drag onto timetable to add`}
+                onClick={handleClearSearch}
+                className="ml-auto shrink-0 text-[9px] font-black font-mono uppercase underline underline-offset-2 cursor-pointer hover:opacity-75"
               >
-                <div>
-                  <div className="flex items-center justify-between gap-1.5">
-                    <span className="nb-course-id font-['Archivo_Black',sans-serif] text-[11px] font-black text-[var(--color-navy)] tracking-wide">
-                      {item.id}
-                    </span>
-                    <span className="nb-course-badge text-[8px] font-black uppercase tracking-wider bg-[var(--color-navy)] text-[var(--color-cream)] px-1.5 py-0.5 rounded leading-none">
-                      {item.component}
-                    </span>
-                  </div>
-
-                  <h3
-                    className="nb-course-name font-mono text-[10.5px] font-bold text-[var(--color-charcoal)] truncate mt-1 text-left"
-                    title={item.title}
-                  >
-                    {item.title}
-                  </h3>
-                </div>
-
-                <div className="nb-course-footer flex items-center justify-between border-t border-[var(--color-navy)]/15 pt-1 mt-1 text-left w-full">
-                  <span className="nb-course-time font-mono text-[9px] font-bold text-[var(--color-navy)] whitespace-nowrap">
-                    {formatCourseSlot(item)}
-                  </span>
-                  <div className="flex items-center gap-1">
-                    <span className="nb-course-seats font-mono text-[9px] font-extrabold text-[var(--color-charcoal)] whitespace-nowrap">
-                      {item.enrolled}/{item.capacity}
-                    </span>
-                    <Users size={9} strokeWidth={2.5} className="text-[var(--color-charcoal)]/60 shrink-0" aria-hidden="true" />
-                  </div>
-                </div>
+                Clear filter
               </button>
-            );
-          })
-        ) : (
-          <div className="flex items-center w-full gap-3 px-1 py-0 text-[var(--color-navy)] font-mono text-[10px] font-bold">
-            <span className="opacity-70">No courses found matching &ldquo;{localSearch}&rdquo;.</span>
-            <button
-              type="button"
-              onClick={handleClearSearch}
-              className="ml-auto shrink-0 text-[9px] font-black font-mono uppercase underline underline-offset-2 cursor-pointer hover:opacity-75"
-            >
-              Clear filter
-            </button>
-          </div>
-        )}
+            </div>
+          )}
         </div>
       </section>
 
@@ -511,11 +528,10 @@ export default function AvailableCourses({
           }}
           aria-label="Undo last repair — restore previous timetable"
           title={canUndoRepair ? 'Undo repair' : 'Nothing to undo'}
-          className={`flex items-center justify-center w-6 h-6 rounded-none border-2 transition-colors ${
-            canUndoRepair
-              ? 'border-[var(--color-navy)] bg-[var(--color-navy)] text-[var(--color-yellow)] hover:bg-[var(--color-yellow)] hover:text-[var(--color-navy)] cursor-pointer'
-              : 'border-[var(--color-navy)]/30 bg-transparent text-[var(--color-navy)]/35 cursor-not-allowed'
-          }`}
+          className={`flex items-center justify-center w-6 h-6 rounded-none border-2 transition-colors ${canUndoRepair
+            ? 'border-[var(--color-navy)] bg-[var(--color-navy)] text-[var(--color-yellow)] hover:bg-[var(--color-yellow)] hover:text-[var(--color-navy)] cursor-pointer'
+            : 'border-[var(--color-navy)]/30 bg-transparent text-[var(--color-navy)]/35 cursor-not-allowed'
+            }`}
         >
           <Undo2 size={12} strokeWidth={2.5} aria-hidden="true" />
         </button>
@@ -530,11 +546,10 @@ export default function AvailableCourses({
           }}
           aria-label="Redo repair — reapply timetable repair"
           title={canRedoRepair ? 'Redo repair' : 'Nothing to redo'}
-          className={`flex items-center justify-center w-6 h-6 rounded-none border-2 transition-colors ${
-            canRedoRepair
-              ? 'border-[var(--color-navy)] bg-[var(--color-navy)] text-[var(--color-yellow)] hover:bg-[var(--color-yellow)] hover:text-[var(--color-navy)] cursor-pointer'
-              : 'border-[var(--color-navy)]/30 bg-transparent text-[var(--color-navy)]/35 cursor-not-allowed'
-          }`}
+          className={`flex items-center justify-center w-6 h-6 rounded-none border-2 transition-colors ${canRedoRepair
+            ? 'border-[var(--color-navy)] bg-[var(--color-navy)] text-[var(--color-yellow)] hover:bg-[var(--color-yellow)] hover:text-[var(--color-navy)] cursor-pointer'
+            : 'border-[var(--color-navy)]/30 bg-transparent text-[var(--color-navy)]/35 cursor-not-allowed'
+            }`}
         >
           <Redo2 size={12} strokeWidth={2.5} aria-hidden="true" />
         </button>
@@ -549,11 +564,10 @@ export default function AvailableCourses({
           }}
           aria-label="Reset timetable to starting selections"
           title={isDraftChanged ? 'Reset timetable' : 'Timetable is already at starting selections'}
-          className={`flex items-center justify-center w-6 h-6 rounded-none border-2 transition-colors ${
-            isDraftChanged
-              ? 'border-[var(--color-navy)] bg-white text-[var(--color-navy)] hover:bg-slate-100 cursor-pointer'
-              : 'border-[var(--color-navy)]/30 bg-transparent text-[var(--color-navy)]/35 cursor-not-allowed'
-          }`}
+          className={`flex items-center justify-center w-6 h-6 rounded-none border-2 transition-colors ${isDraftChanged
+            ? 'border-[var(--color-navy)] bg-white text-[var(--color-navy)] hover:bg-slate-100 cursor-pointer'
+            : 'border-[var(--color-navy)]/30 bg-transparent text-[var(--color-navy)]/35 cursor-not-allowed'
+            }`}
         >
           <RotateCcw size={12} strokeWidth={2.5} aria-hidden="true" />
         </button>
@@ -631,31 +645,30 @@ export default function AvailableCourses({
       {heldCard && (
         typeof document !== 'undefined' && document.body
           ? createPortal(
-              <div
-                className={`nb-course-card-held fixed pointer-events-none z-[9999] select-none ${
-                  heldCard.isRestoring ? 'nb-course-card-held--restoring' : ''
+            <div
+              className={`nb-course-card-held fixed pointer-events-none z-[9999] select-none ${heldCard.isRestoring ? 'nb-course-card-held--restoring' : ''
                 }`}
-                style={{
-                  left: `${heldCard.currentX - heldCard.offsetX}px`,
-                  top: `${heldCard.currentY - heldCard.offsetY}px`,
-                  width: `${heldCard.origRect.width}px`,
-                  height: `${heldCard.origRect.height}px`,
-                }}
-                data-testid={`course-held-${heldCard.item.id}`}
-                data-is-restoring={heldCard.isRestoring ? 'true' : 'false'}
-                aria-hidden="true"
-              >
-                <HeldCardContent
-                  item={heldCard.item}
-                  isSwitch={draft.some((draftId) => {
-                    const drafted = availableCourses.find((c) => c.id === draftId);
-                    return drafted && (drafted.course === heldCard.item.course || heldCard.item.alternates?.includes(draftId));
-                  })}
-                  formatCourseSlot={formatCourseSlot}
-                />
-              </div>,
-              document.body
-            )
+              style={{
+                left: `${heldCard.currentX - heldCard.offsetX}px`,
+                top: `${heldCard.currentY - heldCard.offsetY}px`,
+                width: `${heldCard.origRect.width}px`,
+                height: `${heldCard.origRect.height}px`,
+              }}
+              data-testid={`course-held-${heldCard.item.id}`}
+              data-is-restoring={heldCard.isRestoring ? 'true' : 'false'}
+              aria-hidden="true"
+            >
+              <HeldCardContent
+                item={heldCard.item}
+                isSwitch={draft.some((draftId) => {
+                  const drafted = availableCourses.find((c) => c.id === draftId);
+                  return drafted && (drafted.course === heldCard.item.course || heldCard.item.alternates?.includes(draftId));
+                })}
+                formatCourseSlot={formatCourseSlot}
+              />
+            </div>,
+            document.body
+          )
           : null
       )}
     </div>
