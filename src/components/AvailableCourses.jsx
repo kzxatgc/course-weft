@@ -4,6 +4,7 @@ import { ACTION, canUndo, canRedo } from '../state/draft-controller.mjs';
 import { INITIAL_DRAFT } from '../domain/available-courses.mjs';
 
 import { format24hTime, formatCourseSlot } from '../domain/time.mjs';
+import { playSound } from '../audio/optional-sounds.js';
 
 export { formatCourseSlot };
 
@@ -257,7 +258,10 @@ export default function AvailableCourses({
           id="undo-repair-button"
           type="button"
           disabled={!canUndoRepair}
-          onClick={() => dispatch && dispatch({ type: ACTION.UNDO_REPAIR })}
+          onClick={() => {
+            playSound('undo');
+            if (dispatch) dispatch({ type: ACTION.UNDO_REPAIR });
+          }}
           aria-label="Undo last repair — restore previous timetable"
           title={canUndoRepair ? 'Undo repair' : 'Nothing to undo'}
           className={`flex items-center justify-center w-6 h-6 rounded-none border-2 transition-colors ${
@@ -273,7 +277,10 @@ export default function AvailableCourses({
           id="redo-repair-button"
           type="button"
           disabled={!canRedoRepair}
-          onClick={() => dispatch && dispatch({ type: ACTION.REDO_REPAIR })}
+          onClick={() => {
+            playSound('redo');
+            if (dispatch) dispatch({ type: ACTION.REDO_REPAIR });
+          }}
           aria-label="Redo repair — reapply timetable repair"
           title={canRedoRepair ? 'Redo repair' : 'Nothing to redo'}
           className={`flex items-center justify-center w-6 h-6 rounded-none border-2 transition-colors ${
@@ -289,7 +296,10 @@ export default function AvailableCourses({
           id="reset-timetable-button"
           type="button"
           disabled={!isDraftChanged}
-          onClick={() => setShowResetConfirm(true)}
+          onClick={() => {
+            playSound('popup');
+            setShowResetConfirm(true);
+          }}
           aria-label="Reset timetable to starting selections"
           title={isDraftChanged ? 'Reset timetable' : 'Timetable is already at starting selections'}
           className={`flex items-center justify-center w-6 h-6 rounded-none border-2 transition-colors ${

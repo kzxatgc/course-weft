@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AlertCircle, AlertTriangle, CheckCircle2, Info, X, Wrench } from 'lucide-react';
+import { playSound } from './audio/optional-sounds.js';
 
 /**
  * Accessible notification banner, screen-reader live announcer, and centered desktop modal popups.
@@ -21,10 +22,13 @@ import { AlertCircle, AlertTriangle, CheckCircle2, Info, X, Wrench } from 'lucid
 export default function Notice({ notice, onDismiss, onAction }) {
   const [announcement, setAnnouncement] = useState('');
 
-  // Update polite live region text whenever notice changes
+  // Update polite live region text whenever notice changes and play modal popup cue
   useEffect(() => {
     if (notice) {
       setAnnouncement(`${notice.title}. ${notice.message}`);
+      if (notice.title === 'Timetable updated' || notice.action === 'suggest') {
+        playSound('popup');
+      }
     }
   }, [notice]);
 

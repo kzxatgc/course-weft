@@ -605,6 +605,81 @@ describe('Task 28 — Apply / Undo / Dismiss / Reset wiring', () => {
     assert.ok(!src.includes('TimetableControls'), 'EarlySchedulePreview must not use a standalone TimetableControls bar');
     assert.ok(src.includes('state={state}'), 'EarlySchedulePreview must pass state to AvailableCourses');
   });
+
+  // ── Task 29: Optional local sound cues with Howler.js ──────────────────────
+  it('optional-sounds exports functions with default-off mute and safe toggle', async () => {
+    const { isSoundEnabled, setSoundEnabled, toggleSound, playSound } = await import(
+      '../src/audio/optional-sounds.js'
+    );
+    // Reset to initial state
+    setSoundEnabled(false);
+    assert.equal(isSoundEnabled(), false, 'Sound must be OFF (muted) by default');
+
+    // Toggle on
+    const toggledOn = toggleSound();
+    assert.equal(toggledOn, true);
+    assert.equal(isSoundEnabled(), true);
+
+    // Toggle off
+    const toggledOff = toggleSound();
+    assert.equal(toggledOff, false);
+    assert.equal(isSoundEnabled(), false);
+
+    // Playback calls in non-browser environment must not throw or block
+    assert.doesNotThrow(() => playSound('previewFound'));
+    assert.doesNotThrow(() => playSound('apply'));
+    assert.doesNotThrow(() => playSound('undo'));
+    assert.doesNotThrow(() => playSound('nonExistentCue'));
+  });
+
+  it('three local WAV audio cues and attribution exist', async () => {
+    const { existsSync, statSync, readFileSync } = await import('node:fs');
+    const pubPopup = new URL('../public/sounds/popup.wav', import.meta.url);
+    const pubRedo = new URL('../public/sounds/redo.wav', import.meta.url);
+    const pubUndo = new URL('../public/sounds/undo.wav', import.meta.url);
+    const attribution = new URL('../src/audio/ATTRIBUTION.md', import.meta.url);
+
+    assert.ok(existsSync(pubPopup), 'public/sounds/popup.wav must exist');
+    assert.ok(existsSync(pubRedo), 'public/sounds/redo.wav must exist');
+    assert.ok(existsSync(pubUndo), 'public/sounds/undo.wav must exist');
+    assert.ok(existsSync(attribution), 'src/audio/ATTRIBUTION.md must exist');
+
+    assert.ok(statSync(pubPopup).size > 1000, 'popup.wav must be a valid audio file');
+    assert.ok(statSync(pubRedo).size > 1000, 'redo.wav must be a valid audio file');
+    assert.ok(statSync(pubUndo).size > 1000, 'undo.wav must be a valid audio file');
+
+    const attrText = readFileSync(attribution, 'utf8');
+    assert.match(attrText, /CC0|public domain/i, 'ATTRIBUTION.md must document license');
+  });
+
+  it('SettingsWindow includes dedicated sound toggle button and sample preview buttons', async () => {
+    const { readFileSync } = await import('node:fs');
+    const src = readFileSync(
+      new URL('../src/windows/SettingsWindow.jsx', import.meta.url),
+      'utf8'
+    );
+    assert.ok(src.includes('id="settings-sound-toggle"'), 'SettingsWindow must include settings-sound-toggle');
+    assert.ok(src.includes('toggleSound'), 'SettingsWindow must invoke toggleSound');
+    assert.ok(src.includes('Volume2'), 'SettingsWindow must import Volume2');
+    assert.ok(src.includes('VolumeX'), 'SettingsWindow must import VolumeX');
+    assert.ok(src.includes('handleTestCue'), 'SettingsWindow must include test cue buttons');
+  });
+
+  it('interaction layer wires sound cues for popup, redo, and undo', async () => {
+    const { readFileSync } = await import('node:fs');
+    const noticeSrc = readFileSync(
+      new URL('../src/Notice.jsx', import.meta.url),
+      'utf8'
+    );
+    const coursesSrc = readFileSync(
+      new URL('../src/components/AvailableCourses.jsx', import.meta.url),
+      'utf8'
+    );
+
+    assert.ok(noticeSrc.includes("playSound('popup')"), 'Notice must play popup cue on modal dialog');
+    assert.ok(coursesSrc.includes("playSound('redo')"), 'AvailableCourses must play redo cue on redo');
+    assert.ok(coursesSrc.includes("playSound('undo')"), 'AvailableCourses must play undo cue on undo');
+  });
 });
 
 
