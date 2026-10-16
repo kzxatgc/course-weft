@@ -1138,7 +1138,7 @@ body {
   to   { opacity: 1;    }
 }
 
-/* ── Task 31: Fixed-Slot Time-Conflict Preview ──────────────────────────── */
+/* ── Fixed-Slot Time-Conflict Preview ──────────────────────────── */
 
 .nb-tt-fixed-preview {
   position: absolute;
@@ -1196,6 +1196,33 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .nb-tt-fixed-preview {
     animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* ── Available Courses Drag, Drop, and Cancel ─────────────────── */
+
+.nb-course-placeholder {
+  box-sizing: border-box;
+  pointer-events: none;
+  align-self: stretch;
+}
+
+.nb-course-card-held {
+  position: fixed;
+  pointer-events: none;
+  z-index: 9999;
+  box-sizing: border-box;
+  will-change: left, top;
+}
+
+.nb-course-card-held--restoring {
+  transition: left 0.22s cubic-bezier(0.2, 0.9, 0.3, 1),
+              top 0.22s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nb-course-card-held--restoring {
     transition: none !important;
   }
 }

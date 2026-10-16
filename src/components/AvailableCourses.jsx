@@ -1,11 +1,19 @@
 import React, { useState, useEffect, useId, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Search, X, Users, Undo2, Redo2, RotateCcw } from 'lucide-react';
 import { ACTION, canUndo, canRedo } from '../state/draft-controller.mjs';
 import { INITIAL_DRAFT } from '../domain/available-courses.mjs';
 
 import { format24hTime, formatCourseSlot } from '../domain/time.mjs';
 import { playSound } from '../audio/optional-sounds.js';
-import { DT_SECTION_ID } from '../domain/drop-preview.mjs';
+import {
+  DT_SECTION_ID,
+  POINTER_DRAG_THRESHOLD,
+  hasExceededDragThreshold,
+  isCardTouchingTimetable,
+  evaluateDrop,
+  detectTimeConflict,
+} from '../domain/drop-preview.mjs';
 
 export { formatCourseSlot };
 
@@ -46,10 +54,25 @@ export default function AvailableCourses({
   const searchInputId = useId();
   const draggedCardIdRef = useRef(null);
 
+  // Pointer drag-and-drop state
+  const [heldCard, setHeldCard] = useState(null);
+  const pointerStateRef = useRef(null);
+  const isRestoringTimeoutRef = useRef(null);
+  const panelRef = useRef(null);
+
   // Keep local search in sync when controlled search changes
   useEffect(() => {
     setLocalSearch(controlledSearch);
   }, [controlledSearch]);
+
+  // Clean up any pending restoration timer on unmount
+  useEffect(() => {
+    return () => {
+      if (isRestoringTimeoutRef.current) {
+        clearTimeout(isRestoringTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Undo / Redo / Reset derivations (only when state is wired in)
   const canUndoRepair = state ? canUndo(state) : false;
@@ -59,6 +82,9 @@ export default function AvailableCourses({
     : false;
 
   const query = localSearch.trim().toLowerCase();
+
+  // Selected sections for checking time conflicts
+  const selectedSections = availableCourses.filter((item) => draft.includes(item.id));
 
   // Filter sections that are not already in draft
   const availableItems = availableCourses.filter((item) => !draft.includes(item.id));
@@ -124,10 +150,188 @@ export default function AvailableCourses({
     }
   }
 
+
+  function handlePointerDown(e, item) {
+    if (e.button !== 0) return; // Only primary button
+    if (heldCard && heldCard.isSticky) return; // Sticky drop is handled by window listener
+
+    if (isRestoringTimeoutRef.current) {
+      clearTimeout(isRestoringTimeoutRef.current);
+      isRestoringTimeoutRef.current = null;
+    }
+
+    const targetEl = e.currentTarget;
+    const rect = targetEl.getBoundingClientRect();
+
+    pointerStateRef.current = {
+      item,
+      startX: e.clientX,
+      startY: e.clientY,
+      offsetX: e.clientX - rect.left,
+      offsetY: e.clientY - rect.top,
+      origRect: {
+        left: rect.left,
+        top: rect.top,
+        width: rect.width,
+        height: rect.height,
+      },
+      pointerId: e.pointerId,
+      isDragging: false,
+    };
+
+    function onPointerMove(moveEvent) {
+      if (!pointerStateRef.current) return;
+      const cur = pointerStateRef.current;
+      const dx = moveEvent.clientX - cur.startX;
+      const dy = moveEvent.clientY - cur.startY;
+
+      if (!cur.isDragging) {
+        if (hasExceededDragThreshold(dx, dy, POINTER_DRAG_THRESHOLD)) {
+          cur.isDragging = true;
+
+          setHeldCard({
+            item: cur.item,
+            currentX: moveEvent.clientX,
+            currentY: moveEvent.clientY,
+            offsetX: cur.offsetX,
+            offsetY: cur.offsetY,
+            origRect: cur.origRect,
+            isRestoring: false,
+            isSticky: false,
+          });
+        }
+      }
+
+      if (cur.isDragging) {
+        setHeldCard({
+          item: cur.item,
+          currentX: moveEvent.clientX,
+          currentY: moveEvent.clientY,
+          offsetX: cur.offsetX,
+          offsetY: cur.offsetY,
+          origRect: cur.origRect,
+          isRestoring: false,
+          isSticky: false,
+        });
+
+        // Show fixed-slot preview as soon as dragging starts
+        onPreviewSectionChange?.(cur.item.id);
+      }
+    }
+
+    function cleanupListeners() {
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+      window.removeEventListener('pointercancel', onPointerCancel);
+      window.removeEventListener('keydown', onKeyDown);
+    }
+
+    function cancelAndRestore() {
+      cleanupListeners();
+      if (!pointerStateRef.current) return;
+      const cur = pointerStateRef.current;
+      onPreviewSectionChange?.(null);
+
+      if (cur.isDragging) {
+        setHeldCard({
+          item: cur.item,
+          currentX: cur.origRect.left + cur.offsetX,
+          currentY: cur.origRect.top + cur.offsetY,
+          offsetX: cur.offsetX,
+          offsetY: cur.offsetY,
+          origRect: cur.origRect,
+          isRestoring: true,
+          isSticky: false,
+        });
+
+        isRestoringTimeoutRef.current = setTimeout(() => {
+          setHeldCard(null);
+          pointerStateRef.current = null;
+          isRestoringTimeoutRef.current = null;
+        }, 220);
+      } else {
+        pointerStateRef.current = null;
+      }
+    }
+
+    function onPointerCancel() {
+      cancelAndRestore();
+    }
+
+    function onKeyDown(keyEvent) {
+      if (keyEvent.key === 'Escape') {
+        cancelAndRestore();
+      }
+    }
+
+    function onPointerUp(upEvent) {
+      cleanupListeners();
+      if (!pointerStateRef.current) return;
+      const cur = pointerStateRef.current;
+
+      if (!cur.isDragging) {
+        // Simple click (no drag): do nothing, just clean up pointer state
+        pointerStateRef.current = null;
+        return;
+      }
+
+      // Card was dragged via hold-and-drag: evaluate boundary touch with timetable
+      const timetableEl = document.querySelector('.nb-tt');
+      const timetableRect = timetableEl?.getBoundingClientRect();
+      const cardRect = {
+        left: upEvent.clientX - cur.offsetX,
+        top: upEvent.clientY - cur.offsetY,
+        right: upEvent.clientX - cur.offsetX + cur.origRect.width,
+        bottom: upEvent.clientY - cur.offsetY + cur.origRect.height,
+        width: cur.origRect.width,
+        height: cur.origRect.height,
+      };
+
+      const touchesTimetable = isCardTouchingTimetable(cardRect, timetableRect);
+      const hasConflict = detectTimeConflict(cur.item, selectedSections);
+      const dropResult = evaluateDrop({ touchesTimetable, hasConflict });
+
+      if (dropResult.success) {
+        // Drop successful: add or switch section and close gap
+        onPreviewSectionChange?.(null);
+        setHeldCard(null);
+        pointerStateRef.current = null;
+        handleCardClick(cur.item);
+      } else {
+        // Red drop or outside timetable: animate back to original position
+        onPreviewSectionChange?.(null);
+        setHeldCard({
+          item: cur.item,
+          currentX: cur.origRect.left + cur.offsetX,
+          currentY: cur.origRect.top + cur.offsetY,
+          offsetX: cur.offsetX,
+          offsetY: cur.offsetY,
+          origRect: cur.origRect,
+          isRestoring: true,
+          isSticky: false,
+        });
+
+        isRestoringTimeoutRef.current = setTimeout(() => {
+          setHeldCard(null);
+          pointerStateRef.current = null;
+          isRestoringTimeoutRef.current = null;
+        }, 220);
+      }
+    }
+
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+    window.addEventListener('pointercancel', onPointerCancel);
+    window.addEventListener('keydown', onKeyDown);
+  }
+
+
+
   return (
-    <div className="flex items-stretch gap-2 w-full font-mono">
+    <div className="flex items-stretch gap-2 w-full font-mono relative">
       {/* ── Available Courses section box ── */}
       <section
+        ref={panelRef}
         aria-labelledby="catalogue-heading"
         className="nb-courses-panel flex-1 min-w-0 border-[2.5px] border-[var(--color-navy)] bg-[var(--color-cream)] overflow-hidden shadow-none"
         onDragLeave={(e) => {
@@ -203,6 +407,21 @@ export default function AvailableCourses({
         >
         {filteredCourses.length > 0 ? (
           filteredCourses.map((item) => {
+            const isHeld = Boolean(heldCard && heldCard.item.id === item.id);
+            if (isHeld) {
+              return (
+                <div
+                  key={item.id}
+                  className="nb-course-placeholder w-[195px] min-w-[195px] shrink-0 border-2 border-dashed border-[var(--color-navy)]/35 rounded bg-[var(--color-navy)]/5 transition-opacity duration-150"
+                  style={{
+                    height: heldCard?.origRect?.height ? `${heldCard.origRect.height}px` : undefined,
+                  }}
+                  data-testid={`course-placeholder-${item.id}`}
+                  aria-hidden="true"
+                />
+              );
+            }
+
             const seatsRemaining = Math.max(0, item.capacity - item.enrolled);
             const isSwitch = draft.some((draftId) => {
               const drafted = availableCourses.find((c) => c.id === draftId);
@@ -215,26 +434,20 @@ export default function AvailableCourses({
                 type="button"
                 draggable={true}
                 onDragStart={(e) => {
+                  e.preventDefault();
                   draggedCardIdRef.current = item.id;
-                  e.dataTransfer.effectAllowed = 'copy';
-                  e.dataTransfer.setData(DT_SECTION_ID, item.id);
+                  e.dataTransfer?.setData(DT_SECTION_ID, item.id);
                   // Also store as plain text for fallback
-                  e.dataTransfer.setData('text/plain', item.id);
+                  e.dataTransfer?.setData('text/plain', item.id);
                 }}
                 onDragEnd={() => {
                   draggedCardIdRef.current = null;
                   onPreviewSectionChange?.(null);
                 }}
-                onFocus={() => {
-                  onPreviewSectionChange?.(item.id);
-                }}
-                onBlur={() => {
-                  onPreviewSectionChange?.(null);
-                }}
-                onClick={() => handleCardClick(item)}
-                className="nb-course-card w-[195px] min-w-[195px] shrink-0 bg-[var(--color-cream)] border-2 border-[var(--color-navy)] rounded p-2 flex flex-col justify-between gap-1.5 cursor-pointer text-left transition-all duration-75 hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[2px_2px_0px_var(--color-navy)] hover:bg-[var(--color-yellow)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-blue)]"
+                onPointerDown={(e) => handlePointerDown(e, item)}
+                className="nb-course-card w-[195px] min-w-[195px] shrink-0 bg-[var(--color-cream)] border-2 border-[var(--color-navy)] rounded p-2 flex flex-col justify-between gap-1.5 cursor-grab text-left transition-all duration-75 hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[2px_2px_0px_var(--color-navy)] hover:bg-[var(--color-yellow)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-blue)] touch-none"
                 role="listitem"
-                aria-label={`${isSwitch ? 'Switch to' : 'Add'} ${item.title} (${item.id}), ${formatCourseSlot(item)}, ${seatsRemaining} seats available`}
+                aria-label={`${item.title} (${item.id}), ${formatCourseSlot(item)}, ${seatsRemaining} seats remaining — drag onto timetable to add`}
               >
                 <div>
                   <div className="flex items-center justify-between gap-1.5">
@@ -413,6 +626,81 @@ export default function AvailableCourses({
           </div>
         </div>
       )}
+
+      {/* ── Lifted/Held course card following pointer ── */}
+      {heldCard && (
+        typeof document !== 'undefined' && document.body
+          ? createPortal(
+              <div
+                className={`nb-course-card-held fixed pointer-events-none z-[9999] select-none ${
+                  heldCard.isRestoring ? 'nb-course-card-held--restoring' : ''
+                }`}
+                style={{
+                  left: `${heldCard.currentX - heldCard.offsetX}px`,
+                  top: `${heldCard.currentY - heldCard.offsetY}px`,
+                  width: `${heldCard.origRect.width}px`,
+                  height: `${heldCard.origRect.height}px`,
+                }}
+                data-testid={`course-held-${heldCard.item.id}`}
+                data-is-restoring={heldCard.isRestoring ? 'true' : 'false'}
+                aria-hidden="true"
+              >
+                <HeldCardContent
+                  item={heldCard.item}
+                  isSwitch={draft.some((draftId) => {
+                    const drafted = availableCourses.find((c) => c.id === draftId);
+                    return drafted && (drafted.course === heldCard.item.course || heldCard.item.alternates?.includes(draftId));
+                  })}
+                  formatCourseSlot={formatCourseSlot}
+                />
+              </div>,
+              document.body
+            )
+          : null
+      )}
+    </div>
+  );
+}
+
+// ── Held card floating content───────────────────────────────────
+
+function HeldCardContent({ item, isSwitch, formatCourseSlot }) {
+  const seatsRemaining = Math.max(0, item.capacity - item.enrolled);
+
+  return (
+    <div
+      className="nb-course-card nb-course-card--lifted w-full h-full bg-[var(--color-cream)] border-2 border-[var(--color-navy)] rounded p-2 flex flex-col justify-between gap-1.5 text-left shadow-[6px_6px_0px_var(--color-navy)] bg-[var(--color-yellow)] cursor-grabbing"
+      aria-hidden="true"
+    >
+      <div>
+        <div className="flex items-center justify-between gap-1.5">
+          <span className="nb-course-id font-['Archivo_Black',sans-serif] text-[11px] font-black text-[var(--color-navy)] tracking-wide">
+            {item.id}
+          </span>
+          <span className="nb-course-badge text-[8px] font-black uppercase tracking-wider bg-[var(--color-navy)] text-[var(--color-cream)] px-1.5 py-0.5 rounded leading-none">
+            {item.component}
+          </span>
+        </div>
+
+        <h3
+          className="nb-course-name font-mono text-[10.5px] font-bold text-[var(--color-charcoal)] truncate mt-1 text-left"
+          title={item.title}
+        >
+          {item.title}
+        </h3>
+      </div>
+
+      <div className="nb-course-footer flex items-center justify-between border-t border-[var(--color-navy)]/15 pt-1 mt-1 text-left w-full">
+        <span className="nb-course-time font-mono text-[9px] font-bold text-[var(--color-navy)] whitespace-nowrap">
+          {formatCourseSlot(item)}
+        </span>
+        <div className="flex items-center gap-1">
+          <span className="nb-course-seats font-mono text-[9px] font-extrabold text-[var(--color-charcoal)] whitespace-nowrap">
+            {item.enrolled}/{item.capacity}
+          </span>
+          <Users size={9} strokeWidth={2.5} className="text-[var(--color-charcoal)]/60 shrink-0" aria-hidden="true" />
+        </div>
+      </div>
     </div>
   );
 }

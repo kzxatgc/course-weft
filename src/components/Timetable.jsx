@@ -49,7 +49,7 @@ export default function Timetable({
   // draggedSectionId: the section being dragged over (from DataTransfer)
   const draggedIdRef = useRef(null);
 
-  // ── Fixed-slot preview (Task 31) ──────────────────────────────────────────
+  // ── Fixed-slot preview──────────────────────────────────────────
   // Show at official scheduled day & time for keyboard focus or active drag
   const targetSectionId = fixedPreviewSectionId || previewSectionId || (ghost ? ghost.sectionId : null);
   const targetSection = targetSectionId
@@ -94,7 +94,7 @@ export default function Timetable({
   const isEmpty = selectedSections.length === 0;
 
   return (
-    <section className="nb-tt" aria-label="Weekly schedule timetable">
+    <section className="nb-tt" aria-label="Weekly schedule timetable" data-testid="timetable">
       <div className="nb-tt-grid-wrap">
         {/* ── Top Header Row: X-axis (10 distinct hour columns) ───── */}
         <div className="nb-tt-header-row">
@@ -192,12 +192,12 @@ function DayRow({ day, daySections, ghost, fixedPreview, onDragOver, onDragLeave
           <SectionBlock key={`${sec.id}-${day.id}`} sec={sec} />
         ))}
 
-        {/* Fixed preview (Task 31: official slot time-conflict preview) */}
+        {/* Fixed preview (official slot time-conflict preview) */}
         {fixedPreview && (
           <FixedPreviewBlock fixedPreview={fixedPreview} />
         )}
 
-        {/* Ghost preview (Task 30: pointer-following preview) */}
+        {/* Ghost preview (pointer-following preview) */}
         {ghost && (
           <GhostBlock ghost={ghost} />
         )}

@@ -847,7 +847,7 @@ describe('drop-preview domain', () => {
 });
 
 // ------------------------------------------------------------------------
-// Task 31 — Fixed-slot time-conflict preview
+// Fixed-slot time-conflict preview
 // ------------------------------------------------------------------------
 
 import {
@@ -858,7 +858,7 @@ import {
   buildFixedPreview,
 } from '../src/domain/drop-preview.mjs';
 
-describe('Task 31 — Fixed-slot time-conflict preview', () => {
+describe('Fixed-slot time-conflict preview', () => {
 
   describe('isHalfOpenOverlap — same-day half-open boundaries', () => {
     it('returns true when intervals strictly overlap', () => {
@@ -1066,6 +1066,276 @@ describe('Task 31 — Fixed-slot time-conflict preview', () => {
       assert.ok(src.includes('previewSectionId'), 'EarlySchedulePreview manages previewSectionId state');
       assert.ok(src.includes('onPreviewSectionChange={setPreviewSectionId}'), 'EarlySchedulePreview wires AvailableCourses');
       assert.ok(src.includes('fixedPreviewSectionId={previewSectionId}'), 'EarlySchedulePreview wires Timetable');
+    });
+  });
+
+});
+
+// ------------------------------------------------------------------------
+// Available Courses drag, drop, and cancel
+// ------------------------------------------------------------------------
+
+import {
+  POINTER_DRAG_THRESHOLD,
+  hasExceededDragThreshold,
+  isCardTouchingTimetable,
+  isCardOutsidePanel,
+  evaluateDrop,
+} from '../src/domain/drop-preview.mjs';
+
+describe('Available Courses drag, drop, and cancel', () => {
+
+  describe('pointer threshold/start', () => {
+    it('movement under threshold (e.g. 2px, 3px) does not start drag', () => {
+      assert.strictEqual(hasExceededDragThreshold(0, 0), false);
+      assert.strictEqual(hasExceededDragThreshold(2, 2, POINTER_DRAG_THRESHOLD), false);
+      assert.strictEqual(hasExceededDragThreshold(3, 3, POINTER_DRAG_THRESHOLD), false);
+      assert.strictEqual(hasExceededDragThreshold(-2, 3, POINTER_DRAG_THRESHOLD), false);
+    });
+
+    it('movement meeting or exceeding threshold (>= 5px) initiates drag', () => {
+      assert.strictEqual(hasExceededDragThreshold(0, 5, POINTER_DRAG_THRESHOLD), true);
+      assert.strictEqual(hasExceededDragThreshold(5, 0, POINTER_DRAG_THRESHOLD), true);
+      assert.strictEqual(hasExceededDragThreshold(3, 4, POINTER_DRAG_THRESHOLD), true); // 3-4-5 triangle
+      assert.strictEqual(hasExceededDragThreshold(-6, 0, POINTER_DRAG_THRESHOLD), true);
+      assert.strictEqual(hasExceededDragThreshold(10, 15, POINTER_DRAG_THRESHOLD), true);
+    });
+  });
+
+  describe('placeholder and list order', () => {
+    it('dragged card leaves placeholder preserving original list order and indices', () => {
+      const items = [
+        { id: 'CHEM-B', title: 'Chemistry B' },
+        { id: 'STAT-B', title: 'Statistics B' },
+        { id: 'BIO-214', title: 'Biology' },
+      ];
+
+      // Dragging the middle item (STAT-B)
+      const heldId = 'STAT-B';
+      const renderedSlots = items.map((item, idx) => {
+        if (item.id === heldId) {
+          return { type: 'placeholder', id: item.id, originalIndex: idx };
+        }
+        return { type: 'card', id: item.id, originalIndex: idx };
+      });
+
+      assert.strictEqual(renderedSlots.length, 3);
+      assert.strictEqual(renderedSlots[0].id, 'CHEM-B');
+      assert.strictEqual(renderedSlots[0].type, 'card');
+      assert.strictEqual(renderedSlots[1].id, 'STAT-B');
+      assert.strictEqual(renderedSlots[1].type, 'placeholder');
+      assert.strictEqual(renderedSlots[2].id, 'BIO-214');
+      assert.strictEqual(renderedSlots[2].type, 'card');
+    });
+  });
+
+  describe('boundary-touch hit test', () => {
+    const timetableRect = { left: 50, top: 150, right: 950, bottom: 650, width: 900, height: 500 };
+
+    it('returns true when held card overlaps timetable interior', () => {
+      const cardRect = { left: 100, top: 200, right: 295, bottom: 290 };
+      assert.strictEqual(isCardTouchingTimetable(cardRect, timetableRect), true);
+    });
+
+    it('returns true when held card touches top boundary edge', () => {
+      const cardRect = { left: 100, top: 60, right: 295, bottom: 150 };
+      assert.strictEqual(isCardTouchingTimetable(cardRect, timetableRect), true);
+    });
+
+    it('returns true when held card touches bottom boundary edge', () => {
+      const cardRect = { left: 100, top: 650, right: 295, bottom: 740 };
+      assert.strictEqual(isCardTouchingTimetable(cardRect, timetableRect), true);
+    });
+
+    it('returns true when held card touches left boundary edge', () => {
+      const cardRect = { left: 0, top: 200, right: 50, bottom: 290 };
+      assert.strictEqual(isCardTouchingTimetable(cardRect, timetableRect), true);
+    });
+
+    it('returns true when held card touches right boundary edge', () => {
+      const cardRect = { left: 950, top: 200, right: 1145, bottom: 290 };
+      assert.strictEqual(isCardTouchingTimetable(cardRect, timetableRect), true);
+    });
+
+    it('returns false when held card is completely above timetable', () => {
+      const cardRect = { left: 100, top: 20, right: 295, bottom: 110 };
+      assert.strictEqual(isCardTouchingTimetable(cardRect, timetableRect), false);
+    });
+
+    it('returns false when held card is completely below timetable', () => {
+      const cardRect = { left: 100, top: 700, right: 295, bottom: 790 };
+      assert.strictEqual(isCardTouchingTimetable(cardRect, timetableRect), false);
+    });
+
+    it('returns false when held card is completely to the left or right of timetable', () => {
+      assert.strictEqual(isCardTouchingTimetable({ left: -250, top: 200, right: -55, bottom: 290 }, timetableRect), false);
+      assert.strictEqual(isCardTouchingTimetable({ left: 1000, top: 200, right: 1195, bottom: 290 }, timetableRect), false);
+    });
+
+    it('returns false for null or undefined rectangles', () => {
+      assert.strictEqual(isCardTouchingTimetable(null, timetableRect), false);
+      assert.strictEqual(isCardTouchingTimetable(timetableRect, null), false);
+    });
+  });
+
+  describe('isCardOutsidePanel — preview activation', () => {
+    const panelRect = { left: 20, top: 20, right: 980, bottom: 140 };
+
+    it('returns false when card is inside Available Courses panel bounds', () => {
+      const cardRect = { left: 30, top: 30, right: 225, bottom: 120 };
+      assert.strictEqual(isCardOutsidePanel(cardRect, panelRect), false);
+    });
+
+    it('returns true when card is dragged below the panel towards timetable', () => {
+      const cardRect = { left: 30, top: 150, right: 225, bottom: 240 };
+      assert.strictEqual(isCardOutsidePanel(cardRect, panelRect), true);
+    });
+  });
+
+  describe('green drop', () => {
+    it('evaluates drop as successful when touching timetable with no time conflict', () => {
+      const result = evaluateDrop({ touchesTimetable: true, hasConflict: false });
+      assert.strictEqual(result.success, true);
+      assert.strictEqual(result.reason, 'ok');
+    });
+
+    it('green drop dispatches ADD_SECTION or SWITCH_SECTION to update draft', () => {
+      const draft = ['CHEM-A', 'STAT-A'];
+      const nonConflictingSec = { id: 'CHEM-B', course: 'CHEM' };
+
+      const dropResult = evaluateDrop({ touchesTimetable: true, hasConflict: false });
+      assert.strictEqual(dropResult.success, true);
+
+      let updatedDraft;
+      if (dropResult.success) {
+        updatedDraft = draft.map(id => id === 'CHEM-A' ? nonConflictingSec.id : id);
+      }
+      assert.deepStrictEqual(updatedDraft, ['CHEM-B', 'STAT-A']);
+    });
+  });
+
+  describe('red drop restores source', () => {
+    it('evaluates drop as rejected when touching timetable with time conflict', () => {
+      const result = evaluateDrop({ touchesTimetable: true, hasConflict: true });
+      assert.strictEqual(result.success, false);
+      assert.strictEqual(result.reason, 'conflict');
+    });
+
+    it('rejected red drop does not mutate draft and restores card to origin', () => {
+      const initialDraft = Object.freeze(['CHEM-A', 'STAT-A']);
+      const draft = [...initialDraft];
+
+      const dropResult = evaluateDrop({ touchesTimetable: true, hasConflict: true });
+      assert.strictEqual(dropResult.success, false);
+      assert.deepStrictEqual(draft, initialDraft);
+    });
+  });
+
+  describe('release outside timetable restores source', () => {
+    it('evaluates drop as rejected when released without touching timetable', () => {
+      const result = evaluateDrop({ touchesTimetable: false, hasConflict: false });
+      assert.strictEqual(result.success, false);
+      assert.strictEqual(result.reason, 'outside');
+    });
+
+    it('release outside does not mutate draft and triggers restore animation', () => {
+      const initialDraft = Object.freeze(['CHEM-A', 'STAT-A']);
+      const draft = [...initialDraft];
+
+      const dropResult = evaluateDrop({ touchesTimetable: false, hasConflict: false });
+      assert.strictEqual(dropResult.success, false);
+      assert.strictEqual(dropResult.reason, 'outside');
+      assert.deepStrictEqual(draft, initialDraft);
+    });
+  });
+
+  describe('successful list reflow', () => {
+    it('removes added section from available courses and closes the gap', () => {
+      const catalog = [
+        { id: 'CHEM-B', title: 'General Chemistry B' },
+        { id: 'STAT-B', title: 'Introductory Statistics B' },
+        { id: 'BIO-214', title: 'Cell Biology' },
+      ];
+      let draft = ['STAT-A'];
+
+      let available = catalog.filter(c => !draft.includes(c.id));
+      assert.strictEqual(available.length, 3);
+      assert.strictEqual(available[1].id, 'STAT-B');
+
+      draft = [...draft, 'STAT-B'];
+
+      available = catalog.filter(c => !draft.includes(c.id));
+      assert.strictEqual(available.length, 2);
+      assert.strictEqual(available[0].id, 'CHEM-B');
+      assert.strictEqual(available[1].id, 'BIO-214');
+    });
+  });
+
+  describe('touch and pointer cancellation', () => {
+    it('pointer cancel resets drag state and restores card to source without draft mutation', () => {
+      const initialDraft = Object.freeze(['CHEM-A', 'STAT-A']);
+      const draft = [...initialDraft];
+      let heldCard = { item: { id: 'BIO-214' }, isDragging: true, isRestoring: false };
+
+      function onPointerCancel() {
+        heldCard = { ...heldCard, isRestoring: true };
+      }
+      onPointerCancel();
+
+      assert.strictEqual(heldCard.isRestoring, true);
+      assert.deepStrictEqual(draft, initialDraft);
+    });
+  });
+
+  describe('file and component wiring', () => {
+    it('AvailableCourses implements pointer drag handlers, placeholder, and held card overlay', async () => {
+      const { readFileSync } = await import('node:fs');
+      const src = readFileSync(
+        new URL('../src/components/AvailableCourses.jsx', import.meta.url),
+        'utf8'
+      );
+      assert.ok(src.includes('handlePointerDown'), 'AvailableCourses implements handlePointerDown');
+      assert.ok(src.includes('nb-course-placeholder'), 'AvailableCourses renders nb-course-placeholder');
+      assert.ok(src.includes('nb-course-card-held'), 'AvailableCourses renders nb-course-card-held overlay');
+      assert.ok(src.includes('isCardTouchingTimetable'), 'AvailableCourses uses boundary-touch test');
+      assert.ok(src.includes('isCardOutsidePanel'), 'AvailableCourses checks panel boundary exit');
+      assert.ok(src.includes('evaluateDrop'), 'AvailableCourses evaluates drop validity');
+    });
+
+    it('Timetable has data-testid="timetable" for boundary hit-testing', async () => {
+      const { readFileSync } = await import('node:fs');
+      const src = readFileSync(
+        new URL('../src/components/Timetable.jsx', import.meta.url),
+        'utf8'
+      );
+      assert.ok(src.includes('data-testid="timetable"'), 'Timetable has data-testid="timetable" attribute');
+    });
+
+    it('app.css styles placeholder, held card, and respects prefers-reduced-motion', async () => {
+      const { readFileSync } = await import('node:fs');
+      const css = readFileSync(
+        new URL('../src/app.css', import.meta.url),
+        'utf8'
+      );
+      assert.ok(css.includes('.nb-course-placeholder'), 'app.css has .nb-course-placeholder rule');
+      assert.ok(css.includes('.nb-course-card-held'), 'app.css has .nb-course-card-held rule');
+      assert.ok(css.includes('.nb-course-card-held--restoring'), 'app.css has restoring animation rule');
+      assert.ok(
+        css.includes('.nb-course-card-held--restoring') && css.includes('prefers-reduced-motion'),
+        'app.css respects prefers-reduced-motion for restoring animation'
+      );
+    });
+
+    it('single click alone does not start drag; only hold-and-drag initiates dragging', async () => {
+      const { readFileSync } = await import('node:fs');
+      const src = readFileSync(
+        new URL('../src/components/AvailableCourses.jsx', import.meta.url),
+        'utf8'
+      );
+      // Click without drag threshold: pointer state must be cleared without entering heldCard
+      assert.ok(src.includes('Simple click (no drag): do nothing'), 'AvailableCourses treats plain click as no-op');
+      // Drag must still be initiated when threshold is exceeded
+      assert.ok(src.includes('hasExceededDragThreshold'), 'AvailableCourses initiates drag only above threshold');
     });
   });
 

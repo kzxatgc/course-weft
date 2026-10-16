@@ -182,3 +182,75 @@ export function buildFixedPreview(section, selectedSections = []) {
     status: hasConflict ? 'conflict' : 'ok',
   };
 }
+
+/**
+ * Minimum pointer movement in pixels before pointerdown is considered a drag gesture
+ * instead of a regular click.
+ */
+export const POINTER_DRAG_THRESHOLD = 5;
+
+/**
+ * Determine whether pointer movement delta exceeds the drag start threshold.
+ *
+ * @param {number} dx - delta X in pixels
+ * @param {number} dy - delta Y in pixels
+ * @param {number} [threshold=POINTER_DRAG_THRESHOLD]
+ * @returns {boolean}
+ */
+export function hasExceededDragThreshold(dx, dy, threshold = POINTER_DRAG_THRESHOLD) {
+  return Math.hypot(dx, dy) >= threshold;
+}
+
+/**
+ * Axis-aligned bounding box boundary-touch hit test.
+ * Returns true when any part of the held card touches or overlaps the timetable boundary.
+ *
+ * @param {{ left: number, top: number, right: number, bottom: number } | DOMRect} cardRect
+ * @param {{ left: number, top: number, right: number, bottom: number } | DOMRect} timetableRect
+ * @returns {boolean}
+ */
+export function isCardTouchingTimetable(cardRect, timetableRect) {
+  if (!cardRect || !timetableRect) return false;
+  return !(
+    cardRect.right < timetableRect.left ||
+    cardRect.left > timetableRect.right ||
+    cardRect.bottom < timetableRect.top ||
+    cardRect.top > timetableRect.bottom
+  );
+}
+
+/**
+ * Determine whether a held card has moved outside the Available Courses panel.
+ * Fixed-slot preview is shown only once the card leaves the panel boundary.
+ *
+ * @param {{ left: number, top: number, right: number, bottom: number } | DOMRect} cardRect
+ * @param {{ left: number, top: number, right: number, bottom: number } | DOMRect} panelRect
+ * @returns {boolean}
+ */
+export function isCardOutsidePanel(cardRect, panelRect) {
+  if (!cardRect || !panelRect) return false;
+  return (
+    cardRect.bottom > panelRect.bottom ||
+    cardRect.top < panelRect.top ||
+    cardRect.right < panelRect.left ||
+    cardRect.left > panelRect.right
+  );
+}
+
+/**
+ * Evaluate whether dropping a held card onto the timetable is valid.
+ * Add only when the card touched the timetable and the preview is green (no conflict).
+ * If red, or released without touching the timetable, returns false and the reason.
+ *
+ * @param {{ touchesTimetable: boolean, hasConflict: boolean }} params
+ * @returns {{ success: boolean, reason: 'ok' | 'conflict' | 'outside' }}
+ */
+export function evaluateDrop({ touchesTimetable, hasConflict }) {
+  if (!touchesTimetable) {
+    return { success: false, reason: 'outside' };
+  }
+  if (hasConflict) {
+    return { success: false, reason: 'conflict' };
+  }
+  return { success: true, reason: 'ok' };
+}
