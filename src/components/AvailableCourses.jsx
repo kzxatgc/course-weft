@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useId } from 'react';
+import React, { useState, useEffect, useId, useRef } from 'react';
 import { Search, X, Users, Undo2, Redo2, RotateCcw } from 'lucide-react';
 import { ACTION, canUndo, canRedo } from '../state/draft-controller.mjs';
 import { INITIAL_DRAFT } from '../domain/available-courses.mjs';
@@ -22,12 +22,15 @@ export { formatCourseSlot };
  *  - Handles controller dispatch for ADD_SECTION and SWITCH_SECTION
  *  - Empty state when no courses match query
  *  - Neo-brutalist styling built with Tailwind utility classes
+ *  - Emits onPreviewSectionChange on keyboard focus/blur and when dragging leaves tray
  *
  * @param {{
  *   availableCourses: object[],
  *   draft: string[],
  *   dispatch: function,
- *   search?: string
+ *   search?: string,
+ *   state?: object,
+ *   onPreviewSectionChange?: function
  * }} props
  */
 export default function AvailableCourses({
@@ -36,10 +39,12 @@ export default function AvailableCourses({
   dispatch,
   search: controlledSearch = '',
   state = null,
+  onPreviewSectionChange,
 }) {
   const [localSearch, setLocalSearch] = useState(controlledSearch);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const searchInputId = useId();
+  const draggedCardIdRef = useRef(null);
 
   // Keep local search in sync when controlled search changes
   useEffect(() => {
@@ -125,6 +130,16 @@ export default function AvailableCourses({
       <section
         aria-labelledby="catalogue-heading"
         className="nb-courses-panel flex-1 min-w-0 border-[2.5px] border-[var(--color-navy)] bg-[var(--color-cream)] overflow-hidden shadow-none"
+        onDragLeave={(e) => {
+          if (draggedCardIdRef.current && !e.currentTarget.contains(e.relatedTarget)) {
+            onPreviewSectionChange?.(draggedCardIdRef.current);
+          }
+        }}
+        onDragEnter={(e) => {
+          if (draggedCardIdRef.current && e.currentTarget.contains(e.target)) {
+            onPreviewSectionChange?.(null);
+          }
+        }}
       >
       {/* ── Header Bar: Heading on Left, Search on Right ─────────── */}
       <div className="nb-courses-header flex items-center justify-between min-h-[32px] px-2.5 py-1 bg-[var(--color-yellow)] border-b-2 border-[var(--color-navy)] gap-2">
@@ -200,13 +215,21 @@ export default function AvailableCourses({
                 type="button"
                 draggable={true}
                 onDragStart={(e) => {
+                  draggedCardIdRef.current = item.id;
                   e.dataTransfer.effectAllowed = 'copy';
                   e.dataTransfer.setData(DT_SECTION_ID, item.id);
                   // Also store as plain text for fallback
                   e.dataTransfer.setData('text/plain', item.id);
                 }}
                 onDragEnd={() => {
-                  // Nothing to do — ghost cleanup is handled by Timetable onDrop/onDragLeave
+                  draggedCardIdRef.current = null;
+                  onPreviewSectionChange?.(null);
+                }}
+                onFocus={() => {
+                  onPreviewSectionChange?.(item.id);
+                }}
+                onBlur={() => {
+                  onPreviewSectionChange?.(null);
                 }}
                 onClick={() => handleCardClick(item)}
                 className="nb-course-card w-[195px] min-w-[195px] shrink-0 bg-[var(--color-cream)] border-2 border-[var(--color-navy)] rounded p-2 flex flex-col justify-between gap-1.5 cursor-pointer text-left transition-all duration-75 hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[2px_2px_0px_var(--color-navy)] hover:bg-[var(--color-yellow)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-blue)]"

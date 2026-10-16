@@ -87,3 +87,98 @@ export function buildGhostPreview(pointerX, pointerY, dayId, trackRect, duration
 
   return { dayId, startMin, endMin };
 }
+
+/**
+ * Determine whether two time intervals overlap using standard half-open intervals [start, end).
+ * If endA === startB or startA === endB, they touch only at a boundary point and do NOT overlap.
+ *
+ * @param {number} startA
+ * @param {number} endA
+ * @param {number} startB
+ * @param {number} endB
+ * @returns {boolean}
+ */
+export function isHalfOpenOverlap(startA, endA, startB, endB) {
+  return startA < endB && endA > startB;
+}
+
+/**
+ * Helper to normalize section day(s) into an array of day IDs.
+ *
+ * @param {object} sec
+ * @returns {string[]}
+ */
+export function getSectionDays(sec) {
+  if (!sec) return [];
+  if (Array.isArray(sec.days)) return sec.days;
+  if (sec.day) return [sec.day];
+  return [];
+}
+
+/**
+ * Find all sections in `selectedSections` that have an overlapping meeting time with `section`.
+ * Only sections sharing at least one meeting day are considered.
+ * Matches against the candidate section itself (by id) are ignored.
+ *
+ * @param {object} section - The section to test
+ * @param {object[]} selectedSections - Array of sections currently in the timetable draft
+ * @returns {object[]} List of overlapping sections
+ */
+export function getConflictingSections(section, selectedSections = []) {
+  if (!section || section.start == null || section.end == null) return [];
+  if (!Array.isArray(selectedSections) || selectedSections.length === 0) return [];
+
+  const secDays = getSectionDays(section);
+  if (secDays.length === 0) return [];
+
+  return selectedSections.filter((s) => {
+    if (!s || s.id === section.id) return false;
+    if (s.start == null || s.end == null) return false;
+
+    const sDays = getSectionDays(s);
+    const sharesDay = secDays.some((d) => sDays.includes(d));
+    if (!sharesDay) return false;
+
+    return isHalfOpenOverlap(section.start, section.end, s.start, s.end);
+  });
+}
+
+/**
+ * Detect whether `section` conflicts in scheduled meeting time with any section in `selectedSections`.
+ *
+ * @param {object} section - The section to test
+ * @param {object[]} selectedSections - Array of sections currently in the timetable draft
+ * @returns {boolean} True if there is at least one time overlap
+ */
+export function detectTimeConflict(section, selectedSections = []) {
+  return getConflictingSections(section, selectedSections).length > 0;
+}
+
+/**
+ * Build a fixed-slot preview descriptor for a section.
+ * The slot position is derived strictly from the section's official scheduled day, start, and end,
+ * completely independent of any pointer or drag coordinates.
+ *
+ * @param {object} section - Candidate section { id, day, days, start, end, ... }
+ * @param {object[]} selectedSections - Array of currently selected timetable sections
+ * @returns {object | null} Preview descriptor with status 'ok' (green) or 'conflict' (red)
+ */
+export function buildFixedPreview(section, selectedSections = []) {
+  if (!section || section.start == null || section.end == null) return null;
+
+  const days = getSectionDays(section);
+  const day = days[0] || null;
+  const conflicting = getConflictingSections(section, selectedSections);
+  const hasConflict = conflicting.length > 0;
+
+  return {
+    sectionId: section.id,
+    day,
+    days,
+    startMin: section.start,
+    endMin: section.end,
+    hasConflict,
+    conflictCount: conflicting.length,
+    status: hasConflict ? 'conflict' : 'ok',
+  };
+}

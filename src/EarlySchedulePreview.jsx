@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import Timetable from './components/Timetable.jsx';
 import AvailableCourses from './components/AvailableCourses.jsx';
 import { MAIN_CATALOG, INITIAL_DRAFT } from './domain/available-courses.mjs';
@@ -13,6 +13,7 @@ import { MAIN_CATALOG, INITIAL_DRAFT } from './domain/available-courses.mjs';
 export default function EarlySchedulePreview({ state, dispatch }) {
   const availableCourses = state?.availableCourses || MAIN_CATALOG;
   const draft = state?.draft || INITIAL_DRAFT;
+  const [previewSectionId, setPreviewSectionId] = useState(null);
 
   // Fully hydrated section records for sections currently in the draft
   const selectedSections = availableCourses.filter((item) => draft.includes(item.id));
@@ -49,6 +50,7 @@ export default function EarlySchedulePreview({ state, dispatch }) {
           dispatch={dispatch}
           search={state?.search || ''}
           state={state}
+          onPreviewSectionChange={setPreviewSectionId}
         />
 
         {/* ── Weekly Timetable — spans entire window width ── */}
@@ -57,6 +59,7 @@ export default function EarlySchedulePreview({ state, dispatch }) {
             selectedSections={selectedSections}
             availableCourses={availableCourses}
             dispatch={dispatch}
+            fixedPreviewSectionId={previewSectionId}
           />
         </div>
       </div>

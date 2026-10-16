@@ -6,6 +6,7 @@ import {
   pointerXToMinute,
   computeEndMinute,
   clampToDayBounds,
+  buildFixedPreview,
 } from '../domain/drop-preview.mjs';
 
 /**
@@ -21,19 +22,42 @@ import {
  *  - Signature blue course blocks with 2-line detail and remove (×) control
  *  - Fits the entire width cleanly without scrolling
  *  - Drag/drop ghost preview: dashed ghost card follows pointer at 15-min snap
+ *  - Fixed-slot preview: official scheduled slot colored green (ok) or red (conflict)
  *
- * @param {{ selectedSections: object[], availableCourses: object[], dispatch: function }} props
+ * @param {{
+ *   selectedSections: object[],
+ *   availableCourses: object[],
+ *   dispatch: function,
+ *   fixedPreviewSectionId?: string | null,
+ *   previewSectionId?: string | null
+ * }} props
  */
-export default function Timetable({ selectedSections = [], availableCourses = [], dispatch }) {
+export default function Timetable({
+  selectedSections = [],
+  availableCourses = [],
+  dispatch,
+  fixedPreviewSectionId = null,
+  previewSectionId = null,
+}) {
   function handleRemove(id) {
     dispatch({ type: ACTION.REMOVE_SECTION, payload: id });
   }
 
-  // ── Ghost preview state ───────────────────────────────────────────────────
+  // ── Ghost preview state (follows pointer on drag) ─────────────────────────
   // ghost = { dayId, startMin, endMin } | null
   const [ghost, setGhost] = useState(null);
   // draggedSectionId: the section being dragged over (from DataTransfer)
   const draggedIdRef = useRef(null);
+
+  // ── Fixed-slot preview (Task 31) ──────────────────────────────────────────
+  // Show at official scheduled day & time for keyboard focus or active drag
+  const targetSectionId = fixedPreviewSectionId || previewSectionId || (ghost ? ghost.sectionId : null);
+  const targetSection = targetSectionId
+    ? availableCourses.find((s) => s.id === targetSectionId)
+    : null;
+  const fixedPreview = targetSection
+    ? buildFixedPreview(targetSection, selectedSections)
+    : null;
 
   /**
    * Called by each day-row's onDragEnter / onDragOver.
@@ -94,6 +118,12 @@ export default function Timetable({ selectedSections = [], availableCourses = []
               (s) => s.day === day.id || (Array.isArray(s.days) && s.days.includes(day.id))
             );
             const isGhostDay = ghost?.dayId === day.id;
+            const isFixedPreviewDay = Boolean(
+              fixedPreview && (
+                fixedPreview.day === day.id ||
+                (Array.isArray(fixedPreview.days) && fixedPreview.days.includes(day.id))
+              )
+            );
 
             return (
               <DayRow
@@ -101,6 +131,7 @@ export default function Timetable({ selectedSections = [], availableCourses = []
                 day={day}
                 daySections={daySections}
                 ghost={isGhostDay ? ghost : null}
+                fixedPreview={isFixedPreviewDay ? fixedPreview : null}
                 onDragOver={handleDayDragOver}
                 onDragLeave={clearGhost}
                 onDrop={clearGhost}
@@ -124,7 +155,7 @@ export default function Timetable({ selectedSections = [], availableCourses = []
 
 // ── Day Row with drag-over support ────────────────────────────────────────────
 
-function DayRow({ day, daySections, ghost, onDragOver, onDragLeave, onDrop }) {
+function DayRow({ day, daySections, ghost, fixedPreview, onDragOver, onDragLeave, onDrop }) {
   const trackRef = useRef(null);
 
   function handleDragOver(e) {
@@ -161,11 +192,40 @@ function DayRow({ day, daySections, ghost, onDragOver, onDragLeave, onDrop }) {
           <SectionBlock key={`${sec.id}-${day.id}`} sec={sec} />
         ))}
 
-        {/* Ghost preview */}
+        {/* Fixed preview (Task 31: official slot time-conflict preview) */}
+        {fixedPreview && (
+          <FixedPreviewBlock fixedPreview={fixedPreview} />
+        )}
+
+        {/* Ghost preview (Task 30: pointer-following preview) */}
         {ghost && (
           <GhostBlock ghost={ghost} />
         )}
       </div>
+    </div>
+  );
+}
+
+// ── Fixed preview block (official slot conflict preview) ─────────────────────
+
+function FixedPreviewBlock({ fixedPreview }) {
+  const leftPct  = toPercent(fixedPreview.startMin);
+  const widthPct = ((fixedPreview.endMin - fixedPreview.startMin) / TOTAL_MINUTES) * 100;
+  const isConflict = fixedPreview.hasConflict;
+
+  return (
+    <div
+      className={`nb-tt-fixed-preview ${
+        isConflict ? 'nb-tt-fixed-preview--conflict' : 'nb-tt-fixed-preview--ok'
+      }`}
+      style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
+      data-testid="timetable-fixed-preview"
+      data-section-id={fixedPreview.sectionId}
+      data-status={fixedPreview.status}
+      role="status"
+      aria-label={`Preview for ${fixedPreview.sectionId}: ${isConflict ? 'Time conflict' : 'Available time slot'}`}
+    >
+      <span className="nb-tt-fixed-preview-label">{fixedPreview.sectionId}</span>
     </div>
   );
 }

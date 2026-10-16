@@ -845,3 +845,228 @@ describe('drop-preview domain', () => {
   });
 
 });
+
+// ------------------------------------------------------------------------
+// Task 31 — Fixed-slot time-conflict preview
+// ------------------------------------------------------------------------
+
+import {
+  isHalfOpenOverlap,
+  getSectionDays,
+  getConflictingSections,
+  detectTimeConflict,
+  buildFixedPreview,
+} from '../src/domain/drop-preview.mjs';
+
+describe('Task 31 — Fixed-slot time-conflict preview', () => {
+
+  describe('isHalfOpenOverlap — same-day half-open boundaries', () => {
+    it('returns true when intervals strictly overlap', () => {
+      // 10:00-11:00 (600-660) and 10:30-11:30 (630-690)
+      assert.strictEqual(isHalfOpenOverlap(600, 660, 630, 690), true);
+    });
+
+    it('returns true when one interval completely contains another', () => {
+      // 10:00-13:00 (600-780) and 11:00-12:00 (660-720)
+      assert.strictEqual(isHalfOpenOverlap(600, 780, 660, 720), true);
+    });
+
+    it('returns false for adjacent half-open boundary endA === startB', () => {
+      // Section A: 10:00-11:00 (600-660), Section B: 11:00-12:00 (660-720)
+      assert.strictEqual(isHalfOpenOverlap(600, 660, 660, 720), false);
+    });
+
+    it('returns false for adjacent half-open boundary startA === endB', () => {
+      // Section A: 11:00-12:00 (660-720), Section B: 10:00-11:00 (600-660)
+      assert.strictEqual(isHalfOpenOverlap(660, 720, 600, 660), false);
+    });
+
+    it('returns false for completely disjoint time intervals', () => {
+      // 8:00-9:00 (480-540) and 14:00-15:00 (840-900)
+      assert.strictEqual(isHalfOpenOverlap(480, 540, 840, 900), false);
+    });
+  });
+
+  describe('fixed official slot independent of pointer position', () => {
+    it('official slot position derives solely from section definition', () => {
+      const bio214 = { id: 'BIO-214', day: 'Mon', start: 780, end: 840 };
+      const selected = [];
+      const preview = buildFixedPreview(bio214, selected);
+
+      assert.strictEqual(preview.day, 'Mon');
+      assert.strictEqual(preview.startMin, 780);
+      assert.strictEqual(preview.endMin, 840);
+      assert.strictEqual(preview.sectionId, 'BIO-214');
+    });
+  });
+
+  describe('green non-overlap', () => {
+    it('returns status ok and hasConflict false when timetable has no overlaps', () => {
+      const chemB = { id: 'CHEM-B', day: 'Thu', start: 600, end: 660 };
+      const selected = [
+        { id: 'CHEM-A', day: 'Tue', start: 600, end: 660 },
+        { id: 'STAT-A', day: 'Mon', start: 780, end: 840 },
+      ];
+      const preview = buildFixedPreview(chemB, selected);
+
+      assert.strictEqual(preview.hasConflict, false);
+      assert.strictEqual(preview.status, 'ok');
+      assert.strictEqual(preview.conflictCount, 0);
+    });
+
+    it('returns status ok for same day non-overlapping sections', () => {
+      const secCandidate = { id: 'EXTRA-1', day: 'Mon', start: 480, end: 540 }; // Mon 8-9am
+      const selected = [
+        { id: 'STAT-A', day: 'Mon', start: 780, end: 840 }, // Mon 1-2pm
+      ];
+      const preview = buildFixedPreview(secCandidate, selected);
+
+      assert.strictEqual(preview.hasConflict, false);
+      assert.strictEqual(preview.status, 'ok');
+    });
+  });
+
+  describe('red single and multiple overlaps without labels', () => {
+    it('marks red conflict for a single overlap', () => {
+      const bio214 = { id: 'BIO-214', day: 'Mon', start: 780, end: 840 };
+      const selected = [
+        { id: 'STAT-A', title: 'Introductory Statistics', day: 'Mon', start: 780, end: 840 },
+      ];
+      const preview = buildFixedPreview(bio214, selected);
+
+      assert.strictEqual(preview.hasConflict, true);
+      assert.strictEqual(preview.status, 'conflict');
+      assert.strictEqual(preview.conflictCount, 1);
+    });
+
+    it('marks red conflict for multiple overlaps', () => {
+      const longSec = { id: 'LONG-1', day: 'Mon', start: 600, end: 780 }; // Mon 10:00-13:00
+      const selected = [
+        { id: 'SEC-A', title: 'Course A', day: 'Mon', start: 600, end: 660 }, // 10:00-11:00
+        { id: 'SEC-B', title: 'Course B', day: 'Mon', start: 660, end: 720 }, // 11:00-12:00
+      ];
+      const preview = buildFixedPreview(longSec, selected);
+
+      assert.strictEqual(preview.hasConflict, true);
+      assert.strictEqual(preview.status, 'conflict');
+      assert.strictEqual(preview.conflictCount, 2);
+    });
+
+    it('preview descriptor and timetable visual block do not label conflicting course names', async () => {
+      const { readFileSync } = await import('node:fs');
+      const timetableSrc = readFileSync(
+        new URL('../src/components/Timetable.jsx', import.meta.url),
+        'utf8'
+      );
+      assert.ok(timetableSrc.includes('FixedPreviewBlock'), 'Timetable must define FixedPreviewBlock');
+      assert.ok(
+        timetableSrc.includes('nb-tt-fixed-preview-label'),
+        'Timetable renders label container'
+      );
+      assert.ok(
+        !timetableSrc.includes('conflictingCourses') && !timetableSrc.includes('conflictsWith'),
+        'FixedPreviewBlock must remain purely visual without naming conflicting course titles'
+      );
+    });
+  });
+
+  describe('changing the draft recalculates the preview', () => {
+    it('recalculates from conflict to ok when conflicting section is removed from draft', () => {
+      const bio214 = { id: 'BIO-214', day: 'Mon', start: 780, end: 840 };
+      let selected = [
+        { id: 'CHEM-A', day: 'Tue', start: 600, end: 660 },
+        { id: 'STAT-A', day: 'Mon', start: 780, end: 840 }, // conflicts
+      ];
+
+      const previewBefore = buildFixedPreview(bio214, selected);
+      assert.strictEqual(previewBefore.status, 'conflict');
+
+      // User removes STAT-A from draft
+      selected = selected.filter((s) => s.id !== 'STAT-A');
+
+      const previewAfter = buildFixedPreview(bio214, selected);
+      assert.strictEqual(previewAfter.status, 'ok');
+      assert.strictEqual(previewAfter.hasConflict, false);
+    });
+
+    it('recalculates from ok to conflict when a conflicting section is added to draft', () => {
+      const bio214 = { id: 'BIO-214', day: 'Mon', start: 780, end: 840 };
+      let selected = [
+        { id: 'CHEM-A', day: 'Tue', start: 600, end: 660 },
+      ];
+
+      const previewBefore = buildFixedPreview(bio214, selected);
+      assert.strictEqual(previewBefore.status, 'ok');
+
+      // User adds STAT-A to draft
+      selected = [...selected, { id: 'STAT-A', day: 'Mon', start: 780, end: 840 }];
+
+      const previewAfter = buildFixedPreview(bio214, selected);
+      assert.strictEqual(previewAfter.status, 'conflict');
+    });
+  });
+
+  describe('CSS styling and prefers-reduced-motion', () => {
+    it('app.css includes fixed-preview styles with green ok and red conflict modifiers', async () => {
+      const { readFileSync } = await import('node:fs');
+      const css = readFileSync(
+        new URL('../src/app.css', import.meta.url),
+        'utf8'
+      );
+      assert.ok(css.includes('.nb-tt-fixed-preview'), 'app.css has .nb-tt-fixed-preview base class');
+      assert.ok(css.includes('.nb-tt-fixed-preview--ok'), 'app.css has .nb-tt-fixed-preview--ok class');
+      assert.ok(css.includes('.nb-tt-fixed-preview--conflict'), 'app.css has .nb-tt-fixed-preview--conflict class');
+    });
+
+    it('app.css disables animations and transitions under prefers-reduced-motion: reduce', async () => {
+      const { readFileSync } = await import('node:fs');
+      const css = readFileSync(
+        new URL('../src/app.css', import.meta.url),
+        'utf8'
+      );
+      assert.ok(
+        css.includes('prefers-reduced-motion: reduce') &&
+        css.includes('.nb-tt-fixed-preview'),
+        'app.css respects prefers-reduced-motion for fixed preview'
+      );
+    });
+  });
+
+  describe('component wiring for focus and drag-leave', () => {
+    it('AvailableCourses emits onPreviewSectionChange on focus, blur, dragLeave, and dragEnd', async () => {
+      const { readFileSync } = await import('node:fs');
+      const src = readFileSync(
+        new URL('../src/components/AvailableCourses.jsx', import.meta.url),
+        'utf8'
+      );
+      assert.ok(src.includes('onPreviewSectionChange'), 'AvailableCourses accepts onPreviewSectionChange');
+      assert.ok(src.includes('onFocus='), 'AvailableCourses handles onFocus on course cards');
+      assert.ok(src.includes('onBlur='), 'AvailableCourses handles onBlur on course cards');
+      assert.ok(src.includes('onDragLeave='), 'AvailableCourses handles onDragLeave when leaving strip');
+    });
+
+    it('Timetable accepts fixedPreviewSectionId and renders FixedPreviewBlock', async () => {
+      const { readFileSync } = await import('node:fs');
+      const src = readFileSync(
+        new URL('../src/components/Timetable.jsx', import.meta.url),
+        'utf8'
+      );
+      assert.ok(src.includes('fixedPreviewSectionId'), 'Timetable accepts fixedPreviewSectionId prop');
+      assert.ok(src.includes('FixedPreviewBlock'), 'Timetable renders FixedPreviewBlock');
+      assert.ok(src.includes('nb-tt-fixed-preview--ok'), 'Timetable applies ok modifier');
+      assert.ok(src.includes('nb-tt-fixed-preview--conflict'), 'Timetable applies conflict modifier');
+    });
+
+    it('EarlySchedulePreview wires previewSectionId between AvailableCourses and Timetable', async () => {
+      const { readFileSync } = await import('node:fs');
+      const src = readFileSync(
+        new URL('../src/EarlySchedulePreview.jsx', import.meta.url),
+        'utf8'
+      );
+      assert.ok(src.includes('previewSectionId'), 'EarlySchedulePreview manages previewSectionId state');
+      assert.ok(src.includes('onPreviewSectionChange={setPreviewSectionId}'), 'EarlySchedulePreview wires AvailableCourses');
+      assert.ok(src.includes('fixedPreviewSectionId={previewSectionId}'), 'EarlySchedulePreview wires Timetable');
+    });
+  });
+
+});
