@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import Timetable from './components/Timetable.jsx';
 import AvailableCourses from './components/AvailableCourses.jsx';
@@ -8,7 +8,9 @@ import { ACTION } from './state/draft-controller.mjs';
 import {
   evaluateSwap,
   getEffectiveSwapDuration,
+  buildFixedPreview,
 } from './domain/drop-preview.mjs';
+import { enumerateRepairs } from './domain/repairs.mjs';
 import {
   getRandomAdjacentRainbowPair,
   getLinkedOutlineSectionIds,
@@ -30,12 +32,49 @@ export default function EarlySchedulePreview({ state, dispatch }) {
   const [returningCard, setReturningCard] = useState(null);
   const [returningCardId, setReturningCardId] = useState(null);
   const rainbowPair = getRandomAdjacentRainbowPair();
+  const activePreviewSectionId = previewSectionId && !draft.includes(previewSectionId)
+    ? previewSectionId
+    : null;
+
+  useEffect(() => {
+    if (previewSectionId && draft.includes(previewSectionId)) {
+      setPreviewSectionId(null);
+    }
+  }, [draft, previewSectionId]);
 
   // Sections that should show the chasing rainbow outline
   const linkedOutlineIds = getLinkedOutlineSectionIds(draft, availableCourses);
 
   // Fully hydrated section records for sections currently in the draft
   const selectedSections = availableCourses.filter((item) => draft.includes(item.id));
+  const previewSection = availableCourses.find((item) => item.id === activePreviewSectionId);
+  const previewReplacedIds = previewSection
+    ? selectedSections
+      .filter((section) =>
+        section.id !== previewSection.id &&
+        (
+          (section.course === previewSection.course && section.component === previewSection.component) ||
+          previewSection.alternates?.includes(section.id) ||
+          section.alternates?.includes(previewSection.id)
+        )
+      )
+      .map((section) => section.id)
+    : [];
+  const previewConflict = previewSection
+    ? buildFixedPreview(
+      previewSection,
+      selectedSections.filter((section) => !previewReplacedIds.includes(section.id))
+    )?.hasConflict
+    : false;
+  const repairPreviewId = previewConflict &&
+    enumerateRepairs(
+      draft,
+      availableCourses,
+      activePreviewSectionId,
+      { firstStep: true }
+    ).length > 0
+    ? activePreviewSectionId
+    : null;
 
   function handleRequestSwap({ toId, fromId, dropInfo = null }) {
     if (!dispatch) return;
@@ -192,6 +231,7 @@ export default function EarlySchedulePreview({ state, dispatch }) {
             search={state?.search || ''}
             state={state}
             onPreviewSectionChange={setPreviewSectionId}
+            repairPreviewId={repairPreviewId}
             onRequestSwap={handleRequestSwap}
             animatingReturnId={returningCardId}
             returningCardId={returningCardId}
@@ -206,7 +246,7 @@ export default function EarlySchedulePreview({ state, dispatch }) {
               availableCourses={availableCourses}
               draft={draft}
               dispatch={dispatch}
-              fixedPreviewSectionId={previewSectionId}
+              fixedPreviewSectionId={activePreviewSectionId}
               animatingSwap={animatingSwap}
               onRequestSwap={handleRequestSwap}
               linkedOutlineIds={linkedOutlineIds}
@@ -259,5 +299,3 @@ export default function EarlySchedulePreview({ state, dispatch }) {
     </>
   );
 }
-
-

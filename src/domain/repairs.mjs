@@ -1,13 +1,13 @@
 /**
  * Repair enumeration for EnrollFix course registration.
  *
- * Enumerates valid schedule repairs as direct add or at most one explicitly
- * declared same-course/component swap. Linked courses support exactly one
+ * Enumerates valid schedule repairs as direct add or combinations of explicitly
+ * declared same-course/component swaps. Linked courses support exactly one
  * child requirement (min:1, max:1). Multiple linked requirements are unsupported
  * and yield no candidates.
  *
- * All candidates are independently validated before inclusion. Results are
- * deduplicated by final sorted ID set and ordered no-swap-first then lexically.
+ * All complete schedules are independently validated before inclusion. Results
+ * are deduplicated by sorted ID set and ordered by fewest swaps, then IDs.
  */
 
 import { validateDraft } from './validate.mjs';
@@ -87,19 +87,24 @@ function linkedOptionSets(requested, byId) {
  *
  * A repair is either:
  * - A direct add (no swap): requestedId + any linked children added to the current draft.
- * - A swap + add: one section in the draft is replaced by its declared alternate,
- *   then requestedId + any linked children are added.
+ * - A swap + add: one or more sections in the draft are replaced by their declared
+ *   alternates, then requestedId + any linked children are added.
  *
- * At most one swap is considered per candidate. All candidates are fully validated
- * by validateDraft before inclusion. Results are deduplicated and ordered
- * no-swap-first, then lexically by joined IDs.
+ * All combinations are fully validated by validateDraft before inclusion.
+ * Results are deduplicated and ordered by fewest swaps, then lexically by IDs.
  *
  * @param {string[]} draftIds - Current selected section IDs
  * @param {object[]} catalog - Full section catalogue
  * @param {string} [requestedId] - Section to add (defaults to REQUESTED_SECTION_ID)
- * @returns {Array<{ids: string[], swap: {old:string, replacement:string}|null, added: string[], kept: string[]}>}
+ * @param {{firstStep?: boolean}} [options] - Return only the immediate repair step when true
+ * @returns {Array<{ids: string[], swap: {old:string, replacement:string}|null, swaps: Array<{old:string, replacement:string}>, added: string[], kept: string[]}>}
  */
-export function enumerateRepairs(draftIds, catalog, requestedId = REQUESTED_SECTION_ID) {
+export function enumerateRepairs(
+  draftIds,
+  catalog,
+  requestedId = REQUESTED_SECTION_ID,
+  { firstStep = false } = {}
+) {
   // Guard: validate inputs before any processing
   if (
     !Array.isArray(draftIds) ||
@@ -119,37 +124,60 @@ export function enumerateRepairs(draftIds, catalog, requestedId = REQUESTED_SECT
   // Guard: all draft items must resolve to known catalogue entries
   if (draftIds.some((id) => !byId.get(id))) return [];
 
-  // Guard: base draft must itself be valid before attempting any repair
-  if (!validateDraft(draftIds, catalog).ok) return [];
-
   // Determine the linked-child option sets for the requested section
   const optionSets = linkedOptionSets(requested, byId);
   if (optionSets.length === 0) return [];
 
-  const swaps = getValidSwaps(draftIds, byId);
+  const swapChoices = draftIds.map((oldId) =>
+    getValidSwaps([oldId], byId).filter((choice) => choice.old)
+  );
+  const swapCombinations = [];
+  function enumerateSwapCombinations(index, selectedSwaps) {
+    if (index === swapChoices.length) {
+      swapCombinations.push(selectedSwaps);
+      return;
+    }
+
+    enumerateSwapCombinations(index + 1, selectedSwaps);
+    for (const choice of swapChoices[index]) {
+      enumerateSwapCombinations(index + 1, [...selectedSwaps, choice]);
+    }
+  }
+  enumerateSwapCombinations(0, []);
+
   const results = [];
 
-  for (const swap of swaps) {
+  for (const swaps of swapCombinations) {
     for (const linkedIds of optionSets) {
-      // Build the candidate ID list: remove swapped-out section, add replacement + request + linked
-      const next = draftIds.filter((id) => !swap.old || id !== swap.old);
-      if (swap.replacement) next.push(swap.replacement);
-      next.push(requestedId, ...linkedIds);
+      const swappedOutIds = new Set(swaps.map((swap) => swap.old));
+      const next = draftIds.filter((id) => !swappedOutIds.has(id));
+      next.push(...swaps.map((swap) => swap.replacement));
+      if (!next.includes(requestedId)) next.push(requestedId);
+      for (const linkedId of linkedIds) {
+        if (!next.includes(linkedId)) next.push(linkedId);
+      }
 
       // Dedup within this candidate (guards against edge cases)
       const uniqueIds = [...new Set(next)];
       if (uniqueIds.length !== next.length) continue;
 
-      // Independently validate the full candidate
+      // A complete valid schedule must be reachable from this step.
       const validation = validateDraft(uniqueIds, catalog);
       if (!validation.ok) continue;
 
+      const linkedIdsToAdd = new Set(linkedIds.filter((id) => !draftIds.includes(id)));
+      const stepIds = uniqueIds.filter((id) => !linkedIdsToAdd.has(id));
+      const candidateIds = firstStep ? stepIds : uniqueIds;
       results.push({
-        ids: uniqueIds.slice().sort((a, b) => a.localeCompare(b)),
-        swap: swap.old ? { old: swap.old, replacement: swap.replacement } : null,
-        added: uniqueIds.filter((id) => !draftIds.includes(id)).sort((a, b) => a.localeCompare(b)),
-        kept: draftIds.filter((id) => id !== swap.old).slice().sort((a, b) => a.localeCompare(b)),
-        validation,
+        ids: candidateIds.slice().sort((a, b) => a.localeCompare(b)),
+        swap: swaps[0] || null,
+        swaps,
+        added: candidateIds.filter((id) => !draftIds.includes(id)).sort((a, b) => a.localeCompare(b)),
+        kept: draftIds.filter((id) => !swappedOutIds.has(id)).slice().sort((a, b) => a.localeCompare(b)),
+        validation: Object.freeze({
+          ...validation,
+          stagedLinkedRequirement: firstStep && linkedIdsToAdd.size > 0,
+        }),
       });
     }
   }
@@ -161,10 +189,10 @@ export function enumerateRepairs(draftIds, catalog, requestedId = REQUESTED_SECT
     if (!deduplicated.has(key)) deduplicated.set(key, candidate);
   }
 
-  // Order: no-swap candidates first, then lexically by ID key
+  // Prefer the smallest change set, then use IDs for deterministic ordering.
   return [...deduplicated.values()].sort(
     (a, b) =>
-      Number(Boolean(a.swap)) - Number(Boolean(b.swap)) ||
+      a.swaps.length - b.swaps.length ||
       a.ids.join('|').localeCompare(b.ids.join('|'))
   );
 }
@@ -173,31 +201,31 @@ export function enumerateRepairs(draftIds, catalog, requestedId = REQUESTED_SECT
  * Re-derive and validate a candidate from current state at use time.
  * Never trusts a stored valid flag or UI object property.
  *
- * Checks that:
- * 1. candidateIds is an array of non-empty strings with no duplicates.
- * 2. candidateIds independently passes validateDraft against current catalog.
- * 3. candidateIds exactly matches one of the candidate repair option sets
- *    produced by enumerateRepairs for the current draft, catalog, and requestedId.
+ * Checks that candidateIds exactly matches one of the candidate repair option sets
+ * produced by enumerateRepairs for the current draft, catalog, requestedId, and options.
  *
  * @param {string[]} draftIds - Current selected section IDs
  * @param {string[]} candidateIds - Proposed candidate section IDs to revalidate
  * @param {object[]} catalog - Full section catalogue
  * @param {string} [requestedId] - Requested section ID (defaults to REQUESTED_SECTION_ID)
+ * @param {{firstStep?: boolean}} [options] - Candidate enumeration mode to revalidate against
  * @returns {boolean}
  */
-export function isCurrentCandidate(draftIds, candidateIds, catalog, requestedId = REQUESTED_SECTION_ID) {
+export function isCurrentCandidate(
+  draftIds,
+  candidateIds,
+  catalog,
+  requestedId = REQUESTED_SECTION_ID,
+  options = {}
+) {
   if (!Array.isArray(candidateIds) || candidateIds.length === 0) return false;
   if (candidateIds.some((id) => typeof id !== 'string' || !id)) return false;
   if (new Set(candidateIds).size !== candidateIds.length) return false;
 
-  const valid = validateDraft(candidateIds, catalog);
-  if (!valid.ok) return false;
-
   const sortedCandidate = [...candidateIds].sort((a, b) => a.localeCompare(b));
   const candidateKey = sortedCandidate.join('|');
 
-  return enumerateRepairs(draftIds, catalog, requestedId).some(
+  return enumerateRepairs(draftIds, catalog, requestedId, options).some(
     (candidate) => candidate.ids.join('|') === candidateKey
   );
 }
-

@@ -1553,6 +1553,23 @@ body {
   flex: 0 0 auto;
 }
 
+.nb-repair-action {
+  animation: nb-repair-flash 0.8s steps(1, end) infinite;
+}
+
+@keyframes nb-repair-flash {
+  50% {
+    color: #fff;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nb-repair-action {
+    animation: none;
+    color: #000;
+  }
+}
+
 .nb-courses-hint {
   font-family: 'JetBrains Mono', monospace;
   font-size: 9px;

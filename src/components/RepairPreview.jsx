@@ -8,6 +8,7 @@ import {
   Check,
   X,
   AlertCircle,
+  Info,
   Users,
   Wrench,
 } from 'lucide-react';
@@ -65,25 +66,28 @@ export default function RepairPreview({ state, dispatch, onClose }) {
 
   // Deriving explicit groups:
   // SWAP: old -> replacement
-  const swap = candidate.swap;
-  const oldSection = swap?.old ? byId.get(swap.old) : null;
-  const replacementSection = swap?.replacement ? byId.get(swap.replacement) : null;
+  const swaps = candidate.swaps?.length
+    ? candidate.swaps
+    : candidate.swap
+      ? [candidate.swap]
+      : [];
+  const swappedOutIds = new Set(swaps.map((swap) => swap.old));
+  const replacementIds = new Set(swaps.map((swap) => swap.replacement));
 
   // ADD: newly added sections (excluding replacement which is shown in SWAP)
   const candidateAdded = candidate.added || candidate.ids.filter((id) => !draft.includes(id));
-  const addIds = candidateAdded.filter(
-    (id) => !swap || id !== swap.replacement
-  );
+  const addIds = candidateAdded.filter((id) => !replacementIds.has(id));
   const addSections = addIds.map((id) => byId.get(id)).filter(Boolean);
 
   // KEEP: retained draft sections (excluding swapped-out section)
-  const candidateKept = candidate.kept || draft.filter((id) => !swap || id !== swap.old);
+  const candidateKept = candidate.kept || draft.filter((id) => !swappedOutIds.has(id));
   const keepSections = candidateKept.map((id) => byId.get(id)).filter(Boolean);
 
   // Validation details
   const isPlanA = scenario === 'main';
   const hasLinkedLab = candidate.ids.some((id) => id.includes('L-') || id.includes('LAB'));
   const linkedLabSection = candidate.ids.find((id) => id.includes('L-') || id.includes('LAB'));
+  const needsLinkedLabStep = Boolean(candidate.validation?.stagedLinkedRequirement) && !hasLinkedLab;
 
   const motionTransition = shouldReduceMotion
     ? { duration: 0 }
@@ -201,59 +205,71 @@ export default function RepairPreview({ state, dispatch, onClose }) {
                     ⇄
                   </span>
                   <span className="font-['Archivo_Black',sans-serif] text-xs uppercase text-amber-950 font-bold tracking-wider">
-                    Swap ({swap ? 1 : 0})
+                    Swap ({swaps.length})
                   </span>
                 </div>
-                <span className="text-[9px] font-bold text-amber-800 uppercase">Resolves Clash</span>
+                <span className="text-[9px] font-bold text-amber-800 uppercase">
+                  {swaps.length > 1 ? 'Resolves Clashes' : 'Resolves Clash'}
+                </span>
               </div>
 
               <div className="flex-1 flex flex-col justify-center">
-                {swap && oldSection && replacementSection ? (
-                  <div className="bg-white rounded border border-amber-500/50 p-2 shadow-xs text-xs space-y-2">
-                    {/* Old Section (Replaced) */}
-                    <div className="border-l-2 border-rose-500 pl-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[9px] font-bold uppercase text-rose-700 bg-rose-50 px-1 rounded">
-                          Swapped Out
-                        </span>
-                        <span className="line-through font-mono text-[10px] text-slate-500">
-                          {oldSection.id}
-                        </span>
-                      </div>
-                      <div className="text-[11px] font-semibold text-slate-700 line-through truncate">
-                        {oldSection.title}
-                      </div>
-                      <div className="text-[10px] text-slate-500 font-mono">
-                        {formatCourseSlot(oldSection)}
-                      </div>
-                    </div>
+                {swaps.length > 0 ? (
+                  <div className="space-y-2">
+                    {swaps.map((swap) => {
+                      const oldSection = byId.get(swap.old);
+                      const replacementSection = byId.get(swap.replacement);
+                      if (!oldSection || !replacementSection) return null;
 
-                    {/* Arrow Divider */}
-                    <div className="flex items-center justify-center py-0.5 text-amber-700">
-                      <ArrowRight className="w-4 h-4" aria-hidden="true" />
-                    </div>
+                      return (
+                        <div
+                          key={`${swap.old}-${swap.replacement}`}
+                          className="bg-white rounded border border-amber-500/50 p-2 shadow-xs text-xs space-y-2"
+                        >
+                          <div className="border-l-2 border-rose-500 pl-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[9px] font-bold uppercase text-rose-700 bg-rose-50 px-1 rounded">
+                                Swapped Out
+                              </span>
+                              <span className="line-through font-mono text-[10px] text-slate-500">
+                                {oldSection.id}
+                              </span>
+                            </div>
+                            <div className="text-[11px] font-semibold text-slate-700 line-through truncate">
+                              {oldSection.title}
+                            </div>
+                            <div className="text-[10px] text-slate-500 font-mono">
+                              {formatCourseSlot(oldSection)}
+                            </div>
+                          </div>
 
-                    {/* Replacement Section */}
-                    <div className="border-l-2 border-emerald-500 pl-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[9px] font-bold uppercase text-emerald-800 bg-emerald-50 px-1 rounded">
-                          Alternate Section
-                        </span>
-                        <strong className="font-['Archivo_Black',sans-serif] text-emerald-950">
-                          {replacementSection.id}
-                        </strong>
-                      </div>
-                      <div className="text-[11px] font-semibold text-slate-800 truncate">
-                        {replacementSection.title}
-                      </div>
-                      <div className="mt-0.5 flex items-center justify-between text-[10px] text-slate-600 font-mono">
-                        <span>{formatCourseSlot(replacementSection)}</span>
-                        <span className="flex items-center gap-0.5 text-slate-500">
-                          <Users className="w-3 h-3" aria-hidden="true" />
-                          {replacementSection.enrolled}/{replacementSection.capacity}
-                        </span>
-                      </div>
-                    </div>
+                          <div className="flex items-center justify-center py-0.5 text-amber-700">
+                            <ArrowRight className="w-4 h-4" aria-hidden="true" />
+                          </div>
+
+                          <div className="border-l-2 border-emerald-500 pl-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[9px] font-bold uppercase text-emerald-800 bg-emerald-50 px-1 rounded">
+                                Alternate Section
+                              </span>
+                              <strong className="font-['Archivo_Black',sans-serif] text-emerald-950">
+                                {replacementSection.id}
+                              </strong>
+                            </div>
+                            <div className="text-[11px] font-semibold text-slate-800 truncate">
+                              {replacementSection.title}
+                            </div>
+                            <div className="mt-0.5 flex items-center justify-between text-[10px] text-slate-600 font-mono">
+                              <span>{formatCourseSlot(replacementSection)}</span>
+                              <span className="flex items-center gap-0.5 text-slate-500">
+                                <Users className="w-3 h-3" aria-hidden="true" />
+                                {replacementSection.enrolled}/{replacementSection.capacity}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 ) : (
                   <div className="text-[11px] text-amber-800/80 italic p-2 text-center">
@@ -318,7 +334,7 @@ export default function RepairPreview({ state, dispatch, onClose }) {
             <div className="flex items-center gap-2 mb-2">
               <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" aria-hidden="true" />
               <strong className="font-['Archivo_Black',sans-serif] text-[11px] uppercase tracking-wide text-emerald-950">
-                Encoded Validation Checks Passed
+                {needsLinkedLabStep ? 'First Repair Step' : 'Encoded Validation Checks Passed'}
               </strong>
             </div>
 
@@ -330,10 +346,14 @@ export default function RepairPreview({ state, dispatch, onClose }) {
                 </span>
               </li>
               <li className="flex items-start gap-1.5">
-                <Check className="w-3.5 h-3.5 text-emerald-700 shrink-0 mt-0.5" aria-hidden="true" />
+                {needsLinkedLabStep
+                  ? <Info className="w-3.5 h-3.5 text-amber-700 shrink-0 mt-0.5" aria-hidden="true" />
+                  : <Check className="w-3.5 h-3.5 text-emerald-700 shrink-0 mt-0.5" aria-hidden="true" />}
                 <span>
-                  <strong>Linked Lab:</strong> Satisfied{' '}
-                  {linkedLabSection ? `(${linkedLabSection})` : 'requirement met'}.
+                  <strong>Linked Lab:</strong>{' '}
+                  {needsLinkedLabStep
+                    ? 'Choose a lab from Available Courses after applying this step.'
+                    : `Satisfied ${linkedLabSection ? `(${linkedLabSection})` : 'requirement met'}.`}
                 </span>
               </li>
               <li className="flex items-start gap-1.5">

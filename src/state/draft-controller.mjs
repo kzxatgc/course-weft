@@ -519,7 +519,8 @@ export function reduce(state, action) {
       const candidates = enumerateRepairs(
         state.draft,
         state.availableCourses,
-        requestedId
+        requestedId,
+        { firstStep: true }
       );
 
       if (!candidates || candidates.length === 0) {
@@ -567,7 +568,13 @@ export function reduce(state, action) {
       }
 
       // Revalidate immediately before Apply: ensure candidate matches current state
-      if (!isCurrentCandidate(state.draft, candidate.ids, state.availableCourses, requestedId)) {
+      if (!isCurrentCandidate(
+        state.draft,
+        candidate.ids,
+        state.availableCourses,
+        requestedId,
+        { firstStep: true }
+      )) {
         return Object.freeze({
           ...state,
           candidate: null,
@@ -582,7 +589,13 @@ export function reduce(state, action) {
 
       // Revalidate whole-draft against current catalog
       const finalCheck = validateDraft(candidate.ids, state.availableCourses);
-      if (!finalCheck.ok) {
+      const isValidFirstStep = finalCheck.reason === 'linked-group-invalid' &&
+        candidate.ids.includes(requestedId) &&
+        validateDraft(
+          candidate.ids.filter((id) => id !== requestedId),
+          state.availableCourses
+        ).ok;
+      if (!finalCheck.ok && !isValidFirstStep) {
         return Object.freeze({
           ...state,
           candidate: null,
@@ -611,7 +624,9 @@ export function reduce(state, action) {
         notice: Object.freeze({
           kind: 'success',
           title: 'Timetable updated',
-          message: 'The changes are saved.',
+          message: isValidFirstStep
+            ? `${requestedId} has been added in this repair step. Choose its linked lab from Available Courses to complete your schedule.`
+            : 'The changes are saved.',
         }),
       });
     }

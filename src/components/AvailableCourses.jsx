@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useId, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { Search, X, Users, Undo2, Redo2, RotateCcw } from 'lucide-react';
+import { Search, X, Users, Undo2, Redo2, RotateCcw, Wrench } from 'lucide-react';
 import { ACTION, canUndo, canRedo } from '../state/draft-controller.mjs';
 import { INITIAL_DRAFT } from '../domain/available-courses.mjs';
 
@@ -49,6 +49,7 @@ export default function AvailableCourses({
   search: controlledSearch = '',
   state = null,
   onPreviewSectionChange,
+  repairPreviewId = null,
   onRequestSwap,
   animatingReturnId = null,
   returningCardId = null,
@@ -68,6 +69,7 @@ export default function AvailableCourses({
   const [heldCard, setHeldCard] = useState(null);
   const pointerStateRef = useRef(null);
   const isRestoringTimeoutRef = useRef(null);
+  const preservePreviewOnBlurRef = useRef(false);
   const panelRef = useRef(null);
 
   // Keep local search in sync when controlled search changes
@@ -349,7 +351,9 @@ export default function AvailableCourses({
         handleCardClick(cur.item, dropInfo);
       } else {
         // Red drop or outside timetable: animate back to original position
-        onPreviewSectionChange?.(null);
+        const keepConflictPreview = touchesTimetable && hasConflict;
+        preservePreviewOnBlurRef.current = keepConflictPreview;
+        onPreviewSectionChange?.(keepConflictPreview ? cur.item.id : null);
         setHeldCard({
           item: cur.item,
           currentX: cur.origRect.left + cur.offsetX,
@@ -410,6 +414,34 @@ export default function AvailableCourses({
             >
               {availableItems.length}
             </span>
+            {repairPreviewId && dispatch && (
+              <button
+                type="button"
+                onPointerDown={(event) => event.preventDefault()}
+                onBlur={() => {
+                  preservePreviewOnBlurRef.current = false;
+                  onPreviewSectionChange?.(null);
+                }}
+                onClick={() => {
+                  dispatch({ type: ACTION.SET_REQUEST, payload: repairPreviewId });
+                  dispatch({
+                    type: ACTION.SET_NOTICE,
+                    payload: {
+                      kind: 'error',
+                      title: 'Review the timetable conflict',
+                      message: `A valid repair is available for ${repairPreviewId}. Find a valid repair to review possible changes. Your timetable will not change until you apply the repair.`,
+                      action: 'suggest',
+                    },
+                  });
+                }}
+                aria-label={`Find a valid repair for ${repairPreviewId}`}
+                title={`Find a valid repair for ${repairPreviewId}`}
+                data-repair-action
+                className="nb-repair-action inline-flex h-6 w-4 items-center justify-center border-0 bg-transparent p-0 text-[var(--color-navy)] hover:opacity-70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--color-navy)] transition-opacity cursor-pointer shrink-0"
+              >
+                <Wrench size={12} strokeWidth={2.5} aria-hidden="true" />
+              </button>
+            )}
           </div>
 
           {/* Search bar on top right replacing static text */}
@@ -517,8 +549,18 @@ export default function AvailableCourses({
                     draggedCardIdRef.current = null;
                     onPreviewSectionChange?.(null);
                   }}
-                  onFocus={() => !isFullLab && onPreviewSectionChange?.(item.id)}
-                  onBlur={() => onPreviewSectionChange?.(null)}
+                  onFocus={() => {
+                    preservePreviewOnBlurRef.current = false;
+                    if (!isFullLab) onPreviewSectionChange?.(item.id);
+                  }}
+                  onBlur={(event) => {
+                    if (
+                      !preservePreviewOnBlurRef.current &&
+                      !event.relatedTarget?.closest?.('[data-repair-action]')
+                    ) {
+                      onPreviewSectionChange?.(null);
+                    }
+                  }}
                   onPointerDown={(e) => handlePointerDown(e, item)}
                   className={`nb-course-card w-[195px] min-w-[195px] shrink-0 bg-[var(--color-cream)] border-2 border-[var(--color-navy)] rounded p-2 flex flex-col justify-between gap-1.5 text-left transition-colors duration-75 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-blue)] touch-none ${
                     isFullLab
