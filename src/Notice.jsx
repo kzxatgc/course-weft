@@ -12,7 +12,7 @@ import { playSound } from './audio/optional-sounds.js';
  * directly above all desktop windows, including the Schedule Repair window.
  *
  * @param {{
- *   notice: { kind: 'error' | 'success' | 'info', title: string, message: string, action?: string } | null,
+ *   notice: { kind: 'error' | 'success' | 'info', title: string, message: string, action?: string, emphasizedCourseId?: string } | null,
  *   onDismiss?: () => void,
  *   onAction?: () => void,
  * }} props
@@ -47,6 +47,23 @@ export default function Notice({ notice, onDismiss, onAction }) {
   };
 
   const currentStyle = notice ? kindStyles[notice.kind] || kindStyles.info : kindStyles.info;
+
+  function renderNoticeMessage() {
+    const message = notice?.message ?? '';
+    const courseId = notice?.emphasizedCourseId;
+    if (!courseId) return message;
+
+    const courseIdIndex = message.indexOf(courseId);
+    if (courseIdIndex === -1) return message;
+
+    return (
+      <>
+        {message.slice(0, courseIdIndex)}
+        <strong className="font-bold text-[var(--color-navy)]">{courseId}</strong>
+        {message.slice(courseIdIndex + courseId.length)}
+      </>
+    );
+  }
 
   // Render centered conflict alert when repair is available.
   function renderModalContent() {
@@ -112,7 +129,7 @@ export default function Notice({ notice, onDismiss, onAction }) {
                     id="alert-dialog-desc"
                     className="mt-1.5 text-xs text-slate-800 leading-relaxed font-sans"
                   >
-                    {notice.message}
+                    {renderNoticeMessage()}
                   </p>
                 </div>
               </div>
@@ -183,7 +200,7 @@ export default function Notice({ notice, onDismiss, onAction }) {
                   {notice.title}
                 </strong>
                 <p className="mt-1 text-xs sm:text-sm text-slate-700 leading-relaxed">
-                  {notice.message}
+                  {renderNoticeMessage()}
                 </p>
               </div>
             </div>

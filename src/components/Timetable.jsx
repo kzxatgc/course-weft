@@ -145,6 +145,15 @@ export default function Timetable({
       const cur = pointerStateRef.current;
       const dx = moveEvent.clientX - cur.startX;
       const dy = moveEvent.clientY - cur.startY;
+      const panelRect = document.querySelector('.nb-courses-panel')?.getBoundingClientRect();
+      const cardLeft = moveEvent.clientX - cur.offsetX;
+      const cardTop = moveEvent.clientY - cur.offsetY;
+      const isOverAvailableCourses = isCardTouchingAvailableCourses({
+        left: cardLeft,
+        top: cardTop,
+        right: cardLeft + cur.origRect.width,
+        bottom: cardTop + cur.origRect.height,
+      }, panelRect);
 
       if (!cur.isDragging) {
         if (hasExceededDragThreshold(dx, dy, POINTER_DRAG_THRESHOLD)) {
@@ -157,6 +166,7 @@ export default function Timetable({
             offsetY: cur.offsetY,
             origRect: cur.origRect,
             isRestoring: false,
+            isOverAvailableCourses,
           });
         }
       }
@@ -170,6 +180,7 @@ export default function Timetable({
           offsetY: cur.offsetY,
           origRect: cur.origRect,
           isRestoring: false,
+          isOverAvailableCourses,
         });
       }
     }
@@ -295,8 +306,6 @@ export default function Timetable({
     draggedIdRef.current = null;
   }, []);
 
-  const isEmpty = selectedSections.length === 0;
-
   return (
     <section className="nb-tt relative" aria-label="Weekly schedule timetable" data-testid="timetable">
       <div className="nb-tt-grid-wrap">
@@ -351,14 +360,6 @@ export default function Timetable({
             );
           })}
 
-          {/* Empty state overlay */}
-          {isEmpty && (
-            <div className="nb-tt-empty" aria-live="polite">
-              <span className="nb-tt-empty-icon" aria-hidden="true">📅</span>
-              <p className="nb-tt-empty-msg">No classes on your timetable yet.</p>
-              <p className="nb-tt-empty-hint">Add sections from Available Courses to build your draft schedule.</p>
-            </div>
-          )}
         </div>
       </div>
 
@@ -369,6 +370,8 @@ export default function Timetable({
               <div
                 className={`nb-tt-block nb-tt-block-held ${
                   heldSection.isRestoring ? 'nb-tt-block-held--restoring' : ''
+                } ${
+                  heldSection.isOverAvailableCourses ? 'nb-tt-block-held--over-courses' : ''
                 }`}
                 style={{
                   left: `${heldSection.currentX - heldSection.offsetX}px`,

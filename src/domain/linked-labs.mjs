@@ -12,8 +12,8 @@
  * Each pair contains two adjacent hues from the spectrum.
  */
 export const RAINBOW_ADJACENT_PAIRS = [
-  ['#ec4899', '#8b5cf6'], // Hot Pink & Bright Purple
-  ['#f472b6', '#a855f7'], // Light Pink & Bright Violet
+  ['#ec4899', '#6d28d9'], // Hot Pink & Deep Purple
+  ['#f472b6', '#6b21a8'], // Light Pink & Dark Violet
 ];
 
 /**

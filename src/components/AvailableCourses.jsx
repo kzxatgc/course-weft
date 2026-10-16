@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useId, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { Search, X, Users, Undo2, Redo2, RotateCcw, Wrench } from 'lucide-react';
+import { Search, X, Users, Undo2, Redo2, RotateCcw, Wrench, ChevronLeft, ChevronRight } from 'lucide-react';
 import { ACTION, canUndo, canRedo } from '../state/draft-controller.mjs';
 import { INITIAL_DRAFT } from '../domain/available-courses.mjs';
 
@@ -67,10 +67,14 @@ export default function AvailableCourses({
 
   // Pointer drag-and-drop state
   const [heldCard, setHeldCard] = useState(null);
+  const [pressedCardId, setPressedCardId] = useState(null);
   const pointerStateRef = useRef(null);
   const isRestoringTimeoutRef = useRef(null);
   const preservePreviewOnBlurRef = useRef(false);
   const panelRef = useRef(null);
+  const coursesTrackRef = useRef(null);
+  const courseScrollHoldRef = useRef(null);
+  const [courseScrollState, setCourseScrollState] = useState({ left: false, right: false });
 
   // Keep local search in sync when controlled search changes
   useEffect(() => {
@@ -86,6 +90,7 @@ export default function AvailableCourses({
       if (shakeTimerRef.current) {
         clearTimeout(shakeTimerRef.current);
       }
+      stopCourseScroll();
     };
   }, []);
 
@@ -129,6 +134,64 @@ export default function AvailableCourses({
     const nameMatch = item.title?.toLowerCase().includes(query);
     return Boolean(codeMatch || nameMatch);
   });
+
+  const updateCourseScrollState = useCallback(() => {
+    const track = coursesTrackRef.current;
+    if (!track) return;
+    setCourseScrollState({
+      left: track.scrollLeft > 1,
+      right: track.scrollLeft + track.clientWidth < track.scrollWidth - 1,
+    });
+  }, []);
+
+  useEffect(() => {
+    const track = coursesTrackRef.current;
+    if (!track) return undefined;
+
+    updateCourseScrollState();
+    const resizeObserver = typeof ResizeObserver === 'undefined'
+      ? null
+      : new ResizeObserver(updateCourseScrollState);
+    resizeObserver?.observe(track);
+    window.addEventListener('resize', updateCourseScrollState);
+    return () => {
+      resizeObserver?.disconnect();
+      window.removeEventListener('resize', updateCourseScrollState);
+    };
+  }, [filteredCourses.length, updateCourseScrollState]);
+
+  function scrollCourses(direction, amount = 90, smooth = true) {
+    const track = coursesTrackRef.current;
+    if (!track) return;
+    track.scrollBy({
+      left: direction * amount,
+      behavior: smooth ? 'smooth' : 'auto',
+    });
+  }
+
+  function stopCourseScroll() {
+    const hold = courseScrollHoldRef.current;
+    if (!hold) return;
+    clearTimeout(hold.timeoutId);
+    clearInterval(hold.intervalId);
+    window.removeEventListener('pointerup', hold.release);
+    window.removeEventListener('pointercancel', hold.release);
+    courseScrollHoldRef.current = null;
+  }
+
+  function startCourseScroll(direction) {
+    stopCourseScroll();
+    scrollCourses(direction, 90);
+
+    const hold = { timeoutId: null, intervalId: null, release: null };
+    hold.release = stopCourseScroll;
+    hold.timeoutId = setTimeout(() => {
+      hold.intervalId = setInterval(() => scrollCourses(direction, 90), 175);
+    }, 350);
+    courseScrollHoldRef.current = hold;
+    window.addEventListener('pointerup', hold.release);
+    window.addEventListener('pointercancel', hold.release);
+  }
 
   function handleSearchSubmit(e) {
     e?.preventDefault();
@@ -199,6 +262,8 @@ export default function AvailableCourses({
       triggerShake(item.id);
       return;
     }
+
+    setPressedCardId(item.id);
 
     if (heldCard && heldCard.isSticky) return; // Sticky drop is handled by window listener
 
@@ -340,6 +405,7 @@ export default function AvailableCourses({
 
       if (dropResult.success) {
         // Drop successful: add or switch section and close gap
+        setPressedCardId(null);
         // Capture drop coordinates BEFORE clearing held card (origRect will be gone after)
         const dropInfo = {
           dropPoint: { x: upEvent.clientX, y: upEvent.clientY },
@@ -430,6 +496,7 @@ export default function AvailableCourses({
                       kind: 'error',
                       title: 'Review the timetable conflict',
                       message: `A valid repair is available for ${repairPreviewId}. Find a valid repair to review possible changes. Your timetable will not change until you apply the repair.`,
+                      emphasizedCourseId: repairPreviewId,
                       action: 'suggest',
                     },
                   });
@@ -481,11 +548,30 @@ export default function AvailableCourses({
             >
               <Search size={10} strokeWidth={2.5} aria-hidden="true" />
             </button>
+            <button
+              id="reset-timetable-button"
+              type="button"
+              disabled={!isDraftChanged}
+              onClick={() => {
+                playSound('popup');
+                setShowResetConfirm(true);
+              }}
+              aria-label="Reset timetable to starting selections"
+              title={isDraftChanged ? 'Reset timetable' : 'Timetable is already at starting selections'}
+              className={`flex h-6 w-6 items-center justify-center border-2 transition-colors ${isDraftChanged
+                ? 'border-[var(--color-navy)] bg-white text-[var(--color-navy)] hover:bg-slate-100 cursor-pointer'
+                : 'border-[var(--color-navy)]/30 bg-transparent text-[var(--color-navy)]/35 cursor-not-allowed'
+                }`}
+            >
+              <RotateCcw size={12} strokeWidth={2.5} aria-hidden="true" />
+            </button>
           </form>
         </div>
 
         {/* ── Horizontally scrolling row of Neo-Brutalist cards ─────── */}
         <div
+          ref={coursesTrackRef}
+          onScroll={updateCourseScrollState}
           className="nb-courses-track nb-courses-scroll flex items-stretch gap-2 p-2 overflow-x-auto min-h-[90px]"
           role="list"
           aria-label="Available course sections list"
@@ -568,6 +654,8 @@ export default function AvailableCourses({
                       : 'cursor-grab hover:bg-[var(--color-yellow)]'
                   } ${
                     hasLinkedOutline ? 'nb-linked-outline' : ''
+                  } ${
+                    pressedCardId === item.id ? 'nb-course-card--pressed' : ''
                   } ${
                     isShaking ? 'nb-shake' : ''
                   }`}
@@ -654,10 +742,10 @@ export default function AvailableCourses({
         </div>
       </section>
 
-      {/* ── Outside vertical toolbar on right: Undo, Redo, Reset ── */}
+      {/* ── Outside vertical toolbar: history and course-tray controls ── */}
       <div
-        className="flex flex-col items-center justify-center gap-2 px-1.5 py-2 bg-[var(--color-cream)] border-[2.5px] border-[var(--color-navy)] shrink-0 shadow-none"
-        aria-label="Timetable history controls"
+        className="relative grid grid-rows-4 content-between justify-items-center px-1 py-1 bg-[var(--color-cream)] border-[2.5px] border-[var(--color-navy)] shrink-0 shadow-none"
+        aria-label="Timetable and course tray controls"
       >
         <button
           id="undo-repair-button"
@@ -669,7 +757,7 @@ export default function AvailableCourses({
           }}
           aria-label="Undo last repair — restore previous timetable"
           title={canUndoRepair ? 'Undo repair' : 'Nothing to undo'}
-          className={`flex items-center justify-center w-6 h-6 rounded-none border-2 transition-colors ${canUndoRepair
+          className={`flex items-center justify-center w-5 h-5 rounded-none border-2 transition-colors ${canUndoRepair
             ? 'border-[var(--color-navy)] bg-[var(--color-navy)] text-[var(--color-yellow)] hover:bg-[var(--color-yellow)] hover:text-[var(--color-navy)] cursor-pointer'
             : 'border-[var(--color-navy)]/30 bg-transparent text-[var(--color-navy)]/35 cursor-not-allowed'
             }`}
@@ -687,7 +775,7 @@ export default function AvailableCourses({
           }}
           aria-label="Redo repair — reapply timetable repair"
           title={canRedoRepair ? 'Redo repair' : 'Nothing to redo'}
-          className={`flex items-center justify-center w-6 h-6 rounded-none border-2 transition-colors ${canRedoRepair
+          className={`flex items-center justify-center w-5 h-5 rounded-none border-2 transition-colors ${canRedoRepair
             ? 'border-[var(--color-navy)] bg-[var(--color-navy)] text-[var(--color-yellow)] hover:bg-[var(--color-yellow)] hover:text-[var(--color-navy)] cursor-pointer'
             : 'border-[var(--color-navy)]/30 bg-transparent text-[var(--color-navy)]/35 cursor-not-allowed'
             }`}
@@ -695,22 +783,47 @@ export default function AvailableCourses({
           <Redo2 size={12} strokeWidth={2.5} aria-hidden="true" />
         </button>
 
+        <div className="absolute left-1/2 top-1/2 h-px w-5 -translate-x-1/2 -translate-y-1/2 bg-[var(--color-navy)]/35" aria-hidden="true" />
+
         <button
-          id="reset-timetable-button"
-          type="button"
-          disabled={!isDraftChanged}
-          onClick={() => {
-            playSound('popup');
-            setShowResetConfirm(true);
-          }}
-          aria-label="Reset timetable to starting selections"
-          title={isDraftChanged ? 'Reset timetable' : 'Timetable is already at starting selections'}
-          className={`flex items-center justify-center w-6 h-6 rounded-none border-2 transition-colors ${isDraftChanged
-            ? 'border-[var(--color-navy)] bg-white text-[var(--color-navy)] hover:bg-slate-100 cursor-pointer'
-            : 'border-[var(--color-navy)]/30 bg-transparent text-[var(--color-navy)]/35 cursor-not-allowed'
+            type="button"
+            disabled={!courseScrollState.left}
+            onPointerDown={(event) => {
+              if (event.button === 0) startCourseScroll(-1);
+            }}
+            onClick={(event) => {
+              if (event.detail === 0) scrollCourses(-1, 90);
+            }}
+            onBlur={stopCourseScroll}
+            aria-label="Scroll courses left"
+            title="Previous courses"
+            className={`flex h-5 w-5 items-center justify-center border-2 transition-colors ${
+              courseScrollState.left
+                ? 'border-[var(--color-navy)] bg-white text-[var(--color-navy)] hover:bg-[var(--color-yellow)] cursor-pointer'
+                : 'border-[var(--color-navy)]/30 bg-transparent text-[var(--color-navy)]/35 cursor-not-allowed'
             }`}
         >
-          <RotateCcw size={12} strokeWidth={2.5} aria-hidden="true" />
+            <ChevronLeft size={14} strokeWidth={2.5} aria-hidden="true" />
+        </button>
+        <button
+            type="button"
+            disabled={!courseScrollState.right}
+            onPointerDown={(event) => {
+              if (event.button === 0) startCourseScroll(1);
+            }}
+            onClick={(event) => {
+              if (event.detail === 0) scrollCourses(1, 90);
+            }}
+            onBlur={stopCourseScroll}
+            aria-label="Scroll courses right"
+            title="More courses"
+            className={`flex h-5 w-5 items-center justify-center border-2 transition-colors ${
+              courseScrollState.right
+                ? 'border-[var(--color-navy)] bg-white text-[var(--color-navy)] hover:bg-[var(--color-yellow)] cursor-pointer'
+                : 'border-[var(--color-navy)]/30 bg-transparent text-[var(--color-navy)]/35 cursor-not-allowed'
+            }`}
+        >
+            <ChevronRight size={14} strokeWidth={2.5} aria-hidden="true" />
         </button>
       </div>
 

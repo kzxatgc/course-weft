@@ -574,6 +574,19 @@ describe('Apply / Undo / Dismiss / Reset wiring', () => {
     assert.ok(source.includes('notice && !modalContent'));
   });
 
+  it('repair alert emphasizes the course ID in its message', async () => {
+    const { readFileSync } = await import('node:fs');
+    const noticeSource = readFileSync(new URL('../src/Notice.jsx', import.meta.url), 'utf8');
+    const coursesSource = readFileSync(
+      new URL('../src/components/AvailableCourses.jsx', import.meta.url),
+      'utf8'
+    );
+    assert.ok(coursesSource.includes('emphasizedCourseId: repairPreviewId'));
+    assert.ok(noticeSource.includes('notice?.emphasizedCourseId'));
+    assert.ok(noticeSource.includes('<strong className="font-bold text-[var(--color-navy)]">{courseId}</strong>'));
+    assert.ok(noticeSource.includes('{renderNoticeMessage()}'));
+  });
+
   it('AvailableCourses includes inline Undo, Redo, and Reset icon buttons wired to correct actions', async () => {
     const { readFileSync } = await import('node:fs');
     const src = readFileSync(
@@ -592,6 +605,10 @@ describe('Apply / Undo / Dismiss / Reset wiring', () => {
     assert.ok(src.includes('Undo2'), 'AvailableCourses must import Undo2 icon');
     assert.ok(src.includes('Redo2'), 'AvailableCourses must import Redo2 icon');
     assert.ok(src.includes('RotateCcw'), 'AvailableCourses must import RotateCcw icon');
+    assert.ok(src.includes('Scroll available courses'), 'Course tray navigation must have an accessible group');
+    assert.ok(src.includes('Scroll courses left'), 'Course tray must have a left navigation button');
+    assert.ok(src.includes('Scroll courses right'), 'Course tray must have a right navigation button');
+    assert.ok(src.includes('track.scrollBy'), 'Course tray buttons must scroll the course list');
   });
 
   it('REDO_REPAIR reapplies undone repair timetable and restores canUndo state', async () => {
@@ -1356,8 +1373,15 @@ describe('Available Courses drag, drop, and cancel', () => {
       );
       // Click without drag threshold: pointer state must be cleared without entering heldCard
       assert.ok(src.includes('Simple click (no drag): do nothing'), 'AvailableCourses treats plain click as no-op');
+      assert.ok(src.includes('setPressedCardId(item.id)'), 'A pressed course stays visually selected after release');
+      assert.ok(src.includes("pressedCardId === item.id ? 'nb-course-card--pressed'"), 'The pressed course retains its active card styling');
+      assert.ok(src.includes(`if (dropResult.success) {
+        // Drop successful: add or switch section and close gap
+        setPressedCardId(null);`), 'Only a successful drop clears the pressed-course highlight');
       // Drag must still be initiated when threshold is exceeded
       assert.ok(src.includes('hasExceededDragThreshold'), 'AvailableCourses initiates drag only above threshold');
+      const css = readFileSync(new URL('../src/app.css', import.meta.url), 'utf8');
+      assert.ok(css.includes('.nb-course-card.nb-course-card--pressed'), 'The pressed course uses the yellow raised-card style');
     });
   });
 
@@ -1428,6 +1452,8 @@ describe('Available Courses drag, drop, and cancel', () => {
       assert.ok(src.includes('handleSectionPointerDown'), 'Timetable implements handleSectionPointerDown');
       assert.ok(src.includes('nb-tt-block-placeholder'), 'Timetable renders placeholder when dragging block');
       assert.ok(src.includes('nb-tt-block-held'), 'Timetable renders held floating section overlay');
+      assert.ok(src.includes('isOverAvailableCourses'), 'Held timetable block tracks overlap with the Available Courses tray');
+      assert.ok(src.includes('nb-tt-block-held--over-courses'), 'Held timetable block highlights over the Available Courses tray');
       assert.ok(src.includes('nb-tt-swap-outgoing'), 'Timetable applies nb-tt-swap-outgoing to outgoing section');
       assert.ok(src.includes('nb-tt-swap-incoming'), 'Timetable renders incoming swap preview');
     });
@@ -1443,6 +1469,7 @@ describe('Available Courses drag, drop, and cancel', () => {
       assert.ok(css.includes('.nb-tt-block-remove'), 'app.css has .nb-tt-block-remove');
       assert.ok(css.includes('.nb-tt-block-placeholder'), 'app.css has .nb-tt-block-placeholder');
       assert.ok(css.includes('.nb-tt-block-held'), 'app.css has .nb-tt-block-held');
+      assert.ok(css.includes('.nb-tt-block-held--over-courses'), 'app.css highlights held timetable blocks over the course tray');
       assert.ok(
         css.includes('nb-tt-swap-out') && css.includes('prefers-reduced-motion'),
         'app.css respects prefers-reduced-motion for swap animations'
@@ -1535,6 +1562,7 @@ describe('Available Courses drag, drop, and cancel', () => {
       assert.strictEqual(Array.isArray(pair), true);
       assert.strictEqual(pair.length, 2);
       assert.ok(RAINBOW_ADJACENT_PAIRS.some((p) => p[0] === pair[0] && p[1] === pair[1]));
+      assert.deepStrictEqual(RAINBOW_ADJACENT_PAIRS.map(([, purple]) => purple), ['#6d28d9', '#6b21a8']);
     });
 
     it('moving outline follows pointer independently of fixed preview', async () => {
