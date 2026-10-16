@@ -1,5 +1,5 @@
 /**
- * optional-sounds.js — Task 29
+ * optional-sounds.js
  *
  * Provides optional sound cues using Howler.js for key user interactions:
  *   - 'popup': a gentle chord when a modal / dialog appears

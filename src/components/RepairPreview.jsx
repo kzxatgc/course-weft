@@ -15,7 +15,7 @@ import { ACTION } from '../state/draft-controller.mjs';
 import { formatCourseSlot } from '../domain/time.mjs';
 
 /**
- * RepairPreview — Task 27
+ * RepairPreview
  *
  * Renders the Add / Swap / Keep impact preview panel when a validated
  * repair candidate is available in state (state.candidate !== null).

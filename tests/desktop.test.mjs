@@ -1,6 +1,6 @@
 /**
- * Task 23 — Desktop dock and Settings color themes
- * Task 24 — Website Info window
+ * Desktop dock and Settings color themes
+ * Website Info window
  * Tests cover the pure logic and data contracts:
  *   - Theme catalogue completeness and colour formats
  *   - Default theme identity
@@ -109,7 +109,7 @@ describe('WINDOW_CONFIGS', () => {
   });
 });
 
-// ── Task 24 — Website Info window ────────────────────────────────────────────
+// ── Website Info window ────────────────────────────────────────────
 describe('WebsiteInfo window config', () => {
   const infoCfg = WINDOW_CONFIGS.find((w) => w.id === 'websiteInfo');
 
@@ -209,7 +209,7 @@ describe('Theme colour contrast', () => {
   }
 });
 
-// ── Task 25 — Timetable pure-logic tests ──────────────────────────────────────
+// ──Timetable pure-logic tests ──────────────────────────────────────
 import { MAIN_CATALOG, INITIAL_DRAFT } from '../src/domain/available-courses.mjs';
 import { formatTime, formatTimeRange } from '../src/domain/time.mjs';
 
@@ -341,10 +341,10 @@ describe('Timetable — remove control (domain side)', () => {
   });
 });
 
-// ── Task 26 — Available Courses search, 24h slots, and cards ────────────────
+// ── Available Courses search, 24h slots, and cards ────────────────
 import { format24hTime, formatCourseSlot } from '../src/domain/time.mjs';
 
-describe('Task 26 — Available Courses and search', () => {
+describe('Available Courses and search', () => {
   it('format24hTime formats minutes into 4-digit 24h time', () => {
     assert.equal(format24hTime(480), '0800');
     assert.equal(format24hTime(600), '1000');
@@ -408,8 +408,8 @@ describe('Task 26 — Available Courses and search', () => {
   });
 });
 
-// ── Task 27: Add/Swap/Keep Repair Preview ─────────────────────────────────────
-describe('Task 27 — Repair Preview impact groups and controller wiring', () => {
+// ── Add/Swap/Keep Repair Preview ─────────────────────────────────────
+describe('Repair Preview impact groups and controller wiring', () => {
   it('package.json includes motion in dependencies', async () => {
     const { readFileSync } = await import('node:fs');
     const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
@@ -475,8 +475,8 @@ describe('Task 27 — Repair Preview impact groups and controller wiring', () =>
   });
 });
 
-// ── Task 28: Wire Apply/Undo/dismiss/reset ────────────────────────────────────
-describe('Task 28 — Apply / Undo / Dismiss / Reset wiring', () => {
+// ── Wire Apply/Undo/dismiss/reset ────────────────────────────────────
+describe('Apply / Undo / Dismiss / Reset wiring', () => {
   it('canUndo returns false on initial state', async () => {
     const { initialState, canUndo } = await import('../src/state/draft-controller.mjs');
     const s0 = initialState();
@@ -606,7 +606,7 @@ describe('Task 28 — Apply / Undo / Dismiss / Reset wiring', () => {
     assert.ok(src.includes('state={state}'), 'EarlySchedulePreview must pass state to AvailableCourses');
   });
 
-  // ── Task 29: Optional local sound cues with Howler.js ──────────────────────
+  // ── Optional local sound cues with Howler.js ──────────────────────
   it('optional-sounds exports functions with default-off mute and safe toggle', async () => {
     const { isSoundEnabled, setSoundEnabled, toggleSound, playSound } = await import(
       '../src/audio/optional-sounds.js'
@@ -684,3 +684,164 @@ describe('Task 28 — Apply / Undo / Dismiss / Reset wiring', () => {
 
 
 
+
+// ------------------------------------------------------------------------
+// Drop-preview domain logic
+// ------------------------------------------------------------------------
+
+import {
+  snapToGrid,
+  clampToDayBounds,
+  pointerXToMinute,
+  computeEndMinute,
+  buildGhostPreview,
+  DT_SECTION_ID,
+  DAY_START_MIN,
+  DAY_END_MIN,
+} from '../src/domain/drop-preview.mjs';
+
+describe('drop-preview domain', () => {
+
+  describe('snapToGrid', () => {
+    it('snaps exactly on a 15-min boundary to itself', () => {
+      assert.equal(snapToGrid(480), 480);
+      assert.equal(snapToGrid(630), 630);
+      assert.equal(snapToGrid(1080), 1080);
+    });
+
+    it('snaps 10:23 (623 min) up to 10:30 (630)', () => {
+      assert.equal(snapToGrid(623), 630);
+    });
+
+    it('snaps 10:07 (607 min) down to 10:00 (600)', () => {
+      assert.equal(snapToGrid(607), 600);
+    });
+  });
+
+  describe('clampToDayBounds', () => {
+    it('clamps below 8:00 to 8:00 (480)', () => {
+      assert.equal(clampToDayBounds(400), DAY_START_MIN);
+      assert.equal(clampToDayBounds(0), DAY_START_MIN);
+    });
+
+    it('clamps above 18:00 to 18:00 (1080)', () => {
+      assert.equal(clampToDayBounds(1200), DAY_END_MIN);
+    });
+
+    it('passes through values inside bounds unchanged', () => {
+      assert.equal(clampToDayBounds(630), 630);
+      assert.equal(clampToDayBounds(840), 840);
+    });
+
+    it('returns exact lower bound unchanged', () => {
+      assert.equal(clampToDayBounds(DAY_START_MIN), DAY_START_MIN);
+    });
+
+    it('returns exact upper bound unchanged', () => {
+      assert.equal(clampToDayBounds(DAY_END_MIN), DAY_END_MIN);
+    });
+  });
+
+  describe('pointerXToMinute � 10:30 snap test', () => {
+    const trackRect = { left: 0, width: 600 };
+
+    it('left edge (pointerX = 0) -> 8:00 = 480', () => {
+      assert.equal(pointerXToMinute(0, trackRect), 480);
+    });
+
+    it('right edge (pointerX = 600) -> 18:00 = 1080', () => {
+      assert.equal(pointerXToMinute(600, trackRect), 1080);
+    });
+
+    it('10:30 AM (150/600 = 25%) -> 630 minutes', () => {
+      assert.equal(pointerXToMinute(150, trackRect), 630);
+    });
+
+    it('beyond right edge clamps to 18:00', () => {
+      assert.equal(pointerXToMinute(999, trackRect), DAY_END_MIN);
+    });
+
+    it('before left edge clamps to 8:00', () => {
+      assert.equal(pointerXToMinute(-50, trackRect), DAY_START_MIN);
+    });
+  });
+
+  describe('computeEndMinute', () => {
+    it('returns start + duration for a normal 1-hour section', () => {
+      assert.equal(computeEndMinute(600, 60), 660);
+    });
+
+    it('clamps end to 18:00 when block would overflow', () => {
+      assert.equal(computeEndMinute(1050, 90), DAY_END_MIN);
+    });
+
+    it('1700 + 60 = 18:00 exactly', () => {
+      assert.equal(computeEndMinute(1020, 60), DAY_END_MIN);
+    });
+  });
+
+  describe('buildGhostPreview', () => {
+    const trackRect = { left: 0, width: 600 };
+
+    it('returns a preview object with correct fields', () => {
+      const result = buildGhostPreview(150, 20, 'Mon', trackRect, 60);
+      assert.ok(result !== null);
+      assert.equal(result.dayId, 'Mon');
+      assert.equal(result.startMin, 630);
+      assert.equal(result.endMin, 690);
+    });
+
+    it('returns null for missing dayId', () => {
+      assert.equal(buildGhostPreview(150, 20, null, trackRect, 60), null);
+    });
+
+    it('returns null for zero duration', () => {
+      assert.equal(buildGhostPreview(150, 20, 'Mon', trackRect, 0), null);
+    });
+
+    it('returns null for missing trackRect', () => {
+      assert.equal(buildGhostPreview(150, 20, 'Mon', null, 60), null);
+    });
+  });
+
+  describe('DT_SECTION_ID constant', () => {
+    it('is a non-empty string', () => {
+      assert.ok(typeof DT_SECTION_ID === 'string' && DT_SECTION_ID.length > 0);
+    });
+
+    it('contains enrollfix to avoid MIME collision', () => {
+      assert.ok(DT_SECTION_ID.includes('enrollfix'));
+    });
+  });
+
+  describe('file presence and wiring', () => {
+    it('src/domain/drop-preview.mjs exists', async () => {
+      const { existsSync } = await import('node:fs');
+      const path = new URL('../src/domain/drop-preview.mjs', import.meta.url);
+      assert.ok(existsSync(path), 'drop-preview.mjs must exist in src/domain/');
+    });
+
+    it('AvailableCourses imports DT_SECTION_ID and marks cards draggable', async () => {
+      const { readFileSync } = await import('node:fs');
+      const src = readFileSync(
+        new URL('../src/components/AvailableCourses.jsx', import.meta.url),
+        'utf8'
+      );
+      assert.ok(src.includes('DT_SECTION_ID'), 'AvailableCourses must import DT_SECTION_ID');
+      assert.ok(src.includes('draggable={true}'), 'AvailableCourses must mark cards as draggable');
+    });
+
+    it('Timetable imports from drop-preview and handles drag events', async () => {
+      const { readFileSync } = await import('node:fs');
+      const src = readFileSync(
+        new URL('../src/components/Timetable.jsx', import.meta.url),
+        'utf8'
+      );
+      assert.ok(src.includes('drop-preview.mjs'), 'Timetable must import from drop-preview.mjs');
+      assert.ok(src.includes('onDragOver'), 'Timetable must handle onDragOver');
+      assert.ok(src.includes('onDragLeave'), 'Timetable must handle onDragLeave');
+      assert.ok(src.includes('nb-tt-ghost'), 'Timetable must render nb-tt-ghost element');
+    });
+  });
+
+});

@@ -101,7 +101,7 @@ export default function SettingsWindow({ themes, themeId, onSelectTheme }) {
       {/* ── Section Divider ─────────────────────────────────────── */}
       <div className="h-[2px] bg-[var(--color-navy)]/15 my-2" />
 
-      {/* ── Section 2: Audio & Sound Cues (Task 29) ─────────────── */}
+      {/* ── Section 2: Audio & Sound Cues ─────────────── */}
       <div className="nb-win-header">
         <h2 className="nb-win-heading">Sound Cues</h2>
       </div>

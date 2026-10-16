@@ -3,7 +3,7 @@ import { MAIN_CATALOG } from '../domain/available-courses.mjs';
 
 /**
  * Course Details window — provides a read-only overview of all sections
- * in the synthetic catalogue. Later tasks will add interactive features here.
+ * in the synthetic catalogue. Will add interactive features later here.
  */
 export default function CourseDetailsWindow() {
   return (
@@ -43,7 +43,7 @@ export default function CourseDetailsWindow() {
       </div>
 
       <div className="nb-win-footer-note">
-        Interactive add/switch controls arrive in a later task. These counts are
+        Interactive add/switch controls arrive in a later update. These counts are
         sample figures only and do not reflect live seat availability.
       </div>
     </div>

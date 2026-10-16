@@ -114,7 +114,7 @@ export default function AppShell({ state, dispatch, children }) {
           </DesktopWindow>
         )}
 
-        {/* ── Schedule Repair Window (Task 27) ─────────────── */}
+        {/* Schedule Repair Window */}
         {windows.find((w) => w.id === 'repair') && (
           <DesktopWindow
             {...windows.find((w) => w.id === 'repair')}

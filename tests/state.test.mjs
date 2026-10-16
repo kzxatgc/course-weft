@@ -1,7 +1,7 @@
 /**
  * tests/state.test.mjs
  *
- * Unit tests for src/state/draft-controller.mjs — Task 18.
+ * Unit tests for src/state/draft-controller.mjs.
  * Tests cover: initial state, immutable transitions, unknown action unchanged,
  * scenario switching, search filtering, notice management, request/candidate,
  * snapshot/restore (Undo), and selector helpers.
@@ -400,7 +400,7 @@ describe('snapshot and undo', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 9. ADD_SECTION (Task 20)
+// 9. ADD_SECTION
 // ---------------------------------------------------------------------------
 
 describe('ADD_SECTION', () => {
@@ -485,7 +485,7 @@ function nextNoticeTitleOrMessage(state) {
 }
 
 // ---------------------------------------------------------------------------
-// 10. SWITCH_SECTION (Task 20)
+// 10. SWITCH_SECTION
 // ---------------------------------------------------------------------------
 
 describe('SWITCH_SECTION', () => {
@@ -544,7 +544,7 @@ describe('SWITCH_SECTION', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 11. REMOVE_SECTION (Task 20)
+// 11. REMOVE_SECTION
 // ---------------------------------------------------------------------------
 
 describe('REMOVE_SECTION', () => {
@@ -582,7 +582,7 @@ describe('REMOVE_SECTION', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 12. RESET_DRAFT (Task 20)
+// 12. RESET_DRAFT
 // ---------------------------------------------------------------------------
 
 describe('RESET_DRAFT', () => {
@@ -607,7 +607,7 @@ describe('RESET_DRAFT', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 13. Case-insensitive search and card preservation on failure (Task 20)
+// 13. Case-insensitive search and card preservation on failure
 // ---------------------------------------------------------------------------
 
 describe('case-insensitive search and card preservation on refusal', () => {
@@ -659,10 +659,10 @@ describe('case-insensitive search and card preservation on refusal', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 14. Suggestion, Apply, Exact Undo, Dismiss (Task 21)
+// 14. Suggestion, Apply, Exact Undo, Dismiss
 // ---------------------------------------------------------------------------
 
-describe('suggestion, apply, exact undo, dismiss (Task 21)', () => {
+describe('suggestion, apply, exact undo, dismiss', () => {
   it('main flow: suggest finds repair, apply updates draft and snapshots, undo restores exact pre-apply state', () => {
     const s0 = initialState();
     assert.deepEqual(s0.draft, ['CHEM-A', 'STAT-A']);

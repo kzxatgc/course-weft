@@ -4,7 +4,7 @@ import { ACTION, canUndo } from '../state/draft-controller.mjs';
 import { INITIAL_DRAFT } from '../domain/available-courses.mjs';
 
 /**
- * TimetableControls — Task 28
+ * TimetableControls
  *
  * Renders the Undo and Reset action bar above the timetable.
  * Shows:

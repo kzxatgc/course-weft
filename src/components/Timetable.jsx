@@ -1,6 +1,12 @@
-import React from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import { formatTime } from '../domain/time.mjs';
 import { ACTION } from '../state/draft-controller.mjs';
+import {
+  DT_SECTION_ID,
+  pointerXToMinute,
+  computeEndMinute,
+  clampToDayBounds,
+} from '../domain/drop-preview.mjs';
 
 /**
  * Timetable — Clean Neo-Brutalist Layout
@@ -14,13 +20,52 @@ import { ACTION } from '../state/draft-controller.mjs';
  *  - 52px rows with comfortable breathing room for course blocks
  *  - Signature blue course blocks with 2-line detail and remove (×) control
  *  - Fits the entire width cleanly without scrolling
+ *  - Drag/drop ghost preview: dashed ghost card follows pointer at 15-min snap
  *
- * @param {{ selectedSections: object[], dispatch: function }} props
+ * @param {{ selectedSections: object[], availableCourses: object[], dispatch: function }} props
  */
-export default function Timetable({ selectedSections = [], dispatch }) {
+export default function Timetable({ selectedSections = [], availableCourses = [], dispatch }) {
   function handleRemove(id) {
     dispatch({ type: ACTION.REMOVE_SECTION, payload: id });
   }
+
+  // ── Ghost preview state ───────────────────────────────────────────────────
+  // ghost = { dayId, startMin, endMin } | null
+  const [ghost, setGhost] = useState(null);
+  // draggedSectionId: the section being dragged over (from DataTransfer)
+  const draggedIdRef = useRef(null);
+
+  /**
+   * Called by each day-row's onDragEnter / onDragOver.
+   * Reads section ID from DataTransfer, looks up the section's duration,
+   * then computes the snapped ghost preview position.
+   */
+  const handleDayDragOver = useCallback((e, dayId, trackEl) => {
+    e.preventDefault(); // allow drop
+    e.dataTransfer.dropEffect = 'copy';
+
+    const sectionId = draggedIdRef.current || e.dataTransfer.getData(DT_SECTION_ID);
+    if (!sectionId) return;
+
+    // Keep ref in sync (getData only works on dragstart in some browsers on dragover)
+    if (!draggedIdRef.current) draggedIdRef.current = sectionId;
+
+    const section = availableCourses.find((s) => s.id === sectionId);
+    if (!section) return;
+
+    const durationMin = section.end - section.start;
+    const trackRect   = trackEl.getBoundingClientRect();
+    const startMin    = pointerXToMinute(e.clientX, trackRect);
+    const endMin      = computeEndMinute(startMin, durationMin);
+
+    setGhost({ dayId, startMin, endMin, sectionId, title: section.title, id: section.id });
+  }, [availableCourses]);
+
+  /** Clear ghost on leave / end / drop */
+  const clearGhost = useCallback(() => {
+    setGhost(null);
+    draggedIdRef.current = null;
+  }, []);
 
   const isEmpty = selectedSections.length === 0;
 
@@ -48,32 +93,18 @@ export default function Timetable({ selectedSections = [], dispatch }) {
             const daySections = selectedSections.filter(
               (s) => s.day === day.id || (Array.isArray(s.days) && s.days.includes(day.id))
             );
+            const isGhostDay = ghost?.dayId === day.id;
 
             return (
-              <div key={day.id} className="nb-tt-row" aria-label={day.full}>
-                {/* Day label on Y-axis */}
-                <div className="nb-tt-day-label">
-                  <span className="nb-tt-day-badge">{day.short}</span>
-                </div>
-
-                {/* Day track with 10 column background lines & section blocks */}
-                <div className="nb-tt-row-track">
-                  {/* Background grid columns matching header */}
-                  <div className="nb-tt-track-grid" aria-hidden="true">
-                    {HOURS.map((h) => (
-                      <div key={h.startMin} className="nb-tt-grid-col" />
-                    ))}
-                  </div>
-
-                  {/* Section blocks on this day */}
-                  {daySections.map((sec) => (
-                    <SectionBlock
-                      key={`${sec.id}-${day.id}`}
-                      sec={sec}
-                    />
-                  ))}
-                </div>
-              </div>
+              <DayRow
+                key={day.id}
+                day={day}
+                daySections={daySections}
+                ghost={isGhostDay ? ghost : null}
+                onDragOver={handleDayDragOver}
+                onDragLeave={clearGhost}
+                onDrop={clearGhost}
+              />
             );
           })}
 
@@ -88,6 +119,71 @@ export default function Timetable({ selectedSections = [], dispatch }) {
         </div>
       </div>
     </section>
+  );
+}
+
+// ── Day Row with drag-over support ────────────────────────────────────────────
+
+function DayRow({ day, daySections, ghost, onDragOver, onDragLeave, onDrop }) {
+  const trackRef = useRef(null);
+
+  function handleDragOver(e) {
+    if (trackRef.current) {
+      onDragOver(e, day.id, trackRef.current);
+    }
+  }
+
+  return (
+    <div className="nb-tt-row" aria-label={day.full}>
+      {/* Day label on Y-axis */}
+      <div className="nb-tt-day-label">
+        <span className="nb-tt-day-badge">{day.short}</span>
+      </div>
+
+      {/* Day track */}
+      <div
+        ref={trackRef}
+        className={`nb-tt-row-track${ghost ? ' nb-tt-row-track--drag-over' : ''}`}
+        onDragOver={handleDragOver}
+        onDragEnter={handleDragOver}
+        onDragLeave={onDragLeave}
+        onDrop={onDrop}
+      >
+        {/* Background grid columns matching header */}
+        <div className="nb-tt-track-grid" aria-hidden="true">
+          {HOURS.map((h) => (
+            <div key={h.startMin} className="nb-tt-grid-col" />
+          ))}
+        </div>
+
+        {/* Section blocks on this day */}
+        {daySections.map((sec) => (
+          <SectionBlock key={`${sec.id}-${day.id}`} sec={sec} />
+        ))}
+
+        {/* Ghost preview */}
+        {ghost && (
+          <GhostBlock ghost={ghost} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Ghost block (dashed outline preview) ─────────────────────────────────────
+
+function GhostBlock({ ghost }) {
+  const leftPct  = toPercent(ghost.startMin);
+  const widthPct = ((ghost.endMin - ghost.startMin) / TOTAL_MINUTES) * 100;
+
+  return (
+    <div
+      className="nb-tt-ghost"
+      style={{ left: `${leftPct}%`, width: `${Math.max(widthPct, 1)}%` }}
+      aria-hidden="true"
+    >
+      <span className="nb-tt-ghost-label">{ghost.id}</span>
+    </div>
   );
 }
 
@@ -128,7 +224,7 @@ export const WEEKDAYS = [
   { id: 'Fri', short: 'FRI', full: 'Friday'    },
 ];
 
-export const START_MINUTE  = 8 * 60;   // 8:00 AM  (480)
+export const START_MINUTE  = 8  * 60;   // 8:00 AM  (480)
 export const END_MINUTE    = 18 * 60;  // 6:00 PM  (1080)
 export const TOTAL_MINUTES = END_MINUTE - START_MINUTE;  // 600
 

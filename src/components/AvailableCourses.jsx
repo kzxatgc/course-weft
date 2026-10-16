@@ -5,11 +5,12 @@ import { INITIAL_DRAFT } from '../domain/available-courses.mjs';
 
 import { format24hTime, formatCourseSlot } from '../domain/time.mjs';
 import { playSound } from '../audio/optional-sounds.js';
+import { DT_SECTION_ID } from '../domain/drop-preview.mjs';
 
 export { formatCourseSlot };
 
 /**
- * AvailableCourses — Task 26
+ * AvailableCourses
  *
  * Renders the searchable list of available course sections.
  * Features:
@@ -197,6 +198,16 @@ export default function AvailableCourses({
               <button
                 key={item.id}
                 type="button"
+                draggable={true}
+                onDragStart={(e) => {
+                  e.dataTransfer.effectAllowed = 'copy';
+                  e.dataTransfer.setData(DT_SECTION_ID, item.id);
+                  // Also store as plain text for fallback
+                  e.dataTransfer.setData('text/plain', item.id);
+                }}
+                onDragEnd={() => {
+                  // Nothing to do — ghost cleanup is handled by Timetable onDrop/onDragLeave
+                }}
                 onClick={() => handleCardClick(item)}
                 className="nb-course-card w-[195px] min-w-[195px] shrink-0 bg-[var(--color-cream)] border-2 border-[var(--color-navy)] rounded p-2 flex flex-col justify-between gap-1.5 cursor-pointer text-left transition-all duration-75 hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[2px_2px_0px_var(--color-navy)] hover:bg-[var(--color-yellow)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-blue)]"
                 role="listitem"
