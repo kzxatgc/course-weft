@@ -163,3 +163,12 @@ export function playSound(cue) {
     // Silently continue
   }
 }
+
+/**
+ * Begin loading the local sound cues before the first interaction.
+ * This does not play audio and respects the user's sound preference.
+ */
+export function preloadSounds() {
+  if (!soundEnabled || typeof window === 'undefined') return;
+  getHowls();
+}

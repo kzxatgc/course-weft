@@ -918,6 +918,22 @@ describe('Apply / Undo / Dismiss / Reset wiring', () => {
     assert.doesNotThrow(() => playSound('nonExistentCue'));
   });
 
+  it('preloads enabled sound cues during app startup without playing them', async () => {
+    const { readFileSync } = await import('node:fs');
+    const soundSource = readFileSync(
+      new URL('../src/audio/optional-sounds.js', import.meta.url),
+      'utf8'
+    );
+    const mainSource = readFileSync(
+      new URL('../src/main.jsx', import.meta.url),
+      'utf8'
+    );
+    assert.ok(soundSource.includes('export function preloadSounds()'));
+    assert.ok(soundSource.includes("if (!soundEnabled || typeof window === 'undefined') return;"));
+    assert.ok(mainSource.includes("import { preloadSounds } from './audio/optional-sounds.js'"));
+    assert.ok(mainSource.includes('preloadSounds();'));
+  });
+
   it('three local WAV audio cues and attribution exist', async () => {
     const { existsSync, statSync, readFileSync } = await import('node:fs');
     const pubPopup = new URL('../public/sounds/popup.wav', import.meta.url);
