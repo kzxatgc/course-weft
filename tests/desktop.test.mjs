@@ -555,12 +555,36 @@ describe('Apply / Undo / Dismiss / Reset wiring', () => {
     assert.equal(s3.snapshot, null, 'snapshot must be null after reset');
     assert.equal(s3.isApplied, false, 'isApplied must be false after reset');
     assert.equal(canUndo(s3), false, 'canUndo must be false after reset');
-    assert.equal(s3.notice, null, 'reset notice must be null');
+    assert.equal(s3.notice, null, 'reset success toast waits for the transition to finish');
+    assert.equal(s3.scenarioTransition?.showResetNotice, true);
 
     const incoming = reduce(s3, { type: ACTION.COMPLETE_SCENARIO_TRANSITION });
     assert.deepEqual([...incoming.draft].sort(), [...INITIAL_DRAFT].sort(), 'Initial courses return after current courses animate out');
     const completed = reduce(incoming, { type: ACTION.COMPLETE_SCENARIO_TRANSITION });
     assert.equal(completed.scenarioTransition, null);
+  });
+
+  it('shows the timetable-reset toast only after the incoming reset animation', async () => {
+    const { readFileSync } = await import('node:fs');
+    const previewSource = readFileSync(new URL('../src/EarlySchedulePreview.jsx', import.meta.url), 'utf8');
+    assert.ok(previewSource.includes("scenarioTransition.phase === 'incoming' && scenarioTransition.showResetNotice"));
+    assert.ok(previewSource.includes("title: 'Timetable reset'"));
+    assert.ok(previewSource.includes('type: ACTION.SET_NOTICE'));
+  });
+
+  it('renders reset confirmation backdrop through a body portal', async () => {
+    const { readFileSync } = await import('node:fs');
+    const coursesSource = readFileSync(
+      new URL('../src/components/AvailableCourses.jsx', import.meta.url),
+      'utf8'
+    );
+    const resetDialog = coursesSource.slice(
+      coursesSource.indexOf('{showResetConfirm && typeof document'),
+      coursesSource.indexOf('/* ── Lifted/Held course card', coursesSource.indexOf('{showResetConfirm && typeof document'))
+    );
+    assert.ok(resetDialog.includes('createPortal('));
+    assert.ok(resetDialog.includes('className="fixed inset-0 z-[9999]'));
+    assert.ok(resetDialog.includes('document.body'));
   });
 
   it('DISMISS_REPAIR does not mutate draft and clears candidate without undo', async () => {

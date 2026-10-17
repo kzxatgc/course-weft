@@ -125,7 +125,10 @@ export function reduce(state, action) {
         return Object.freeze({
           ...state,
           draft: Object.freeze([...INITIAL_DRAFT]),
-          scenarioTransition: Object.freeze({ phase: 'incoming' }),
+          scenarioTransition: Object.freeze({
+            phase: 'incoming',
+            ...(state.scenarioTransition.showResetNotice ? { showResetNotice: true } : {}),
+          }),
         });
       }
       return Object.freeze({ ...state, scenarioTransition: null });
@@ -507,6 +510,7 @@ export function reduce(state, action) {
           phase: 'outgoing',
           draft: Object.freeze([...(state.scenarioTransition?.draft || state.draft)]),
           availableCourses: state.scenarioTransition?.availableCourses || state.availableCourses,
+          showResetNotice: true,
         }),
         candidate: null,
         request: null,

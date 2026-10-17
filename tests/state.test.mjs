@@ -690,6 +690,7 @@ describe('RESET_DRAFT', () => {
     const reset = reduce(mutated, { type: ACTION.RESET_DRAFT });
     assert.deepEqual(reset.draft, []);
     assert.equal(reset.scenarioTransition.phase, 'outgoing');
+    assert.equal(reset.scenarioTransition.showResetNotice, true);
     assert.deepEqual(reset.scenarioTransition.draft, ['MATH-A', 'STAT-B']);
     assert.equal(reset.candidate, null);
     assert.equal(reset.request, null);
@@ -700,6 +701,7 @@ describe('RESET_DRAFT', () => {
     const incoming = reduce(reset, { type: ACTION.COMPLETE_SCENARIO_TRANSITION });
     assert.deepEqual(incoming.draft, [...INITIAL_DRAFT]);
     assert.equal(incoming.scenarioTransition.phase, 'incoming');
+    assert.equal(incoming.scenarioTransition.showResetNotice, true);
     const completed = reduce(incoming, { type: ACTION.COMPLETE_SCENARIO_TRANSITION });
     assert.deepEqual(completed.draft, [...INITIAL_DRAFT]);
     assert.equal(completed.scenarioTransition, null);

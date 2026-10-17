@@ -965,7 +965,7 @@ export default function AvailableCourses({
       </div>
 
       {/* ── Reset Confirmation Dialog ── */}
-      {showResetConfirm && (
+      {showResetConfirm && typeof document !== 'undefined' && createPortal(
         <div
           className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-[1.5px] p-4 select-none font-mono"
           onPointerDown={(e) => e.stopPropagation()}
@@ -1029,7 +1029,8 @@ export default function AvailableCourses({
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ── Lifted/Held course card following pointer ── */}

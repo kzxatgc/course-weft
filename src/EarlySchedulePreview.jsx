@@ -186,6 +186,16 @@ export default function EarlySchedulePreview({ state, dispatch }) {
         setRepairTransition('idle');
       }
       dispatch?.({ type: ACTION.COMPLETE_SCENARIO_TRANSITION });
+      if (scenarioTransition.phase === 'incoming' && scenarioTransition.showResetNotice) {
+        dispatch?.({
+          type: ACTION.SET_NOTICE,
+          payload: {
+            kind: 'success',
+            title: 'Timetable reset',
+            message: 'Your timetable has been restored to its starting selections.',
+          },
+        });
+      }
     }, prefersReducedMotion ? 0 : 280);
 
     return () => window.clearTimeout(transitionTimer);
