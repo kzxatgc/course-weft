@@ -16,6 +16,14 @@ import {
   getLinkedOutlineSectionIds,
 } from './domain/linked-labs.mjs';
 
+function orderLinkedSections(ids, sectionsById, direction) {
+  const labs = ids.filter((id) => Boolean(sectionsById.get(id)?.requiredBy));
+  const lectures = ids.filter((id) => Boolean(sectionsById.get(id)?.requires?.length));
+  return direction === 'outgoing'
+    ? [...labs, ...lectures]
+    : [...lectures, ...labs];
+}
+
 /**
  * EarlySchedulePreview — main schedule workspace.
  *
@@ -85,7 +93,31 @@ export default function EarlySchedulePreview({ state, dispatch }) {
     const previousDraft = state.snapshot?.draft || [];
     const incomingIds = draft.filter((id) => !previousDraft.includes(id));
     const outgoingIds = previousDraft.filter((id) => !draft.includes(id));
-    const swaps = state.snapshot?.candidate?.swaps || [];
+    const byId = new Map(availableCourses.map((section) => [section.id, section]));
+    const isLinkedSection = (id) => Boolean(
+      byId.get(id)?.requiredBy || byId.get(id)?.requires?.length
+    );
+    const candidateSwaps = state.snapshot?.candidate?.swaps || [];
+    const swappedOutIds = new Set(candidateSwaps.map(({ old }) => old));
+    const swappedInIds = new Set(candidateSwaps.map(({ replacement }) => replacement));
+    const outgoingSequence = [
+      ...orderLinkedSections(
+        outgoingIds.filter((id) => isLinkedSection(id) && !swappedOutIds.has(id)),
+        byId,
+        'outgoing'
+      ),
+    ];
+    const remainingOutgoingIds = outgoingIds.filter((id) => (
+      !isLinkedSection(id) && !swappedOutIds.has(id)
+    ));
+    const remainingIncomingIds = incomingIds.filter((id) => (
+      !isLinkedSection(id) && !swappedInIds.has(id)
+    ));
+    const linkedIncomingIds = orderLinkedSections(
+      incomingIds.filter((id) => isLinkedSection(id) && !swappedInIds.has(id)),
+      byId,
+      'incoming'
+    );
     const timers = repairTransitionTimersRef.current;
     const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const showAppliedNotice = () => {
@@ -111,54 +143,58 @@ export default function EarlySchedulePreview({ state, dispatch }) {
       setRepairDisplayDraft([...previousDraft]);
       setRepairTransition('swapping');
       let stageDraft = [...previousDraft];
-      const runAdditionAnimation = () => {
-        const remainingIncomingIds = draft.filter((id) => !stageDraft.includes(id));
-        const remainingOutgoingIds = stageDraft.filter((id) => !draft.includes(id));
-        if (remainingIncomingIds.length === 0 && remainingOutgoingIds.length === 0) {
-          setAnimatingSwap(null);
-          setRepairDisplayDraft(null);
-          setRepairTransition('idle');
-          showAppliedNotice();
-          return;
+      const animateSection = (id, direction, onComplete) => {
+        setAnimatingSwap(direction === 'outgoing' ? { outgoingId: id } : { incomingId: id });
+        if (direction === 'incoming' && !stageDraft.includes(id)) {
+          stageDraft = [...stageDraft, id];
+          setRepairDisplayDraft([...stageDraft]);
         }
-
-        setAnimatingSwap({
-          incomingIds: remainingIncomingIds,
-          outgoingIds: remainingOutgoingIds,
-        });
         timers.push(window.setTimeout(() => {
+          if (direction === 'outgoing') {
+            stageDraft = stageDraft.filter((sectionId) => sectionId !== id);
+            setRepairDisplayDraft([...stageDraft]);
+          }
           setAnimatingSwap(null);
-          setRepairDisplayDraft(null);
-          setRepairTransition('idle');
-          showAppliedNotice();
-        }, Math.max(280, remainingIncomingIds.length * 280)));
-      };
-
-      const runSwap = (index) => {
-        if (index >= swaps.length) {
-          runAdditionAnimation();
-          return;
-        }
-
-        const swap = swaps[index];
-        setAnimatingSwap({ outgoingId: swap.old, incomingId: swap.replacement });
-        timers.push(window.setTimeout(() => {
-          stageDraft = [
-            ...stageDraft.filter((id) => id !== swap.old),
-            ...(stageDraft.includes(swap.replacement) ? [] : [swap.replacement]),
-          ];
-          setRepairDisplayDraft(stageDraft);
-          setAnimatingSwap(null);
-          timers.push(window.setTimeout(() => runSwap(index + 1), 40));
+          timers.push(window.setTimeout(onComplete, 40));
         }, 280));
       };
 
-      runSwap(0);
+      const runSections = (ids, direction, onComplete, index = 0) => {
+        if (index >= ids.length) {
+          onComplete();
+          return;
+        }
+        animateSection(ids[index], direction, () => {
+          runSections(ids, direction, onComplete, index + 1);
+        });
+      };
+      const runSwaps = (index = 0) => {
+        if (index >= candidateSwaps.length) {
+          runSections(remainingOutgoingIds, 'outgoing', () => {
+            runSections(remainingIncomingIds, 'incoming', () => {
+              runSections(linkedIncomingIds, 'incoming', finishAnimation);
+            });
+          });
+          return;
+        }
+        const swap = candidateSwaps[index];
+        animateSection(swap.old, 'outgoing', () => {
+          animateSection(swap.replacement, 'incoming', () => runSwaps(index + 1));
+        });
+      };
+      const finishAnimation = () => {
+        setAnimatingSwap(null);
+        setRepairDisplayDraft(null);
+        setRepairTransition('idle');
+        showAppliedNotice();
+      };
+
+      runSections(outgoingSequence, 'outgoing', runSwaps);
     }, 1000);
     timers.push(loadingTimer);
 
     return undefined;
-  }, [state?.isApplied, state?.snapshot, draft]);
+  }, [state?.isApplied, state?.snapshot, draft, availableCourses]);
 
   useLayoutEffect(() => {
     const transition = state?.historyTransition;
@@ -187,21 +223,18 @@ export default function EarlySchedulePreview({ state, dispatch }) {
     const removed = fromDraft.filter((id) => !toDraft.includes(id));
     const added = toDraft.filter((id) => !fromDraft.includes(id));
 
-    if (transition.direction === 'undo') {
+    {
       const byId = new Map(availableCourses.map((section) => [section.id, section]));
       const isLinkedSection = (id) => Boolean(
         byId.get(id)?.requiredBy || byId.get(id)?.requires?.length
       );
-      const linkedRemoved = removed.filter((id) => isLinkedSection(id));
-      const regularRemoved = removed.filter((id) => !isLinkedSection(id));
-      const linkedAdded = added.filter((id) => isLinkedSection(id));
-      const regularAddedSet = new Set(added.filter((id) => !isLinkedSection(id)));
+      const isLinkedLecture = (id) => Boolean(byId.get(id)?.requires?.length);
+      const replacementAdded = new Set(added.filter((id) => !isLinkedLecture(id)));
       const replacementPairs = [];
-
-      for (const oldId of regularRemoved) {
+      for (const oldId of removed.filter((id) => !isLinkedLecture(id))) {
         const oldSection = byId.get(oldId);
         const replacementId = added.find((newId) => {
-          if (!regularAddedSet.has(newId)) return false;
+          if (!replacementAdded.has(newId)) return false;
           const newSection = byId.get(newId);
           return Boolean(
             newSection &&
@@ -214,13 +247,19 @@ export default function EarlySchedulePreview({ state, dispatch }) {
         });
         if (replacementId) {
           replacementPairs.push({ old: oldId, replacement: replacementId });
-          regularAddedSet.delete(replacementId);
+          replacementAdded.delete(replacementId);
         }
       }
-
+      replacementPairs.sort((first, second) => (
+        Number(isLinkedSection(second.old)) - Number(isLinkedSection(first.old))
+      ));
+      if (transition.direction === 'undo') replacementPairs.reverse();
       const pairedRemoved = new Set(replacementPairs.map(({ old }) => old));
-      const unmatchedRemoved = regularRemoved.filter((id) => !pairedRemoved.has(id));
-      const unmatchedAdded = added.filter((id) => regularAddedSet.has(id));
+      const pairedAdded = new Set(replacementPairs.map(({ replacement }) => replacement));
+      const linkedRemoved = removed.filter((id) => isLinkedSection(id) && !pairedRemoved.has(id));
+      const unmatchedRemoved = removed.filter((id) => !pairedRemoved.has(id) && !isLinkedSection(id));
+      const unmatchedAdded = added.filter((id) => replacementAdded.has(id) && !isLinkedSection(id));
+      const linkedAdded = added.filter((id) => isLinkedSection(id) && !pairedAdded.has(id));
       const orderLinked = (ids, direction) => {
         const labs = ids.filter((id) => Boolean(byId.get(id)?.requiredBy));
         const lectures = ids.filter((id) => Boolean(byId.get(id)?.requires?.length));
@@ -269,85 +308,12 @@ export default function EarlySchedulePreview({ state, dispatch }) {
 
       setRepairDisplayDraft(fromDraft);
       setRepairTransition('swapping');
-      runSections(orderLinked(linkedRemoved, 'outgoing'), 'outgoing', () => {
-        runPairs();
-      });
+      runSections(orderLinked(linkedRemoved, 'outgoing'), 'outgoing', runPairs);
 
       return () => {
         timers.forEach((timer) => window.clearTimeout(timer));
       };
     }
-
-    const unmatchedAdded = new Set(added);
-    const swaps = [];
-    const byId = new Map(availableCourses.map((section) => [section.id, section]));
-    for (const oldId of removed) {
-      const oldSection = byId.get(oldId);
-      const replacementId = added.find((newId) => {
-        if (!unmatchedAdded.has(newId)) return false;
-        const newSection = byId.get(newId);
-        return Boolean(
-          newSection &&
-          (
-            oldSection?.alternates?.includes(newId) ||
-            newSection.alternates?.includes(oldId) ||
-            (oldSection?.course === newSection.course && oldSection?.component === newSection.component)
-          )
-        );
-      });
-      if (replacementId) {
-        swaps.push({ old: oldId, replacement: replacementId });
-        unmatchedAdded.delete(replacementId);
-      }
-    }
-    const unmatchedRemoved = removed.filter((id) => !swaps.some((swap) => swap.old === id));
-
-    setRepairDisplayDraft(fromDraft);
-    setRepairTransition('swapping');
-
-    const finishRemaining = () => {
-      const incomingIds = toDraft.filter((id) => !stageDraft.includes(id));
-      const outgoingIds = stageDraft.filter((id) => !toDraft.includes(id));
-      if (incomingIds.length === 0 && outgoingIds.length === 0) {
-        finishTransition();
-        return;
-      }
-
-      setAnimatingSwap({ incomingIds, outgoingIds });
-      timers.push(window.setTimeout(() => {
-        stageDraft = [...toDraft];
-        setRepairDisplayDraft(stageDraft);
-        finishTransition();
-      }, Math.max(280, incomingIds.length * 280)));
-    };
-
-    const runSwap = (index) => {
-      if (index >= swaps.length) {
-        finishRemaining();
-        return;
-      }
-      const swap = swaps[index];
-      setAnimatingSwap({ outgoingId: swap.old, incomingId: swap.replacement });
-      timers.push(window.setTimeout(() => {
-        stageDraft = [
-          ...stageDraft.filter((id) => id !== swap.old),
-          ...(stageDraft.includes(swap.replacement) ? [] : [swap.replacement]),
-        ];
-        setRepairDisplayDraft([...stageDraft]);
-        setAnimatingSwap(null);
-        timers.push(window.setTimeout(() => runSwap(index + 1), 40));
-      }, 280));
-    };
-
-    if (swaps.length === 0 && unmatchedRemoved.length === 0 && unmatchedAdded.size === 0) {
-      finishTransition();
-    } else {
-      runSwap(0);
-    }
-
-    return () => {
-      timers.forEach((timer) => window.clearTimeout(timer));
-    };
   }, [state?.historyTransition, availableCourses, dispatch]);
 
   useEffect(() => () => {

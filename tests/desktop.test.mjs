@@ -197,6 +197,25 @@ describe('WINDOW_CONFIGS', () => {
   });
 });
 
+describe('DesktopWindow opening animation', () => {
+  it('uses one smooth scale-in animation for all windows with reduced-motion support', async () => {
+    const { readFileSync } = await import('node:fs');
+    const windowSource = readFileSync(
+      new URL('../src/components/DesktopWindow.jsx', import.meta.url),
+      'utf8'
+    );
+    const css = readFileSync(new URL('../src/app.css', import.meta.url), 'utf8');
+    const normalizedCss = css.replace(/\r\n/g, '\n');
+
+    assert.ok(windowSource.includes('className="nb-window '));
+    assert.ok(!windowSource.includes('[animation:nb-win-open'));
+    assert.ok(normalizedCss.includes('animation: nb-win-open 0.55s cubic-bezier(0.16, 1, 0.3, 1) both;'));
+    assert.ok(normalizedCss.includes('transform: scale(0.96) translateY(6px);'));
+    assert.ok(normalizedCss.includes('@media (prefers-reduced-motion: reduce)'));
+    assert.ok(normalizedCss.includes('.nb-window {\n    animation: none;'));
+  });
+});
+
 // ── Website Info window ────────────────────────────────────────────
 describe('WebsiteInfo window config', () => {
   const infoCfg = WINDOW_CONFIGS.find((w) => w.id === 'websiteInfo');
@@ -1855,7 +1874,7 @@ describe('Available Courses drag, drop, and cancel', () => {
       assert.ok(src.includes('setPreviewSectionId(null)'), 'Starting a timetable drag clears the course preview');
     });
 
-    it('repair Apply animates swaps in sequence before adding remaining sections', async () => {
+    it('repair Apply animates one outgoing and incoming section at a time', async () => {
       const { readFileSync } = await import('node:fs');
       const src = readFileSync(
         new URL('../src/EarlySchedulePreview.jsx', import.meta.url),
@@ -1873,10 +1892,16 @@ describe('Available Courses drag, drop, and cancel', () => {
       assert.ok(src.includes('}, 1000);'), 'Loading stage lasts about one second');
       assert.ok(src.includes('bg-white/50'), 'Loading overlay uses 50% white opacity');
       assert.ok(src.includes('data-testid="repair-loading-overlay"'));
+      assert.ok(src.includes('function orderLinkedSections(ids, sectionsById, direction)'));
       assert.ok(src.includes('state.snapshot?.candidate?.swaps || []'), 'Repair transitions use the suggested swap order');
-      assert.ok(src.includes('const runSwap = (index)'), 'Each repair swap is animated as a separate stage');
-      assert.ok(src.includes('runAdditionAnimation()'), 'New requested courses are animated after the swaps');
-      assert.ok(src.includes('setRepairDisplayDraft(stageDraft)'), 'Each completed swap updates the displayed timetable');
+      assert.ok(src.includes('isLinkedSection(id) && !swappedOutIds.has(id)'), 'Linked sections already in a swap are not animated twice on exit');
+      assert.ok(src.includes('isLinkedSection(id) && !swappedInIds.has(id)'), 'Linked sections already in a swap are not animated twice on entry');
+      assert.ok(src.includes('const runSwaps = (index = 0)'), 'Repair replacements animate one pair at a time');
+      assert.ok(src.includes("animateSection(swap.old, 'outgoing', () => {"));
+      assert.ok(src.includes("animateSection(swap.replacement, 'incoming', () => runSwaps(index + 1))"));
+      assert.ok(src.includes('runSections(outgoingSequence, \'outgoing\', runSwaps)'));
+      assert.ok(src.includes('runSections(ids, direction, onComplete, index + 1)'));
+      assert.ok(src.includes('setRepairDisplayDraft([...stageDraft])'), 'Each completed section animation updates the timetable');
       assert.ok(src.includes('repairLockedIds'), 'Repair-involved sections remain locked throughout the transition');
       assert.ok(src.includes('repairLockedIds={repairLockedIds}'), 'Both course tray and timetable receive the repair lock');
       assert.ok(src.includes('repairInteractionLocked={repairInteractionLocked}'), 'All courses remain locked until the complete repair transition ends');
@@ -1888,10 +1913,9 @@ describe('Available Courses drag, drop, and cancel', () => {
       assert.ok(timetableSrc.includes('outgoingSwapIds.includes(sec.id)'));
       assert.ok(timetableSrc.includes('incomingSwapSections.findIndex((section) => section.id === incomingSwapSection.id)'), 'Incoming course animations follow their sorted order');
       assert.ok(timetableSrc.includes('first.id === second.requiredBy'), 'Linked lectures animate before their labs');
-      assert.ok(src.includes('remainingIncomingIds.length * 280'), 'Animation duration accounts for added courses');
     });
 
-    it('undo removes linked sections and sequences replacements without changing redo', async () => {
+    it('undo and redo animate replacement pairs one at a time', async () => {
       const { readFileSync } = await import('node:fs');
       const previewSource = readFileSync(
         new URL('../src/EarlySchedulePreview.jsx', import.meta.url),
@@ -1904,17 +1928,17 @@ describe('Available Courses drag, drop, and cancel', () => {
       assert.ok(previewSource.includes('const transition = state?.historyTransition'));
       assert.ok(previewSource.includes('const fromDraft = [...transition.fromDraft]'));
       assert.ok(previewSource.includes('const toDraft = [...transition.toDraft]'));
-      const undoStart = previewSource.indexOf("if (transition.direction === 'undo') {");
-      const undoEnd = previewSource.indexOf('const unmatchedAdded = new Set(added);', undoStart);
-      const undoBranch = previewSource.slice(undoStart, undoEnd);
-      assert.ok(undoStart >= 0 && undoEnd > undoStart, 'Undo has a dedicated transition path');
-      assert.ok(undoBranch.includes("runSections(orderLinked(linkedRemoved, 'outgoing'), 'outgoing', () => {"));
-      assert.ok(undoBranch.includes("animateSection(pair.old, 'outgoing', () => {"));
-      assert.ok(undoBranch.includes("animateSection(pair.replacement, 'incoming', () => runPairs(index + 1))"));
-      assert.ok(!undoBranch.includes('setAnimatingSwap({ outgoingId: pair.old, incomingId: pair.replacement })'));
-      assert.ok(previewSource.includes('setAnimatingSwap({ outgoingId: swap.old, incomingId: swap.replacement })'));
-      assert.ok(previewSource.includes('const incomingIds = toDraft.filter((id) => !stageDraft.includes(id))'));
-      assert.ok(previewSource.includes('const outgoingIds = stageDraft.filter((id) => !toDraft.includes(id))'));
+      assert.ok(previewSource.includes('const replacementPairs = []'));
+      assert.ok(previewSource.includes('const runPairs = (index = 0) => {'));
+      assert.ok(previewSource.includes("animateSection(pair.old, 'outgoing', () => {"));
+      assert.ok(previewSource.includes("animateSection(pair.replacement, 'incoming', () => runPairs(index + 1))"));
+      assert.ok(previewSource.includes("runSections(orderLinked(linkedRemoved, 'outgoing'), 'outgoing', runPairs)"));
+      assert.ok(previewSource.includes('const linkedAdded = added.filter((id) => isLinkedSection(id) && !pairedAdded.has(id))'));
+      assert.ok(previewSource.includes('removed.filter((id) => !isLinkedLecture(id))'));
+      assert.ok(previewSource.includes('replacementPairs.sort((first, second) => ('));
+      assert.ok(previewSource.includes('Number(isLinkedSection(second.old)) - Number(isLinkedSection(first.old))'));
+      assert.ok(previewSource.includes("if (transition.direction === 'undo') replacementPairs.reverse()"));
+      assert.ok(previewSource.includes('runSections(ids, direction, onComplete, index + 1)'));
       assert.ok(previewSource.includes('type: ACTION.COMPLETE_HISTORY_TRANSITION'));
       assert.ok(coursesSource.includes('disabled={!canUndoRepair || historyTransitionInProgress}'));
       assert.ok(coursesSource.includes('disabled={!canRedoRepair || historyTransitionInProgress}'));

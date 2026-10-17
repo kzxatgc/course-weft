@@ -235,13 +235,24 @@ body {
   box-shadow: 6px 6px 0 var(--color-navy);
   min-width: 280px;
   max-width: calc(100vw - 16px);
-  /* pop-in animation */
-  animation: nb-win-open 0.12s steps(2, end) both;
+  animation: nb-win-open 0.55s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 @keyframes nb-win-open {
-  from { transform: scale(0.95) translate(4px, 4px); opacity: 0.6; }
-  to   { transform: scale(1)    translate(0,   0);   opacity: 1;   }
+  from {
+    transform: scale(0.96) translateY(6px);
+    opacity: 0.7;
+  }
+  to {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nb-window {
+    animation: none;
+  }
 }
 
 /* ── Title Bar ──────────────────────────────────────────────── */

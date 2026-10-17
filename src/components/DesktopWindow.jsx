@@ -140,7 +140,7 @@ export default function DesktopWindow({
       aria-label={title}
       aria-modal={locked ? 'true' : 'false'}
       inert={inert}
-      className="flex min-w-[280px] max-w-[calc(100vw-16px)] flex-col border-[3px] border-[var(--color-navy)] bg-[var(--color-cream)] shadow-[6px_6px_0_var(--color-navy)] [animation:nb-win-open_0.12s_steps(2,end)_both]"
+      className="nb-window flex min-w-[280px] max-w-[calc(100vw-16px)] flex-col border-[3px] border-[var(--color-navy)] bg-[var(--color-cream)] shadow-[6px_6px_0_var(--color-navy)]"
       style={posStyle}
       onPointerDown={() => onFocus(id)}
     >
