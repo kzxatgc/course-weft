@@ -38,6 +38,7 @@ export function initialState() {
     scenario: 'main',
     availableCourses: Object.freeze(catalogForScenario('main')),
     draft: Object.freeze([...INITIAL_DRAFT]),
+    scenarioTransition: null,
     notice: null,
     request: null,
     candidate: null,
@@ -54,6 +55,7 @@ export function initialState() {
 
 export const ACTION = Object.freeze({
   SELECT_SCENARIO: 'SELECT_SCENARIO',
+  COMPLETE_SCENARIO_TRANSITION: 'COMPLETE_SCENARIO_TRANSITION',
   SET_SEARCH: 'SET_SEARCH',
   SET_NOTICE: 'SET_NOTICE',
   CLEAR_NOTICE: 'CLEAR_NOTICE',
@@ -102,7 +104,12 @@ export function reduce(state, action) {
         ...state,
         scenario,
         availableCourses: Object.freeze(catalogForScenario(scenario)),
-        draft: Object.freeze([...INITIAL_DRAFT]),
+        draft: Object.freeze([]),
+        scenarioTransition: Object.freeze({
+          phase: 'outgoing',
+          draft: Object.freeze([...(state.scenarioTransition?.draft || state.draft)]),
+          availableCourses: state.scenarioTransition?.availableCourses || state.availableCourses,
+        }),
         notice: null,
         request: null,
         candidate: null,
@@ -111,6 +118,17 @@ export function reduce(state, action) {
         isApplied: false,
       });
     }
+
+    case ACTION.COMPLETE_SCENARIO_TRANSITION:
+      if (!state.scenarioTransition) return state;
+      if (state.scenarioTransition.phase === 'outgoing') {
+        return Object.freeze({
+          ...state,
+          draft: Object.freeze([...INITIAL_DRAFT]),
+          scenarioTransition: Object.freeze({ phase: 'incoming' }),
+        });
+      }
+      return Object.freeze({ ...state, scenarioTransition: null });
 
     // Update the Available Courses search filter string
     case ACTION.SET_SEARCH: {
@@ -496,7 +514,12 @@ export function reduce(state, action) {
     case ACTION.RESET_DRAFT: {
       return Object.freeze({
         ...state,
-        draft: Object.freeze([...INITIAL_DRAFT]),
+        draft: Object.freeze([]),
+        scenarioTransition: Object.freeze({
+          phase: 'outgoing',
+          draft: Object.freeze([...(state.scenarioTransition?.draft || state.draft)]),
+          availableCourses: state.scenarioTransition?.availableCourses || state.availableCourses,
+        }),
         candidate: null,
         request: null,
         snapshot: null,

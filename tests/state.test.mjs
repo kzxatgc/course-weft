@@ -131,9 +131,24 @@ describe('SELECT_SCENARIO', () => {
     assert.equal(s.scenario, 'noRepair');
   });
 
-  it('resets draft to INITIAL_DRAFT on switch', () => {
+  it('clears the timetable and preserves its selected sections for the return animation', () => {
     const s = dispatch([{ type: ACTION.SELECT_SCENARIO, payload: 'noRepair' }]);
-    assert.deepEqual(s.draft, [...INITIAL_DRAFT]);
+    assert.deepEqual(s.draft, []);
+    assert.equal(s.scenarioTransition?.phase, 'outgoing');
+    assert.deepEqual(s.scenarioTransition?.draft, [...INITIAL_DRAFT]);
+    assert.equal(s.scenarioTransition?.availableCourses.length, s.availableCourses.length);
+  });
+
+  it('restores the new scenario default timetable after old sections return to the tray', () => {
+    const switching = reduce(initialState(), { type: ACTION.SELECT_SCENARIO, payload: 'noRepair' });
+    const incoming = reduce(switching, { type: ACTION.COMPLETE_SCENARIO_TRANSITION });
+
+    assert.deepEqual(incoming.draft, [...INITIAL_DRAFT]);
+    assert.equal(incoming.scenarioTransition?.phase, 'incoming');
+
+    const completed = reduce(incoming, { type: ACTION.COMPLETE_SCENARIO_TRANSITION });
+    assert.equal(completed.scenarioTransition, null);
+    assert.deepEqual(completed.draft, [...INITIAL_DRAFT]);
   });
 
   it('clears transient slices on switch', () => {
@@ -166,7 +181,12 @@ describe('SELECT_SCENARIO', () => {
 
   it('noRepair offers and applies the STAT-A to STAT-B first step for BIO-214', () => {
     const selected = dispatch([{ type: ACTION.SELECT_SCENARIO, payload: 'noRepair' }]);
-    const suggested = reduce(selected, { type: ACTION.SUGGEST_REPAIR, payload: 'BIO-214' });
+    const ready = reduce(selected, { type: ACTION.COMPLETE_SCENARIO_TRANSITION });
+    const withStartingCourses = reduce(
+      reduce(ready, { type: ACTION.ADD_SECTION, payload: 'MATH-A' }),
+      { type: ACTION.ADD_SECTION, payload: 'STAT-A' }
+    );
+    const suggested = reduce(withStartingCourses, { type: ACTION.SUGGEST_REPAIR, payload: 'BIO-214' });
     assert.deepEqual(suggested.candidate?.swap, { old: 'STAT-A', replacement: 'STAT-B' });
     assert.equal(suggested.candidate?.validation.stagedLinkedRequirement, true);
 
@@ -190,7 +210,12 @@ describe('SELECT_SCENARIO', () => {
 
   it('noRepair linked lab preview has a conflict alert and no repair candidates', () => {
     const selected = dispatch([{ type: ACTION.SELECT_SCENARIO, payload: 'noRepair' }]);
-    const suggested = reduce(selected, { type: ACTION.SUGGEST_REPAIR, payload: 'BIO-214' });
+    const ready = reduce(selected, { type: ACTION.COMPLETE_SCENARIO_TRANSITION });
+    const withStartingCourses = reduce(
+      reduce(ready, { type: ACTION.ADD_SECTION, payload: 'MATH-A' }),
+      { type: ACTION.ADD_SECTION, payload: 'STAT-A' }
+    );
+    const suggested = reduce(withStartingCourses, { type: ACTION.SUGGEST_REPAIR, payload: 'BIO-214' });
     const applied = reduce(suggested, { type: ACTION.APPLY_REPAIR });
     const labA = applied.availableCourses.find((item) => item.id === 'BIO-214L-A');
     const selectedSections = applied.availableCourses.filter((item) => applied.draft.includes(item.id));
@@ -660,12 +685,21 @@ describe('RESET_DRAFT', () => {
     assert.equal(mutated.search, 'bio');
 
     const reset = reduce(mutated, { type: ACTION.RESET_DRAFT });
-    assert.deepEqual(reset.draft, [...INITIAL_DRAFT]);
+    assert.deepEqual(reset.draft, []);
+    assert.equal(reset.scenarioTransition.phase, 'outgoing');
+    assert.deepEqual(reset.scenarioTransition.draft, ['MATH-A', 'STAT-B']);
     assert.equal(reset.candidate, null);
     assert.equal(reset.request, null);
     assert.equal(reset.snapshot, null);
     assert.equal(reset.search, '');
     assert.equal(reset.notice, null);
+
+    const incoming = reduce(reset, { type: ACTION.COMPLETE_SCENARIO_TRANSITION });
+    assert.deepEqual(incoming.draft, [...INITIAL_DRAFT]);
+    assert.equal(incoming.scenarioTransition.phase, 'incoming');
+    const completed = reduce(incoming, { type: ACTION.COMPLETE_SCENARIO_TRANSITION });
+    assert.deepEqual(completed.draft, [...INITIAL_DRAFT]);
+    assert.equal(completed.scenarioTransition, null);
   });
 });
 
@@ -850,11 +884,13 @@ describe('suggestion, apply, exact undo, dismiss', () => {
   });
 
   it('suggest in noRepair scenario offers the valid next step despite the unavailable lab', () => {
-    const sNoRepair = reduce(initialState(), {
-      type: ACTION.SELECT_SCENARIO,
-      payload: 'noRepair',
-    });
-    const sSuggested = reduce(sNoRepair, {
+    const switched = reduce(initialState(), { type: ACTION.SELECT_SCENARIO, payload: 'noRepair' });
+    const noRepair = reduce(switched, { type: ACTION.COMPLETE_SCENARIO_TRANSITION });
+    const withStartingCourses = reduce(
+      reduce(noRepair, { type: ACTION.ADD_SECTION, payload: 'MATH-A' }),
+      { type: ACTION.ADD_SECTION, payload: 'STAT-A' }
+    );
+    const sSuggested = reduce(withStartingCourses, {
       type: ACTION.SUGGEST_REPAIR,
       payload: 'BIO-214',
     });

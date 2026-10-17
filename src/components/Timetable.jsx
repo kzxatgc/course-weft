@@ -50,6 +50,8 @@ export default function Timetable({
   fixedPreviewSectionId = null,
   previewSectionId = null,
   animatingSwap = null,
+  repairLockedIds = [],
+  repairInteractionLocked = false,
   onRequestSwap = null,
   onSectionDragStart,
   linkedOutlineIds = [],
@@ -363,6 +365,8 @@ export default function Timetable({
                 incomingSwapIds={incomingSwapIds}
                 outgoingSwapIds={outgoingSwapIds}
                 outgoingSwapSections={outgoingSwapSections}
+                repairLockedIds={repairLockedIds}
+                repairInteractionLocked={repairInteractionLocked}
                 replacedSectionIds={replacedSectionIds}
                 linkedOutlineIds={linkedOutlineIds}
                 rainbowPair={rainbowPair}
@@ -420,6 +424,8 @@ function DayRow({
   incomingSwapIds,
   outgoingSwapIds,
   outgoingSwapSections,
+  repairLockedIds,
+  repairInteractionLocked,
   replacedSectionIds,
   linkedOutlineIds,
   rainbowPair,
@@ -497,6 +503,7 @@ function DayRow({
               sec={sec}
               isOutgoing={isOutgoing}
               isReplaced={isReplaced}
+              isRepairLocked={repairInteractionLocked || repairLockedIds.includes(sec.id)}
               linkedOutlineIds={linkedOutlineIds}
               rainbowPair={rainbowPair}
               onRemove={onRemove}
@@ -591,6 +598,7 @@ function SectionBlock({
   sec,
   isOutgoing = false,
   isReplaced = false,
+  isRepairLocked = false,
   linkedOutlineIds = [],
   rainbowPair = null,
   onRemove,
@@ -607,6 +615,8 @@ function SectionBlock({
         isOutgoing ? 'nb-tt-swap-outgoing' : ''
       } ${isReplaced ? 'nb-tt-block--swapping-out' : ''} ${
         hasLinkedOutline ? 'nb-linked-outline' : ''
+      } ${
+        isRepairLocked ? 'nb-tt-block--repair-locked cursor-not-allowed' : ''
       }`}
       style={{
         left: `${leftPct}%`,
@@ -620,10 +630,12 @@ function SectionBlock({
       }}
       aria-label={`${sec.title} (${sec.id}), ${sec.day} ${timeLabel}`}
       title={`${sec.title} (${sec.id})\n${sec.day} ${timeLabel}`}
-      onPointerDown={onPointerDown}
+      onPointerDown={isRepairLocked ? undefined : onPointerDown}
       data-testid={`timetable-block-${sec.id}`}
       data-is-replaced={isReplaced ? 'true' : 'false'}
+      data-repair-locked={isRepairLocked ? 'true' : 'false'}
       data-linked-outline={hasLinkedOutline ? 'true' : 'false'}
+      aria-disabled={isRepairLocked ? 'true' : undefined}
     >
       <span className="nb-tt-block-id">{sec.id}</span>
     </article>

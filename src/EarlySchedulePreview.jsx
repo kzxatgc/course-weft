@@ -26,20 +26,32 @@ import {
  * All data is synthetic sample data only (no live registration system).
  */
 export default function EarlySchedulePreview({ state, dispatch }) {
-  const availableCourses = state?.availableCourses || MAIN_CATALOG;
+  const scenarioTransition = state?.scenarioTransition || null;
+  const availableCourses = scenarioTransition?.availableCourses || state?.availableCourses || MAIN_CATALOG;
   const draft = state?.draft || INITIAL_DRAFT;
   const [previewSectionId, setPreviewSectionId] = useState(null);
   const [traySelectionResetKey, setTraySelectionResetKey] = useState(0);
   const [animatingSwap, setAnimatingSwap] = useState(null);
   const [repairTransition, setRepairTransition] = useState('idle');
+  const [repairDisplayDraft, setRepairDisplayDraft] = useState(null);
   const repairTransitionTimersRef = useRef([]);
   const wasAppliedRef = useRef(false);
   const [returningCard, setReturningCard] = useState(null);
   const [returningCardId, setReturningCardId] = useState(null);
   const rainbowPair = getRandomAdjacentRainbowPair();
-  const displayDraft = repairTransition === 'loading' && state?.snapshot?.draft
-    ? state.snapshot.draft
-    : draft;
+  const displayDraft = scenarioTransition?.phase === 'outgoing'
+    ? scenarioTransition.draft
+    : repairTransition === 'loading' && state?.snapshot?.draft
+      ? state.snapshot.draft
+      : repairDisplayDraft ?? draft;
+  const repairLockedIds = repairTransition === 'idle' || !state?.snapshot?.candidate
+    ? []
+    : [...new Set([
+      ...(state.snapshot.candidate.swaps || []).flatMap(({ old, replacement }) => [old, replacement]),
+      ...(state.snapshot.candidate.added || []),
+      ...(state.snapshot.draft || []).filter((id) => !draft.includes(id)),
+    ])];
+  const repairInteractionLocked = repairTransition !== 'idle' || Boolean(scenarioTransition);
   const activePreviewSectionId = previewSectionId && !draft.includes(previewSectionId)
     ? previewSectionId
     : null;
@@ -49,8 +61,19 @@ export default function EarlySchedulePreview({ state, dispatch }) {
   };
 
   useLayoutEffect(() => {
+    if (scenarioTransition?.phase !== 'outgoing') return;
+    setPreviewSectionId(null);
+    setTraySelectionResetKey((key) => key + 1);
+  }, [scenarioTransition]);
+
+  useLayoutEffect(() => {
     if (!state?.isApplied) {
       wasAppliedRef.current = false;
+      repairTransitionTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+      repairTransitionTimersRef.current = [];
+      setAnimatingSwap(null);
+      setRepairDisplayDraft(null);
+      setRepairTransition('idle');
       return undefined;
     }
     if (wasAppliedRef.current) return undefined;
@@ -59,20 +82,62 @@ export default function EarlySchedulePreview({ state, dispatch }) {
     const previousDraft = state.snapshot?.draft || [];
     const incomingIds = draft.filter((id) => !previousDraft.includes(id));
     const outgoingIds = previousDraft.filter((id) => !draft.includes(id));
+    const swaps = state.snapshot?.candidate?.swaps || [];
     const timers = repairTransitionTimersRef.current;
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
     setRepairTransition('loading');
     const loadingTimer = window.setTimeout(() => {
-      setRepairTransition('idle');
-      const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-      if (prefersReducedMotion || incomingIds.length === 0) return;
-
-      setAnimatingSwap({ incomingIds, outgoingIds });
-      setRepairTransition('swapping');
-      timers.push(window.setTimeout(() => {
-        setAnimatingSwap(null);
+      if (prefersReducedMotion) {
+        setRepairDisplayDraft(null);
         setRepairTransition('idle');
-      }, Math.max(280, incomingIds.length * 280)));
+        return;
+      }
+
+      setRepairDisplayDraft([...previousDraft]);
+      setRepairTransition('swapping');
+      let stageDraft = [...previousDraft];
+      const runAdditionAnimation = () => {
+        const remainingIncomingIds = draft.filter((id) => !stageDraft.includes(id));
+        const remainingOutgoingIds = stageDraft.filter((id) => !draft.includes(id));
+        if (remainingIncomingIds.length === 0 && remainingOutgoingIds.length === 0) {
+          setAnimatingSwap(null);
+          setRepairDisplayDraft(null);
+          setRepairTransition('idle');
+          return;
+        }
+
+        setAnimatingSwap({
+          incomingIds: remainingIncomingIds,
+          outgoingIds: remainingOutgoingIds,
+        });
+        timers.push(window.setTimeout(() => {
+          setAnimatingSwap(null);
+          setRepairDisplayDraft(null);
+          setRepairTransition('idle');
+        }, Math.max(280, remainingIncomingIds.length * 280)));
+      };
+
+      const runSwap = (index) => {
+        if (index >= swaps.length) {
+          runAdditionAnimation();
+          return;
+        }
+
+        const swap = swaps[index];
+        setAnimatingSwap({ outgoingId: swap.old, incomingId: swap.replacement });
+        timers.push(window.setTimeout(() => {
+          stageDraft = [
+            ...stageDraft.filter((id) => id !== swap.old),
+            ...(stageDraft.includes(swap.replacement) ? [] : [swap.replacement]),
+          ];
+          setRepairDisplayDraft(stageDraft);
+          setAnimatingSwap(null);
+          timers.push(window.setTimeout(() => runSwap(index + 1), 40));
+        }, 280));
+      };
+
+      runSwap(0);
     }, 1000);
     timers.push(loadingTimer);
 
@@ -88,6 +153,30 @@ export default function EarlySchedulePreview({ state, dispatch }) {
       setPreviewSectionId(null);
     }
   }, [draft, previewSectionId]);
+
+  useEffect(() => {
+    if (!scenarioTransition) return undefined;
+
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    setRepairTransition('swapping');
+    if (scenarioTransition.phase === 'outgoing') {
+      if (scenarioTransition.draft.length > 0 && !prefersReducedMotion) {
+        setAnimatingSwap({ incomingIds: [], outgoingIds: scenarioTransition.draft });
+      }
+    } else if (scenarioTransition.phase === 'incoming' && !prefersReducedMotion) {
+      setAnimatingSwap({ incomingIds: draft, outgoingIds: [] });
+    }
+
+    const transitionTimer = window.setTimeout(() => {
+      setAnimatingSwap(null);
+      if (scenarioTransition.phase === 'incoming') {
+        setRepairTransition('idle');
+      }
+      dispatch?.({ type: ACTION.COMPLETE_SCENARIO_TRANSITION });
+    }, prefersReducedMotion ? 0 : 280);
+
+    return () => window.clearTimeout(transitionTimer);
+  }, [dispatch, draft, scenarioTransition]);
 
   // Sections that should show the chasing rainbow outline
   const linkedOutlineIds = getLinkedOutlineSectionIds(displayDraft, availableCourses);
@@ -127,25 +216,13 @@ export default function EarlySchedulePreview({ state, dispatch }) {
       selectedSections.filter((section) => !previewReplacedIds.includes(section.id))
     ).map((section) => section.id)
     : [];
-  const scenarioTwoLabWithoutLecture =
-    state?.scenario === 'noRepair' &&
-    previewSection?.id === 'BIO-214L-A' &&
-    previewSection.requiredBy &&
-    !displayDraft.includes(previewSection.requiredBy) &&
-    previewConflictNames.includes('MATH-A');
   const unavailableLinkedLabPreviewId =
     previewConflict &&
-    (
-      scenarioTwoLabWithoutLecture ||
-      (
-        previewSection?.requiredBy &&
-        displayDraft.includes(previewSection.requiredBy) &&
-        previewRepairs.length === 0
-      )
-    )
+    previewSection?.requiredBy &&
+    previewRepairs.length === 0
       ? activePreviewSectionId
       : null;
-  const repairPreviewId = previewRepairs.length > 0 && !scenarioTwoLabWithoutLecture
+  const repairPreviewId = previewRepairs.length > 0
     ? activePreviewSectionId
     : null;
 
@@ -309,6 +386,8 @@ export default function EarlySchedulePreview({ state, dispatch }) {
             unavailableLinkedLabPreviewId={unavailableLinkedLabPreviewId}
             previewConflictNames={previewConflictNames}
             onRequestSwap={handleRequestSwap}
+            repairLockedIds={repairLockedIds}
+            repairInteractionLocked={repairInteractionLocked}
             onSectionDragStart={handleTimetableDragStart}
             animatingReturnId={returningCardId}
             returningCardId={returningCardId}
@@ -326,6 +405,8 @@ export default function EarlySchedulePreview({ state, dispatch }) {
               fixedPreviewSectionId={activePreviewSectionId}
               animatingSwap={animatingSwap}
               onRequestSwap={handleRequestSwap}
+              repairLockedIds={repairLockedIds}
+              repairInteractionLocked={repairInteractionLocked}
               linkedOutlineIds={linkedOutlineIds}
               rainbowPair={rainbowPair}
             />

@@ -536,12 +536,18 @@ describe('Apply / Undo / Dismiss / Reset wiring', () => {
     assert.equal(canUndo(s2), true);
 
     const s3 = reduce(s2, { type: ACTION.RESET_DRAFT });
-    assert.deepEqual([...s3.draft].sort(), [...INITIAL_DRAFT].sort(), 'RESET_DRAFT must restore INITIAL_DRAFT');
+    assert.deepEqual(s3.draft, [], 'RESET_DRAFT clears the timetable for the return animation');
+    assert.deepEqual(s3.scenarioTransition?.draft, [...s2.draft], 'Current courses remain available to animate out');
     assert.equal(s3.candidate, null, 'candidate must be null after reset');
     assert.equal(s3.snapshot, null, 'snapshot must be null after reset');
     assert.equal(s3.isApplied, false, 'isApplied must be false after reset');
     assert.equal(canUndo(s3), false, 'canUndo must be false after reset');
     assert.equal(s3.notice, null, 'reset notice must be null');
+
+    const incoming = reduce(s3, { type: ACTION.COMPLETE_SCENARIO_TRANSITION });
+    assert.deepEqual([...incoming.draft].sort(), [...INITIAL_DRAFT].sort(), 'Initial courses return after current courses animate out');
+    const completed = reduce(incoming, { type: ACTION.COMPLETE_SCENARIO_TRANSITION });
+    assert.equal(completed.scenarioTransition, null);
   });
 
   it('DISMISS_REPAIR does not mutate draft and clears candidate without undo', async () => {
@@ -606,11 +612,9 @@ describe('Apply / Undo / Dismiss / Reset wiring', () => {
       'utf8'
     );
     assert.ok(previewSource.includes('unavailableLinkedLabPreviewId'));
-    assert.ok(previewSource.includes('displayDraft.includes(previewSection.requiredBy)'));
-    assert.ok(previewSource.includes("state?.scenario === 'noRepair'"));
-    assert.ok(previewSource.includes("previewConflictNames.includes('MATH-A')"));
-    assert.ok(previewSource.includes('!displayDraft.includes(previewSection.requiredBy)'));
-    assert.ok(previewSource.includes('!scenarioTwoLabWithoutLecture'));
+    assert.ok(previewSource.includes('previewSection?.requiredBy'));
+    assert.ok(previewSource.includes('previewRepairs.length === 0'));
+    assert.ok(!previewSource.includes('scenarioTwoLabWithoutLecture'));
     assert.ok(coursesSource.includes('Get help finding a compatible lab'));
     assert.ok(coursesSource.includes('academic advisor or registration office'));
     assert.ok(previewSource.includes('.map((section) => section.id)'));
@@ -653,6 +657,9 @@ describe('Apply / Undo / Dismiss / Reset wiring', () => {
     assert.ok(src.includes('Scroll courses left'), 'Course tray must have a left navigation button');
     assert.ok(src.includes('Scroll courses right'), 'Course tray must have a right navigation button');
     assert.ok(src.includes('track.scrollBy'), 'Course tray buttons must scroll the course list');
+    assert.ok(src.includes('requestAnimationFrame(scrollFrame)'), 'Holding a tray control scrolls continuously by animation frame');
+    assert.ok(src.includes('elapsedSeconds * 220'), 'Held scrolling uses elapsed time for steady speed');
+    assert.ok(src.includes('cancelAnimationFrame(hold.frameId)'), 'Releasing the control stops continuous scrolling');
   });
 
   it('REDO_REPAIR reapplies undone repair timetable and restores canUndo state', async () => {
@@ -909,8 +916,8 @@ describe('drop-preview domain', () => {
       );
       assert.ok(src.includes('DT_SECTION_ID'), 'AvailableCourses must import DT_SECTION_ID');
       assert.ok(
-        src.includes('draggable={true}') || src.includes('draggable={!isFullSection}'),
-        'AvailableCourses must mark cards as draggable (or conditionally non-draggable for full sections)'
+        src.includes('draggable={true}') || src.includes('draggable={!isFullSection && !isRepairLocked}'),
+        'AvailableCourses must mark open, unlocked cards as draggable'
       );
     });
 
@@ -1426,6 +1433,8 @@ describe('Available Courses drag, drop, and cancel', () => {
       assert.ok(src.includes('if (returnedSection) {') && src.includes('setPressedCardId(null)'), 'Returning a timetable course clears stale tray selection');
       assert.ok(src.includes('onPreviewSectionChange?.(null)'), 'Returning a timetable course clears the active preview');
       assert.ok(src.includes('selectionResetKey = 0') && src.includes('}, [selectionResetKey])'), 'A timetable drag can clear tray selection before the course is dropped');
+      assert.ok(src.includes("useLayoutEffect(() => {\n    setPressedCardId(null);\n    preservePreviewOnBlurRef.current = false;\n  }, [selectionResetKey])"), 'Scenario changes clear the pressed-card state before paint');
+      assert.ok(src.includes("event.relatedTarget?.closest?.('#window-scenarios, #dock-scenarios')"), 'Opening Scenario preserves the current preview until a scenario is actually changed');
       // Drag must still be initiated when threshold is exceeded
       assert.ok(src.includes('hasExceededDragThreshold'), 'AvailableCourses initiates drag only above threshold');
       const css = readFileSync(new URL('../src/app.css', import.meta.url), 'utf8');
@@ -1539,7 +1548,7 @@ describe('Available Courses drag, drop, and cancel', () => {
       assert.ok(src.includes('setPreviewSectionId(null)'), 'Starting a timetable drag clears the course preview');
     });
 
-    it('repair Apply shows loading overlay before animating all timetable additions and removals', async () => {
+    it('repair Apply animates swaps in sequence before adding remaining sections', async () => {
       const { readFileSync } = await import('node:fs');
       const src = readFileSync(
         new URL('../src/EarlySchedulePreview.jsx', import.meta.url),
@@ -1549,18 +1558,75 @@ describe('Available Courses drag, drop, and cancel', () => {
         new URL('../src/components/Timetable.jsx', import.meta.url),
         'utf8'
       );
+      const coursesSrc = readFileSync(
+        new URL('../src/components/AvailableCourses.jsx', import.meta.url),
+        'utf8'
+      );
       assert.ok(src.includes("setRepairTransition('loading')"));
       assert.ok(src.includes('}, 1000);'), 'Loading stage lasts about one second');
       assert.ok(src.includes('bg-white/50'), 'Loading overlay uses 50% white opacity');
       assert.ok(src.includes('data-testid="repair-loading-overlay"'));
-      assert.ok(src.includes('incomingIds, outgoingIds'), 'Repair transitions animate added and removed sections');
+      assert.ok(src.includes('state.snapshot?.candidate?.swaps || []'), 'Repair transitions use the suggested swap order');
+      assert.ok(src.includes('const runSwap = (index)'), 'Each repair swap is animated as a separate stage');
+      assert.ok(src.includes('runAdditionAnimation()'), 'New requested courses are animated after the swaps');
+      assert.ok(src.includes('setRepairDisplayDraft(stageDraft)'), 'Each completed swap updates the displayed timetable');
+      assert.ok(src.includes('repairLockedIds'), 'Repair-involved sections remain locked throughout the transition');
+      assert.ok(src.includes('repairLockedIds={repairLockedIds}'), 'Both course tray and timetable receive the repair lock');
+      assert.ok(src.includes('repairInteractionLocked={repairInteractionLocked}'), 'All courses remain locked until the complete repair transition ends');
+      assert.ok(coursesSrc.includes('disabled={isRepairLocked}'), 'Locked tray cards cannot be activated');
+      assert.ok(timetableSrc.includes("nb-tt-block--repair-locked"), 'Locked timetable blocks show the non-interactive state');
       assert.ok(src.includes('state.snapshot.draft'), 'The previous timetable remains visible during loading');
       assert.ok(src.includes('draft={displayDraft}'), 'The previous timetable is rendered until loading finishes');
       assert.ok(timetableSrc.includes('incomingSwapIds.includes(sec.id)'));
       assert.ok(timetableSrc.includes('outgoingSwapIds.includes(sec.id)'));
       assert.ok(timetableSrc.includes('incomingSwapSections.findIndex((section) => section.id === incomingSwapSection.id)'), 'Incoming course animations follow their sorted order');
       assert.ok(timetableSrc.includes('first.id === second.requiredBy'), 'Linked lectures animate before their labs');
-      assert.ok(src.includes('incomingIds.length * 280'), 'Animation duration accounts for each staggered incoming course');
+      assert.ok(src.includes('remainingIncomingIds.length * 280'), 'Animation duration accounts for added courses');
+    });
+
+    it('scenario switching animates selected sections back before revealing the new course list', async () => {
+      const { readFileSync } = await import('node:fs');
+      const src = readFileSync(
+        new URL('../src/EarlySchedulePreview.jsx', import.meta.url),
+        'utf8'
+      );
+      const controllerSrc = readFileSync(
+        new URL('../src/state/draft-controller.mjs', import.meta.url),
+        'utf8'
+      );
+      assert.ok(src.includes('scenarioTransition?.availableCourses'), 'Old scenario cards remain visible during reset');
+      assert.ok(src.includes('scenarioTransition.draft'), 'The previous selected sections remain visible during reset');
+      assert.ok(src.includes('outgoingIds: scenarioTransition.draft'), 'Selected timetable sections animate back toward the tray');
+      assert.ok(src.includes("scenarioTransition.phase === 'outgoing'"), 'Old selections return before the new defaults appear');
+      assert.ok(src.includes('setTraySelectionResetKey((key) => key + 1)'), 'Scenario changes clear stale pressed-card styling');
+      assert.ok(src.includes("scenarioTransition.phase === 'incoming'"), 'The new scenario defaults animate into the timetable');
+      assert.ok(src.includes('incomingIds: draft, outgoingIds: []'), 'New default sections animate into the schedule');
+      assert.ok(src.includes('ACTION.COMPLETE_SCENARIO_TRANSITION'), 'The scenario reset advances and completes both animation stages');
+      assert.ok(controllerSrc.includes('draft: Object.freeze([])'), 'Switching scenarios clears the timetable');
+      assert.ok(controllerSrc.includes("phase: 'incoming'"), 'Completing the return stage restores the new default timetable');
+      assert.ok(controllerSrc.includes('COMPLETE_SCENARIO_TRANSITION'), 'Scenario reset has an explicit completion action');
+    });
+
+    it('Reset button uses the same two-stage return-and-restore animation', async () => {
+      const { readFileSync } = await import('node:fs');
+      const src = readFileSync(
+        new URL('../src/EarlySchedulePreview.jsx', import.meta.url),
+        'utf8'
+      );
+      const controllerSrc = readFileSync(
+        new URL('../src/state/draft-controller.mjs', import.meta.url),
+        'utf8'
+      );
+      const coursesSrc = readFileSync(
+        new URL('../src/components/AvailableCourses.jsx', import.meta.url),
+        'utf8'
+      );
+      assert.ok(coursesSrc.includes("type: ACTION.RESET_DRAFT"));
+      assert.ok(controllerSrc.includes("case ACTION.RESET_DRAFT"));
+      assert.ok(controllerSrc.includes("phase: 'outgoing'"));
+      assert.ok(src.includes("scenarioTransition.phase === 'incoming'"));
+      assert.ok(src.includes('incomingIds: draft, outgoingIds: []'));
+      assert.ok(src.includes('COMPLETE_SCENARIO_TRANSITION'));
     });
 
     it('Timetable highlights outgoing alternate section with nb-tt-block--swapping-out and 40% opacity', async () => {

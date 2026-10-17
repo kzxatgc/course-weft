@@ -1468,6 +1468,25 @@ body {
   background-color: color-mix(in srgb, var(--color-cream) 85%, #888 15%) !important;
 }
 
+.nb-course-card.nb-repair-locked {
+  cursor: not-allowed !important;
+  opacity: 0.62;
+  background-color: color-mix(in srgb, var(--color-cream) 85%, #888 15%) !important;
+  border-color: color-mix(in srgb, var(--color-navy) 45%, transparent) !important;
+  box-shadow: none !important;
+}
+
+.nb-course-card.nb-repair-locked:hover {
+  transform: none !important;
+  box-shadow: none !important;
+  background-color: color-mix(in srgb, var(--color-cream) 85%, #888 15%) !important;
+}
+
+.nb-tt-block--repair-locked {
+  opacity: 0.62;
+  cursor: not-allowed !important;
+}
+
 /* "FULL" status badge inside full-section card */
 .nb-full-badge {
   display: inline-flex;

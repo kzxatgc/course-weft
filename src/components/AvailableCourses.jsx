@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useId, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useId, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { Search, X, Users, Undo2, Redo2, RotateCcw, Wrench, AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { ACTION, canUndo, canRedo } from '../state/draft-controller.mjs';
@@ -58,6 +58,8 @@ export default function AvailableCourses({
   onPreviewSectionChange,
   selectionResetKey = 0,
   repairPreviewId = null,
+  repairLockedIds = [],
+  repairInteractionLocked = false,
   unavailableLinkedLabPreviewId = null,
   previewConflictNames = [],
   onRequestSwap,
@@ -102,7 +104,7 @@ export default function AvailableCourses({
     previousDraftRef.current = draft;
   }, [draft, onPreviewSectionChange]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     setPressedCardId(null);
     preservePreviewOnBlurRef.current = false;
   }, [selectionResetKey]);
@@ -165,10 +167,15 @@ export default function AvailableCourses({
   const updateCourseScrollState = useCallback(() => {
     const track = coursesTrackRef.current;
     if (!track) return;
-    setCourseScrollState({
+    const nextState = {
       left: track.scrollLeft > 1,
       right: track.scrollLeft + track.clientWidth < track.scrollWidth - 1,
-    });
+    };
+    setCourseScrollState((current) =>
+      current.left === nextState.left && current.right === nextState.right
+        ? current
+        : nextState
+    );
   }, []);
 
   useEffect(() => {
@@ -176,6 +183,7 @@ export default function AvailableCourses({
     if (!track) return undefined;
 
     updateCourseScrollState();
+    track.addEventListener('scroll', updateCourseScrollState, { passive: true });
     const resizeObserver = typeof ResizeObserver === 'undefined'
       ? null
       : new ResizeObserver(updateCourseScrollState);
@@ -183,6 +191,7 @@ export default function AvailableCourses({
     window.addEventListener('resize', updateCourseScrollState);
     return () => {
       resizeObserver?.disconnect();
+      track.removeEventListener('scroll', updateCourseScrollState);
       window.removeEventListener('resize', updateCourseScrollState);
     };
   }, [filteredCourses.length, updateCourseScrollState]);
@@ -199,23 +208,44 @@ export default function AvailableCourses({
   function stopCourseScroll() {
     const hold = courseScrollHoldRef.current;
     if (!hold) return;
-    clearTimeout(hold.timeoutId);
-    clearInterval(hold.intervalId);
+    cancelAnimationFrame(hold.frameId);
     window.removeEventListener('pointerup', hold.release);
     window.removeEventListener('pointercancel', hold.release);
     courseScrollHoldRef.current = null;
+    updateCourseScrollState();
   }
 
   function startCourseScroll(direction) {
     stopCourseScroll();
-    scrollCourses(direction, 90);
-
-    const hold = { timeoutId: null, intervalId: null, release: null };
+    const hold = { frameId: null, lastTime: null, release: null };
     hold.release = stopCourseScroll;
-    hold.timeoutId = setTimeout(() => {
-      hold.intervalId = setInterval(() => scrollCourses(direction, 90), 175);
-    }, 350);
+    const scrollFrame = (time) => {
+      if (courseScrollHoldRef.current !== hold) return;
+      const track = coursesTrackRef.current;
+      if (!track) {
+        stopCourseScroll();
+        return;
+      }
+
+      const elapsedSeconds = hold.lastTime === null
+        ? 0
+        : Math.min((time - hold.lastTime) / 1000, 0.05);
+      hold.lastTime = time;
+      track.scrollLeft += direction * elapsedSeconds * 220;
+
+      const reachedEdge = direction < 0
+        ? track.scrollLeft <= 0
+        : track.scrollLeft + track.clientWidth >= track.scrollWidth - 1;
+      if (reachedEdge) {
+        stopCourseScroll();
+        return;
+      }
+
+      hold.frameId = requestAnimationFrame(scrollFrame);
+    };
+
     courseScrollHoldRef.current = hold;
+    hold.frameId = requestAnimationFrame(scrollFrame);
     window.addEventListener('pointerup', hold.release);
     window.addEventListener('pointercancel', hold.release);
   }
@@ -243,7 +273,7 @@ export default function AvailableCourses({
   }
 
   function handleCardClick(item, dropInfo = null) {
-    if (!dispatch) return;
+    if (!dispatch || repairLockedIds.includes(item.id)) return;
 
     // Check if another section of this course component (or declared alternate) is already in the draft
     const draftedAlternate = draft.find((draftId) => {
@@ -278,6 +308,11 @@ export default function AvailableCourses({
 
   function handlePointerDown(e, item) {
     if (e.button !== 0) return; // Only primary button
+
+    if (repairLockedIds.includes(item.id)) {
+      e.preventDefault();
+      return;
+    }
 
     if (isSectionFull(item)) {
       e.preventDefault();
@@ -669,6 +704,7 @@ export default function AvailableCourses({
               });
 
               const isFullSection = isSectionFull(item);
+              const isRepairLocked = repairInteractionLocked || repairLockedIds.includes(item.id);
 
               const hasLinkedOutline = Boolean(linkedOutlineIds?.includes(item.id));
               const isShaking = shakingId === item.id;
@@ -677,11 +713,12 @@ export default function AvailableCourses({
                 <button
                   key={item.id}
                   type="button"
-                  draggable={!isFullSection}
+                  draggable={!isFullSection && !isRepairLocked}
+                  disabled={isRepairLocked}
                   onDragStart={(e) => {
-                    if (isFullSection) {
+                    if (isFullSection || isRepairLocked) {
                       e.preventDefault();
-                      triggerShake(item.id);
+                      if (isFullSection) triggerShake(item.id);
                       return;
                     }
                     e.preventDefault();
@@ -699,8 +736,11 @@ export default function AvailableCourses({
                     if (!isFullSection) onPreviewSectionChange?.(item.id);
                   }}
                   onBlur={(event) => {
+                    const focusMovedToScenarios =
+                      event.relatedTarget?.closest?.('#window-scenarios, #dock-scenarios');
                     if (
                       !preservePreviewOnBlurRef.current &&
+                      !focusMovedToScenarios &&
                       !event.relatedTarget?.closest?.('[data-repair-action], [data-preview-alert-action]')
                     ) {
                       onPreviewSectionChange?.(null);
@@ -710,6 +750,8 @@ export default function AvailableCourses({
                   className={`nb-course-card w-[195px] min-w-[195px] shrink-0 bg-[var(--color-cream)] border-2 border-[var(--color-navy)] rounded p-2 flex flex-col justify-between gap-1.5 text-left transition-colors duration-75 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-blue)] touch-none ${
                     isFullSection
                       ? 'nb-full-section'
+                      : isRepairLocked
+                        ? 'nb-repair-locked'
                       : 'cursor-grab hover:bg-[var(--color-yellow)]'
                   } ${
                     hasLinkedOutline ? 'nb-linked-outline' : ''
@@ -728,13 +770,14 @@ export default function AvailableCourses({
                   }
                   data-linked-outline={hasLinkedOutline ? 'true' : 'false'}
                   data-full-section={isFullSection ? 'true' : 'false'}
+                  data-repair-locked={isRepairLocked ? 'true' : 'false'}
                   role="listitem"
                   aria-label={
                     isFullSection
                       ? `${item.title} (${item.id}), ${formatCourseSlot(item)}, FULL — no seats available`
                       : `${item.title} (${item.id}), ${formatCourseSlot(item)}, ${seatsRemaining} seats remaining — drag onto timetable to add`
                   }
-                  aria-disabled={isFullSection ? 'true' : undefined}
+                  aria-disabled={isFullSection || isRepairLocked ? 'true' : undefined}
                 >
                   <div>
                     <div className="flex items-center justify-between gap-1.5">
