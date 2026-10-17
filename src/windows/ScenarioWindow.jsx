@@ -13,16 +13,16 @@ export default function ScenarioWindow({ scenario, dispatch }) {
       name: 'Successful repair available',
       tag: 'Primary flow',
       icon: <Sparkles size={18} aria-hidden="true" />,
-      desc: 'Demonstrates intelligent schedule conflict repair. When a time overlap occurs between CS 101 Lecture and MATH 201, EnrollFix suggests moving MATH 201 to an open alternate section.',
-      bullet: 'Suggested alternate: MATH 201 Section B (Fri 14:00–16:00)',
+      desc: 'Demonstrates schedule repair with available alternate sections. STAT-B has open seats, and BIO-214 enrollment reflects the combined enrollment of its two lab sections.',
+      bullet: 'BIO-214: 34/60 students across Lab A and Lab B',
     },
     {
       id: 'noRepair',
       name: 'No repair available',
       tag: 'Refusal flow',
       icon: <AlertTriangle size={18} aria-hidden="true" />,
-      desc: 'Demonstrates graceful refusal and fallback advisory. Alternate sections are filled or produce secondary conflicts, showing clear explanation without mutating the student draft.',
-      bullet: 'Advisory guidance: Contact academic advisor or join waitlist',
+      desc: 'Demonstrates graceful refusal with full alternate sections. MATH-B and BIO-214 Lab B are full, while STAT-B has vacancies; BIO-214 remains open based on total enrollment across both labs.',
+      bullet: 'MATH-B: Full · STAT-B: Vacancies · BIO-214: 42/60 students',
     },
   ];
 

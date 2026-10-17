@@ -27,17 +27,31 @@ test('smoke: test harness is discovered and assertions execute cleanly', () => {
 });
 
 test('smoke: synthetic target fixtures are properly isolated and configured', () => {
-  assert.deepEqual(INITIAL_DRAFT, ['CHEM-A', 'STAT-A']);
+  assert.deepEqual(INITIAL_DRAFT, ['MATH-A', 'STAT-A']);
   assert.equal(REQUESTED_SECTION_ID, 'BIO-214');
   assert.equal(MAIN_CATALOG.length, 7);
 
   const mainCat = catalogForScenario('main');
   assert.equal(mainCat.length, 7);
+  const mainStatB = mainCat.find((s) => s.id === 'STAT-B');
+  assert.equal(mainStatB.seat, 'open');
+  const mainBio = mainCat.find((s) => s.id === 'BIO-214');
+  assert.equal(mainBio.enrolled, 34);
+  assert.equal(mainBio.capacity, 60);
+  assert.equal(mainBio.seat, 'open');
   const bioLabB = mainCat.find((s) => s.id === 'BIO-214L-B');
   assert.ok(bioLabB);
   assert.equal(bioLabB.seat, 'open');
 
   const noRepairCat = catalogForScenario('noRepair');
+  const noRepairMathB = noRepairCat.find((s) => s.id === 'MATH-B');
+  assert.equal(noRepairMathB.seat, 'full');
+  const noRepairStatB = noRepairCat.find((s) => s.id === 'STAT-B');
+  assert.equal(noRepairStatB.seat, 'open');
+  const noRepairBio = noRepairCat.find((s) => s.id === 'BIO-214');
+  assert.equal(noRepairBio.enrolled, 42);
+  assert.equal(noRepairBio.capacity, 60);
+  assert.equal(noRepairBio.seat, 'open');
   const noRepairLabB = noRepairCat.find((s) => s.id === 'BIO-214L-B');
   assert.ok(noRepairLabB);
   assert.equal(noRepairLabB.seat, 'full');
@@ -46,16 +60,16 @@ test('smoke: synthetic target fixtures are properly isolated and configured', ()
 });
 
 test('catalogue exports correct section records, relations, and initial states', () => {
-  assert.deepEqual(CATALOG_INITIAL_DRAFT, ['CHEM-A', 'STAT-A']);
+  assert.deepEqual(CATALOG_INITIAL_DRAFT, ['MATH-A', 'STAT-A']);
   assert.equal(CATALOG_REQUESTED_SECTION_ID, 'BIO-214');
   assert.equal(PRODUCTION_CATALOG.length, 7);
 
   const ids = PRODUCTION_CATALOG.map((s) => s.id);
-  assert.deepEqual(ids, ['CHEM-A', 'CHEM-B', 'STAT-A', 'STAT-B', 'BIO-214', 'BIO-214L-A', 'BIO-214L-B']);
+  assert.deepEqual(ids, ['MATH-A', 'MATH-B', 'STAT-A', 'STAT-B', 'BIO-214', 'BIO-214L-A', 'BIO-214L-B']);
 
   // Alternates
-  const chemA = PRODUCTION_CATALOG.find((s) => s.id === 'CHEM-A');
-  assert.deepEqual(chemA.alternates, ['CHEM-B']);
+  const mathA = PRODUCTION_CATALOG.find((s) => s.id === 'MATH-A');
+  assert.deepEqual(mathA.alternates, ['MATH-B']);
   const statA = PRODUCTION_CATALOG.find((s) => s.id === 'STAT-A');
   assert.deepEqual(statA.alternates, ['STAT-B']);
 
@@ -105,7 +119,7 @@ test('validateDraft accepts the initial draft against production catalogue', () 
 
 test('validateDraft rejects non-array draft', () => {
   assert.equal(validateDraft(null, PRODUCTION_CATALOG).ok, false);
-  assert.equal(validateDraft('CHEM-A', PRODUCTION_CATALOG).ok, false);
+  assert.equal(validateDraft('MATH-A', PRODUCTION_CATALOG).ok, false);
   assert.equal(validateDraft(undefined, PRODUCTION_CATALOG).ok, false);
   assert.equal(validateDraft(42, PRODUCTION_CATALOG).ok, false);
 });
@@ -129,13 +143,13 @@ test('validateDraft rejects whitespace-only IDs', () => {
 });
 
 test('validateDraft rejects duplicate IDs in draft', () => {
-  const result = validateDraft(['CHEM-A', 'CHEM-A'], PRODUCTION_CATALOG);
+  const result = validateDraft(['MATH-A', 'MATH-A'], PRODUCTION_CATALOG);
   assert.equal(result.ok, false);
   assert.match(result.reason, /duplicate/i);
 });
 
 test('validateDraft rejects ID not in catalogue', () => {
-  const result = validateDraft(['CHEM-A', 'UNKNOWN-999'], PRODUCTION_CATALOG);
+  const result = validateDraft(['MATH-A', 'UNKNOWN-999'], PRODUCTION_CATALOG);
   assert.equal(result.ok, false);
   assert.match(result.reason, /unknown/i);
 });
@@ -154,8 +168,8 @@ test('validateCatalogue rejects non-array input', () => {
 
 test('validateCatalogue rejects catalogue with duplicate IDs', () => {
   const dupCat = [
-    { id: 'CHEM-A', course: 'CHEM', component: 'lecture' },
-    { id: 'CHEM-A', course: 'CHEM', component: 'lecture' },
+    { id: 'MATH-A', course: 'CHEM', component: 'lecture' },
+    { id: 'MATH-A', course: 'CHEM', component: 'lecture' },
   ];
   const result = validateCatalogue(dupCat);
   assert.equal(result.ok, false);
@@ -171,14 +185,14 @@ test('validateCatalogue rejects record with nonstring/empty id', () => {
 });
 
 test('validateCatalogue rejects record missing required course field', () => {
-  const bad = [{ id: 'CHEM-A', component: 'lecture' }];
+  const bad = [{ id: 'MATH-A', component: 'lecture' }];
   const result = validateCatalogue(bad);
   assert.equal(result.ok, false);
   assert.match(result.reason, /course/i);
 });
 
 test('validateCatalogue rejects record missing required component field', () => {
-  const bad = [{ id: 'CHEM-A', course: 'CHEM' }];
+  const bad = [{ id: 'MATH-A', course: 'CHEM' }];
   const result = validateCatalogue(bad);
   assert.equal(result.ok, false);
   assert.match(result.reason, /component/i);
@@ -264,7 +278,7 @@ test('count formatting label: enrolled/capacity renders as "enrolled / capacity"
 test('validateDraft rejects draft containing a full section (seat-not-certified-open)', () => {
   const fullCat = getCatalogForScenario('noRepair');
   // In noRepair scenario, BIO-214L-B is 30/30 (full)
-  const result = validateDraft(['CHEM-A', 'BIO-214L-B'], fullCat);
+  const result = validateDraft(['MATH-A', 'BIO-214L-B'], fullCat);
   assert.equal(result.ok, false);
   assert.equal(result.reason, 'seat-not-certified-open');
 });
@@ -278,7 +292,7 @@ test('full section remains valid catalogue data in validateCatalogue', () => {
 
 test('validateDraft rejects draft containing generic section with missing counts (seat-not-certified-open)', () => {
   const missingCountCat = PRODUCTION_CATALOG.map((s) => (s.id === 'BIO-214L-B' ? { ...s, enrolled: undefined, capacity: undefined, seat: 'unknown' } : s));
-  const result = validateDraft(['CHEM-A', 'BIO-214L-B'], missingCountCat);
+  const result = validateDraft(['MATH-A', 'BIO-214L-B'], missingCountCat);
   assert.equal(result.ok, false);
   assert.equal(result.reason, 'seat-not-certified-open');
 });
@@ -291,8 +305,8 @@ test('generic missing-count section with seat unknown remains valid catalogue da
 });
 
 test('validateDraft rejects unrecognized seat state (malformed-seat-state)', () => {
-  const badSeatCat = PRODUCTION_CATALOG.map((s) => (s.id === 'CHEM-A' ? { ...s, seat: 'maybe' } : s));
-  const result = validateDraft(['CHEM-A'], badSeatCat);
+  const badSeatCat = PRODUCTION_CATALOG.map((s) => (s.id === 'MATH-A' ? { ...s, seat: 'maybe' } : s));
+  const result = validateDraft(['MATH-A'], badSeatCat);
   assert.equal(result.ok, false);
   assert.equal(result.reason, 'malformed-seat-state');
 });
@@ -311,8 +325,8 @@ test('validateDraft rejects missing, string, negative, reversed, zero-length, an
   ];
 
   for (const { desc, patch } of badTimeVariations) {
-    const patchedCat = PRODUCTION_CATALOG.map((s) => (s.id === 'CHEM-A' ? { ...s, ...patch } : s));
-    const result = validateDraft(['CHEM-A'], patchedCat);
+    const patchedCat = PRODUCTION_CATALOG.map((s) => (s.id === 'MATH-A' ? { ...s, ...patch } : s));
+    const result = validateDraft(['MATH-A'], patchedCat);
     assert.equal(result.ok, false, `Expected failure for ${desc}`);
     assert.equal(result.reason, 'bad-time-or-day', `Expected bad-time-or-day for ${desc}`);
   }
@@ -321,8 +335,8 @@ test('validateDraft rejects missing, string, negative, reversed, zero-length, an
 test('validateDraft rejects invalid weekday (bad-time-or-day)', () => {
   const invalidDays = ['Funday', '', 'Tomorrow', 123, null, undefined];
   for (const day of invalidDays) {
-    const patchedCat = PRODUCTION_CATALOG.map((s) => (s.id === 'CHEM-A' ? { ...s, day } : s));
-    const result = validateDraft(['CHEM-A'], patchedCat);
+    const patchedCat = PRODUCTION_CATALOG.map((s) => (s.id === 'MATH-A' ? { ...s, day } : s));
+    const result = validateDraft(['MATH-A'], patchedCat);
     assert.equal(result.ok, false, `Expected failure for day: ${day}`);
     assert.equal(result.reason, 'bad-time-or-day');
   }
@@ -330,33 +344,33 @@ test('validateDraft rejects invalid weekday (bad-time-or-day)', () => {
 
 test('validateDraft rejects malformed catalogue with stable malformed-catalog reason', () => {
   const dupCat = [...PRODUCTION_CATALOG, PRODUCTION_CATALOG[0]];
-  const result = validateDraft(['CHEM-A'], dupCat);
+  const result = validateDraft(['MATH-A'], dupCat);
   assert.equal(result.ok, false);
   assert.equal(result.reason, 'malformed-catalog');
 });
 
 test('validateCatalogue rejects sections with invalid weekday or invalid meeting time', () => {
-  const badDayCat = PRODUCTION_CATALOG.map((s) => (s.id === 'CHEM-A' ? { ...s, day: 'InvalidDay' } : s));
+  const badDayCat = PRODUCTION_CATALOG.map((s) => (s.id === 'MATH-A' ? { ...s, day: 'InvalidDay' } : s));
   assert.equal(validateCatalogue(badDayCat).ok, false);
 
-  const badTimeCat = PRODUCTION_CATALOG.map((s) => (s.id === 'CHEM-A' ? { ...s, start: 700, end: 600 } : s));
+  const badTimeCat = PRODUCTION_CATALOG.map((s) => (s.id === 'MATH-A' ? { ...s, start: 700, end: 600 } : s));
   assert.equal(validateCatalogue(badTimeCat).ok, false);
 });
 
 test('validateCatalogue rejects sections with unrecognized seat or corrupted counts', () => {
-  const badSeatCat = PRODUCTION_CATALOG.map((s) => (s.id === 'CHEM-A' ? { ...s, seat: 'unknown-state' } : s));
+  const badSeatCat = PRODUCTION_CATALOG.map((s) => (s.id === 'MATH-A' ? { ...s, seat: 'unknown-state' } : s));
   assert.equal(validateCatalogue(badSeatCat).ok, false);
 
-  const badCapacityCat = PRODUCTION_CATALOG.map((s) => (s.id === 'CHEM-A' ? { ...s, capacity: 0 } : s));
+  const badCapacityCat = PRODUCTION_CATALOG.map((s) => (s.id === 'MATH-A' ? { ...s, capacity: 0 } : s));
   assert.equal(validateCatalogue(badCapacityCat).ok, false);
 
-  const negativeEnrolledCat = PRODUCTION_CATALOG.map((s) => (s.id === 'CHEM-A' ? { ...s, enrolled: -5 } : s));
+  const negativeEnrolledCat = PRODUCTION_CATALOG.map((s) => (s.id === 'MATH-A' ? { ...s, enrolled: -5 } : s));
   assert.equal(validateCatalogue(negativeEnrolledCat).ok, false);
 
-  const enrolledOverCapCat = PRODUCTION_CATALOG.map((s) => (s.id === 'CHEM-A' ? { ...s, enrolled: 35, capacity: 30 } : s));
+  const enrolledOverCapCat = PRODUCTION_CATALOG.map((s) => (s.id === 'MATH-A' ? { ...s, enrolled: 35, capacity: 30 } : s));
   assert.equal(validateCatalogue(enrolledOverCapCat).ok, false);
 
-  const mismatchedSeatCat = PRODUCTION_CATALOG.map((s) => (s.id === 'CHEM-A' ? { ...s, enrolled: 30, capacity: 30, seat: 'open' } : s));
+  const mismatchedSeatCat = PRODUCTION_CATALOG.map((s) => (s.id === 'MATH-A' ? { ...s, enrolled: 30, capacity: 30, seat: 'open' } : s));
   assert.equal(validateCatalogue(mismatchedSeatCat).ok, false);
 });
 
@@ -364,7 +378,7 @@ test('validateDraft and validateCatalogue never throw exceptions on malformed in
   const pathologicalInputs = [null, undefined, 42, 'string', {}, [], [null], [{}]];
   for (const input of pathologicalInputs) {
     assert.doesNotThrow(() => validateDraft(input, PRODUCTION_CATALOG));
-    assert.doesNotThrow(() => validateDraft(['CHEM-A'], input));
+    assert.doesNotThrow(() => validateDraft(['MATH-A'], input));
     assert.doesNotThrow(() => validateCatalogue(input));
   }
 });
@@ -398,16 +412,16 @@ test('validateDraft rejects draft with timetable clash (STAT-A and BIO-214 confl
   assert.equal(result.reason, 'time-conflict');
 });
 
-test('validateDraft rejects draft with overlapping lecture and lab (CHEM-A and BIO-214L-A on Tuesday)', () => {
-  // CHEM-A: Tue 600..660; BIO-214L-A: Tue 600..720
-  const result = validateDraft(['CHEM-A', 'BIO-214', 'BIO-214L-A'], PRODUCTION_CATALOG);
+test('validateDraft rejects draft with overlapping lecture and lab (MATH-A and BIO-214L-A on Tuesday)', () => {
+  // MATH-A: Tue 600..660; BIO-214L-A: Tue 600..720
+  const result = validateDraft(['MATH-A', 'BIO-214', 'BIO-214L-A'], PRODUCTION_CATALOG);
   assert.equal(result.ok, false);
   assert.equal(result.reason, 'time-conflict');
 });
 
 test('validateDraft rejects duplicate course/component even with distinct section IDs', () => {
-  // CHEM-A (CHEM lecture) and CHEM-B (CHEM lecture)
-  const chemResult = validateDraft(['CHEM-A', 'CHEM-B'], PRODUCTION_CATALOG);
+  // MATH-A (CHEM lecture) and MATH-B (CHEM lecture)
+  const chemResult = validateDraft(['MATH-A', 'MATH-B'], PRODUCTION_CATALOG);
   assert.equal(chemResult.ok, false);
   assert.equal(chemResult.reason, 'duplicate-course-component');
 
@@ -433,17 +447,17 @@ test('REQUIRED_LINK_RULES defines authoritative exact-one-lab rule for BIO-214',
 });
 
 test('validateDraft accepts valid draft with BIO-214 and exactly one matching lab', () => {
-  // Valid with Lab B (CHEM-A + STAT-B + BIO-214 + BIO-214L-B)
+  // Valid with Lab B (MATH-A + STAT-B + BIO-214 + BIO-214L-B)
   const validWithLabB = validateDraft(
-    ['CHEM-A', 'STAT-B', 'BIO-214', 'BIO-214L-B'],
+    ['MATH-A', 'STAT-B', 'BIO-214', 'BIO-214L-B'],
     PRODUCTION_CATALOG
   );
   assert.equal(validWithLabB.ok, true);
   assert.equal(validWithLabB.reason, null);
 
-  // Valid with Lab A (CHEM-B on Thu avoids Tue clash with Lab A; STAT-B on Thu 780 avoids Mon BIO)
+  // Valid with Lab A (MATH-B on Thu avoids Tue clash with Lab A; STAT-B on Thu 780 avoids Mon BIO)
   const validWithLabA = validateDraft(
-    ['CHEM-B', 'BIO-214', 'BIO-214L-A'],
+    ['MATH-B', 'BIO-214', 'BIO-214L-A'],
     PRODUCTION_CATALOG
   );
   assert.equal(validWithLabA.ok, true);
@@ -452,7 +466,7 @@ test('validateDraft accepts valid draft with BIO-214 and exactly one matching la
 
 test('validateDraft rejects draft with BIO-214 missing its required linked lab', () => {
   const missingLab = validateDraft(
-    ['CHEM-A', 'STAT-B', 'BIO-214'],
+    ['MATH-A', 'STAT-B', 'BIO-214'],
     PRODUCTION_CATALOG
   );
   assert.equal(missingLab.ok, false);
@@ -461,7 +475,7 @@ test('validateDraft rejects draft with BIO-214 missing its required linked lab',
 
 test('validateDraft rejects draft with extra linked labs exceeding max', () => {
   const twoLabs = validateDraft(
-    ['CHEM-B', 'BIO-214', 'BIO-214L-A', 'BIO-214L-B'],
+    ['MATH-B', 'BIO-214', 'BIO-214L-A', 'BIO-214L-B'],
     PRODUCTION_CATALOG
   );
   assert.equal(twoLabs.ok, false);
@@ -470,7 +484,7 @@ test('validateDraft rejects draft with extra linked labs exceeding max', () => {
 });
 
 test('validateDraft rejects orphan linked lab selected without its parent lecture', () => {
-  const orphan = validateDraft(['CHEM-A', 'BIO-214L-B'], PRODUCTION_CATALOG);
+  const orphan = validateDraft(['MATH-A', 'BIO-214L-B'], PRODUCTION_CATALOG);
   assert.equal(orphan.ok, false);
   assert.equal(orphan.reason, 'orphan-linked-section');
 });
@@ -480,7 +494,7 @@ test('validateDraft rejects linked lab with wrong linkedGroup', () => {
     item.id === 'BIO-214L-B' ? { ...item, linkedGroup: 'WRONG-GROUP' } : item
   );
   const result = validateDraft(
-    ['CHEM-A', 'STAT-B', 'BIO-214', 'BIO-214L-B'],
+    ['MATH-A', 'STAT-B', 'BIO-214', 'BIO-214L-B'],
     wrongGroupCat
   );
   assert.equal(result.ok, false);
@@ -493,7 +507,7 @@ test('validateDraft fails closed when required-link metadata is removed or corru
     item.id === 'BIO-214' ? { ...item, requires: undefined } : item
   );
   const res1 = validateDraft(
-    ['CHEM-A', 'STAT-B', 'BIO-214', 'BIO-214L-B'],
+    ['MATH-A', 'STAT-B', 'BIO-214', 'BIO-214L-B'],
     missingRequires
   );
   assert.equal(res1.ok, false);
@@ -506,7 +520,7 @@ test('validateDraft fails closed when required-link metadata is removed or corru
       : item
   );
   const res2 = validateDraft(
-    ['CHEM-A', 'STAT-B', 'BIO-214', 'BIO-214L-B'],
+    ['MATH-A', 'STAT-B', 'BIO-214', 'BIO-214L-B'],
     invalidCount
   );
   assert.equal(res2.ok, false);
@@ -568,21 +582,21 @@ test('enumerateRepairs returns empty array for invalid or malformed draft inputs
   assert.deepEqual(enumerateRepairs(null, cat), []);
   assert.deepEqual(enumerateRepairs(undefined, cat), []);
   assert.deepEqual(enumerateRepairs(42, cat), []);
-  assert.deepEqual(enumerateRepairs('CHEM-A', cat), []);
+  assert.deepEqual(enumerateRepairs('MATH-A', cat), []);
   assert.deepEqual(enumerateRepairs([42], cat), []);
-  assert.deepEqual(enumerateRepairs(['CHEM-A', 'CHEM-A'], cat), []); // duplicate draft IDs
+  assert.deepEqual(enumerateRepairs(['MATH-A', 'MATH-A'], cat), []); // duplicate draft IDs
 });
 
 test('enumerateRepairs returns empty array for malformed or missing catalogue', () => {
   assert.deepEqual(enumerateRepairs([...CATALOG_INITIAL_DRAFT], null), []);
   assert.deepEqual(enumerateRepairs([...CATALOG_INITIAL_DRAFT], undefined), []);
   assert.deepEqual(enumerateRepairs([...CATALOG_INITIAL_DRAFT], 'bad'), []);
-  assert.deepEqual(enumerateRepairs([...CATALOG_INITIAL_DRAFT], [{ id: 'CHEM-A' }, { id: 'CHEM-A' }]), []); // dup catalogue
+  assert.deepEqual(enumerateRepairs([...CATALOG_INITIAL_DRAFT], [{ id: 'MATH-A' }, { id: 'MATH-A' }]), []); // dup catalogue
 });
 
 test('enumerateRepairs returns empty array if requested section is already in the draft', () => {
   const cat = getCatalogForScenario('main');
-  assert.deepEqual(enumerateRepairs(['CHEM-A', 'STAT-A', CATALOG_REQUESTED_SECTION_ID], cat), []);
+  assert.deepEqual(enumerateRepairs(['MATH-A', 'STAT-A', CATALOG_REQUESTED_SECTION_ID], cat), []);
 });
 
 test('enumerateRepairs returns empty array if requested section is unknown in the catalogue', () => {
@@ -600,7 +614,7 @@ test('enumerateRepairs: main scenario yields exactly one candidate with correct 
   const cat = getCatalogForScenario('main');
   const candidates = enumerateRepairs([...CATALOG_INITIAL_DRAFT], cat);
   assert.equal(candidates.length, 1);
-  assert.deepEqual(candidates[0].ids, ['BIO-214', 'BIO-214L-B', 'CHEM-A', 'STAT-B']);
+  assert.deepEqual(candidates[0].ids, ['BIO-214', 'BIO-214L-B', 'MATH-A', 'STAT-B']);
 });
 
 test('enumerateRepairs: main scenario candidate has correct swap (STAT-A → STAT-B)', () => {
@@ -613,7 +627,7 @@ test('enumerateRepairs: main scenario candidate has correct added and kept sets'
   const cat = getCatalogForScenario('main');
   const [candidate] = enumerateRepairs([...CATALOG_INITIAL_DRAFT], cat);
   assert.deepEqual(candidate.added, ['BIO-214', 'BIO-214L-B', 'STAT-B']);
-  assert.deepEqual(candidate.kept, ['CHEM-A']);
+  assert.deepEqual(candidate.kept, ['MATH-A']);
 });
 
 test('enumerateRepairs stops after finding a valid single-swap plan', () => {
@@ -653,18 +667,18 @@ test('enumerateRepairs falls back to two swaps only when no single-swap plan wor
   assert.deepEqual(
     candidates[0].swaps.map(({ old, replacement }) => [old, replacement]),
     [
-      ['CHEM-A', 'CHEM-B'],
+      ['MATH-A', 'MATH-B'],
       ['STAT-A', 'STAT-B'],
     ]
   );
 });
 
 test('enumerateRepairs finds a two-swap course-section change after single swaps fail', () => {
-  const draft = ['BIO-214', 'BIO-214L-A', 'CHEM-B', 'STAT-B'];
+  const draft = ['BIO-214', 'BIO-214L-A', 'MATH-B', 'STAT-B'];
   const candidates = enumerateRepairs(
     draft,
     getCatalogForScenario('main'),
-    'CHEM-A',
+    'MATH-A',
     { firstStep: true }
   );
 
@@ -674,38 +688,38 @@ test('enumerateRepairs finds a two-swap course-section change after single swaps
     candidates[0].swaps.map(({ old, replacement }) => [old, replacement]),
     [
       ['BIO-214L-A', 'BIO-214L-B'],
-      ['CHEM-B', 'CHEM-A'],
+      ['MATH-B', 'MATH-A'],
     ]
   );
 });
 
 test('enumerateRepairs rejects undeclared alternate (alternate not in section.alternates)', () => {
-  // Patch STAT-A so its alternates point to CHEM-B instead of STAT-B
+  // Patch STAT-A so its alternates point to MATH-B instead of STAT-B
   const cat = getCatalogForScenario('main').map((s) =>
-    s.id === 'STAT-A' ? { ...s, alternates: ['CHEM-B'] } : s
+    s.id === 'STAT-A' ? { ...s, alternates: ['MATH-B'] } : s
   );
   assert.deepEqual(enumerateRepairs([...CATALOG_INITIAL_DRAFT], cat), []);
 });
 
 test('enumerateRepairs rejects swap where alternate has a different course or component', () => {
-  // Patch STAT-A alternates to include CHEM-A (different course)
+  // Patch STAT-A alternates to include MATH-A (different course)
   const cat = getCatalogForScenario('main').map((s) =>
-    s.id === 'STAT-A' ? { ...s, alternates: ['CHEM-A'] } : s
+    s.id === 'STAT-A' ? { ...s, alternates: ['MATH-A'] } : s
   );
-  // CHEM-A is already in draft so result may be empty; alternately patch a section not in draft
-  // Use a fresh scenario: STAT-A declares CHEM-B as alternate, CHEM-B is different course
+  // MATH-A is already in draft so result may be empty; alternately patch a section not in draft
+  // Use a fresh scenario: STAT-A declares MATH-B as alternate, MATH-B is different course
   const cat2 = getCatalogForScenario('main').map((s) =>
-    s.id === 'STAT-A' ? { ...s, alternates: ['CHEM-B'] } : s
+    s.id === 'STAT-A' ? { ...s, alternates: ['MATH-B'] } : s
   );
   assert.deepEqual(enumerateRepairs([...CATALOG_INITIAL_DRAFT], cat2), []);
 });
 
 test('enumerateRepairs: direct add (no swap) is supported when no swap needed', () => {
   // Draft already has STAT-B (which does not conflict with BIO-214); direct add should work
-  // CHEM-A Tue 10-11, STAT-B Thu 13-14, BIO-214 Mon 13-14, BIO-214L-B Wed 14-16 -> no conflicts
+  // MATH-A Tue 10-11, STAT-B Thu 13-14, BIO-214 Mon 13-14, BIO-214L-B Wed 14-16 -> no conflicts
   const cat = getCatalogForScenario('main');
-  // Request BIO-214 from draft ['CHEM-A', 'STAT-B'] — should find direct add candidate (no swap)
-  const candidates = enumerateRepairs(['CHEM-A', 'STAT-B'], cat);
+  // Request BIO-214 from draft ['MATH-A', 'STAT-B'] — should find direct add candidate (no swap)
+  const candidates = enumerateRepairs(['MATH-A', 'STAT-B'], cat);
   assert.ok(candidates.length >= 1, 'direct add without swap should yield at least one candidate');
   const directAdd = candidates.find((c) => c.swap === null);
   assert.ok(directAdd, 'should include a no-swap (direct add) candidate');
@@ -716,7 +730,7 @@ test('enumerateRepairs: direct add (no swap) is supported when no swap needed', 
 test('enumerateRepairs: no-swap candidates sorted before swap candidates', () => {
   // When both direct-add and swap candidates exist, no-swap should appear first
   const cat = getCatalogForScenario('main');
-  const candidates = enumerateRepairs(['CHEM-A', 'STAT-B'], cat);
+  const candidates = enumerateRepairs(['MATH-A', 'STAT-B'], cat);
   if (candidates.length > 1) {
     const firstSwapIndex = candidates.findIndex((c) => c.swap !== null);
     const lastDirectIndex = candidates.reduce((acc, c, i) => (c.swap === null ? i : acc), -1);
@@ -758,15 +772,15 @@ test('enumerateRepairs: unsupported multi-link requirement (requires.length > 1)
 
 // --- Validate, deduplicate, rank candidates ---
 
-test('exact main candidate is BIO-214 + BIO-214L-B + CHEM-A + STAT-B (Chemistry kept, Statistics swapped)', () => {
+test('exact main candidate is BIO-214 + BIO-214L-B + MATH-A + STAT-B (Chemistry kept, Statistics swapped)', () => {
   const cat = getCatalogForScenario('main');
   const candidates = enumerateRepairs([...CATALOG_INITIAL_DRAFT], cat);
   assert.equal(candidates.length, 1, 'main scenario must yield exactly one candidate');
   const [c] = candidates;
   // Exact sorted IDs
-  assert.deepEqual(c.ids, ['BIO-214', 'BIO-214L-B', 'CHEM-A', 'STAT-B']);
-  // Chemistry is kept (CHEM-A stays, was in original draft)
-  assert.ok(c.kept.includes('CHEM-A'), 'CHEM-A must be in kept set');
+  assert.deepEqual(c.ids, ['BIO-214', 'BIO-214L-B', 'MATH-A', 'STAT-B']);
+  // Chemistry is kept (MATH-A stays, was in original draft)
+  assert.ok(c.kept.includes('MATH-A'), 'MATH-A must be in kept set');
   assert.ok(!c.kept.includes('STAT-A'), 'STAT-A must not be in kept set');
   // Statistics is swapped (STAT-A → STAT-B)
   assert.deepEqual(c.swap, { old: 'STAT-A', replacement: 'STAT-B' });
@@ -836,7 +850,7 @@ test('independent validation rejects candidate with corrupted seat on swap targe
 
 test('stable ordering — no-swap candidates always precede swap candidates', () => {
   const cat = getCatalogForScenario('main');
-  const candidates = enumerateRepairs(['CHEM-A', 'STAT-B'], cat);
+  const candidates = enumerateRepairs(['MATH-A', 'STAT-B'], cat);
   let seenSwap = false;
   for (const c of candidates) {
     if (c.swap !== null) seenSwap = true;
@@ -891,12 +905,12 @@ test('isCurrentCandidate fails if candidate IDs input is not an array or is inva
 test('isCurrentCandidate fails if draft has changed', () => {
   const cat = getCatalogForScenario('main');
   const [candidate] = enumerateRepairs([...CATALOG_INITIAL_DRAFT], cat);
-  // Student modified draft: removed CHEM-A
+  // Student modified draft: removed MATH-A
   assert.equal(isCurrentCandidate(['STAT-A'], candidate.ids, cat), false);
   // Student modified draft: added something else
-  assert.equal(isCurrentCandidate(['CHEM-A'], candidate.ids, cat), false);
+  assert.equal(isCurrentCandidate(['MATH-A'], candidate.ids, cat), false);
   // Student modified draft: completely different draft
-  assert.equal(isCurrentCandidate(['CHEM-B'], candidate.ids, cat), false);
+  assert.equal(isCurrentCandidate(['MATH-B'], candidate.ids, cat), false);
   // Empty draft
   assert.equal(isCurrentCandidate([], candidate.ids, cat), false);
 });
@@ -904,19 +918,19 @@ test('isCurrentCandidate fails if draft has changed', () => {
 test('isCurrentCandidate fails if candidate IDs were mutated to an invalid or stale schedule', () => {
   const cat = getCatalogForScenario('main');
   // Revert swap: keep STAT-A instead of STAT-B, producing conflict
-  const corrupted = ['BIO-214', 'BIO-214L-B', 'CHEM-A', 'STAT-A'];
+  const corrupted = ['BIO-214', 'BIO-214L-B', 'MATH-A', 'STAT-A'];
   assert.equal(isCurrentCandidate([...CATALOG_INITIAL_DRAFT], corrupted, cat), false);
   // Omit linked lab
-  const missingLab = ['BIO-214', 'CHEM-A', 'STAT-B'];
+  const missingLab = ['BIO-214', 'MATH-A', 'STAT-B'];
   assert.equal(isCurrentCandidate([...CATALOG_INITIAL_DRAFT], missingLab, cat), false);
   // Unknown section ID in candidate
-  const unknownSection = ['BIO-214', 'BIO-214L-B', 'CHEM-A', 'STAT-999'];
+  const unknownSection = ['BIO-214', 'BIO-214L-B', 'MATH-A', 'STAT-999'];
   assert.equal(isCurrentCandidate([...CATALOG_INITIAL_DRAFT], unknownSection, cat), false);
 });
 
 test('isCurrentCandidate fails if candidate time was mutated in catalog to overlap', () => {
   const [candidate] = enumerateRepairs([...CATALOG_INITIAL_DRAFT], getCatalogForScenario('main'));
-  // Mutate candidate section time in catalog so it overlaps with CHEM-A (Tue 600-660)
+  // Mutate candidate section time in catalog so it overlaps with MATH-A (Tue 600-660)
   const mutatedCat = getCatalogForScenario('main').map((s) =>
     s.id === 'STAT-B' ? { ...s, day: 'Tue', start: 600, end: 660 } : s
   );
@@ -964,7 +978,7 @@ test('validateDraft rejects malformed draft ID entries (empty string, whitespace
   assert.equal(validateDraft([undefined], cat).ok, false);
   assert.equal(validateDraft([42], cat).ok, false);
   assert.equal(validateDraft([{}], cat).ok, false);
-  assert.equal(validateDraft([['CHEM-A']], cat).ok, false);
+  assert.equal(validateDraft([['MATH-A']], cat).ok, false);
 });
 
 test('validateDraft rejects case-mismatched section IDs', () => {
@@ -976,54 +990,54 @@ test('validateDraft rejects case-mismatched section IDs', () => {
 
 test('validateDraft rejects draft containing unknown IDs', () => {
   const cat = getCatalogForScenario('main');
-  const res = validateDraft(['CHEM-A', 'UNKNOWN-SECTION-999'], cat);
+  const res = validateDraft(['MATH-A', 'UNKNOWN-SECTION-999'], cat);
   assert.equal(res.ok, false);
   assert.ok(res.reason.includes('unknown section ID in draft'));
 });
 
 test('validateDraft rejects section with empty or non-string component', () => {
   const badCat = getCatalogForScenario('main').map((s) =>
-    s.id === 'CHEM-A' ? { ...s, component: '' } : s
+    s.id === 'MATH-A' ? { ...s, component: '' } : s
   );
-  assert.equal(validateDraft(['CHEM-A'], badCat).ok, false);
+  assert.equal(validateDraft(['MATH-A'], badCat).ok, false);
 });
 
 test('validateDraft rejects section with empty or non-string course', () => {
   const badCat = getCatalogForScenario('main').map((s) =>
-    s.id === 'CHEM-A' ? { ...s, course: '' } : s
+    s.id === 'MATH-A' ? { ...s, course: '' } : s
   );
-  assert.equal(validateDraft(['CHEM-A'], badCat).ok, false);
+  assert.equal(validateDraft(['MATH-A'], badCat).ok, false);
 });
 
 test('validateDraft rejects section with zero or negative duration (start >= end)', () => {
   const badCat1 = getCatalogForScenario('main').map((s) =>
-    s.id === 'CHEM-A' ? { ...s, start: 600, end: 600 } : s
+    s.id === 'MATH-A' ? { ...s, start: 600, end: 600 } : s
   );
-  assert.equal(validateDraft(['CHEM-A'], badCat1).ok, false);
+  assert.equal(validateDraft(['MATH-A'], badCat1).ok, false);
 
   const badCat2 = getCatalogForScenario('main').map((s) =>
-    s.id === 'CHEM-A' ? { ...s, start: 660, end: 600 } : s
+    s.id === 'MATH-A' ? { ...s, start: 660, end: 600 } : s
   );
-  assert.equal(validateDraft(['CHEM-A'], badCat2).ok, false);
+  assert.equal(validateDraft(['MATH-A'], badCat2).ok, false);
 });
 
 test('validateDraft rejects section with start or end exceeding 24 hours (1440)', () => {
   const badCat1 = getCatalogForScenario('main').map((s) =>
-    s.id === 'CHEM-A' ? { ...s, start: -5, end: 600 } : s
+    s.id === 'MATH-A' ? { ...s, start: -5, end: 600 } : s
   );
-  assert.equal(validateDraft(['CHEM-A'], badCat1).ok, false);
+  assert.equal(validateDraft(['MATH-A'], badCat1).ok, false);
 
   const badCat2 = getCatalogForScenario('main').map((s) =>
-    s.id === 'CHEM-A' ? { ...s, start: 600, end: 1441 } : s
+    s.id === 'MATH-A' ? { ...s, start: 600, end: 1441 } : s
   );
-  assert.equal(validateDraft(['CHEM-A'], badCat2).ok, false);
+  assert.equal(validateDraft(['MATH-A'], badCat2).ok, false);
 });
 
 test('validateDraft rejects section with invalid day of the week', () => {
   const badCat = getCatalogForScenario('main').map((s) =>
-    s.id === 'CHEM-A' ? { ...s, day: 'Funday' } : s
+    s.id === 'MATH-A' ? { ...s, day: 'Funday' } : s
   );
-  assert.equal(validateDraft(['CHEM-A'], badCat).ok, false);
+  assert.equal(validateDraft(['MATH-A'], badCat).ok, false);
 });
 
 test('overlaps correctly distinguishes adjacent half-open boundaries from 1-minute overlap', () => {
@@ -1059,14 +1073,14 @@ test('overlaps returns false for identical time intervals on different days', ()
 
 test('enumerateRepairs rejects draft with malformed or non-string IDs', () => {
   const cat = getCatalogForScenario('main');
-  assert.deepEqual(enumerateRepairs(['CHEM-A', ''], cat), []);
-  assert.deepEqual(enumerateRepairs(['CHEM-A', null], cat), []);
-  assert.deepEqual(enumerateRepairs(['CHEM-A', 42], cat), []);
+  assert.deepEqual(enumerateRepairs(['MATH-A', ''], cat), []);
+  assert.deepEqual(enumerateRepairs(['MATH-A', null], cat), []);
+  assert.deepEqual(enumerateRepairs(['MATH-A', 42], cat), []);
 });
 
 test('enumerateRepairs rejects draft with duplicate IDs', () => {
   const cat = getCatalogForScenario('main');
-  assert.deepEqual(enumerateRepairs(['CHEM-A', 'CHEM-A'], cat), []);
+  assert.deepEqual(enumerateRepairs(['MATH-A', 'MATH-A'], cat), []);
 });
 
 test('enumerateRepairs rejects parent section requiring multiple linked components (unsupported multi-link)', () => {
@@ -1085,9 +1099,9 @@ test('enumerateRepairs rejects parent section requiring multiple linked componen
 });
 
 test('enumerateRepairs rejects alternate swap with mismatched course or component', () => {
-  // Course mismatch: STAT-A declares CHEM-B as alternate
+  // Course mismatch: STAT-A declares MATH-B as alternate
   const catCrossCourse = getCatalogForScenario('main').map((s) =>
-    s.id === 'STAT-A' ? { ...s, alternates: ['CHEM-B'] } : s
+    s.id === 'STAT-A' ? { ...s, alternates: ['MATH-B'] } : s
   );
   assert.deepEqual(enumerateRepairs([...CATALOG_INITIAL_DRAFT], catCrossCourse), []);
 
@@ -1120,7 +1134,7 @@ test('click-time Apply revalidation: rejects candidate corrupted in memory befor
   // Preview generated candidate; before user clicks Apply, candidate is mutated in memory:
   const corruptedCandidate = {
     ...candidate,
-    ids: ['BIO-214', 'BIO-214L-B', 'CHEM-A', 'STAT-A'], // reverted to conflicting STAT-A
+    ids: ['BIO-214', 'BIO-214L-B', 'MATH-A', 'STAT-A'], // reverted to conflicting STAT-A
   };
 
   // Click-time revalidation must reject it
@@ -1133,7 +1147,7 @@ test('click-time Apply revalidation: rejects candidate with injected extra secti
   const [candidate] = enumerateRepairs([...CATALOG_INITIAL_DRAFT], cat);
 
   // Injected extra section before Apply click
-  const tamperedIds = [...candidate.ids, 'CHEM-B'];
+  const tamperedIds = [...candidate.ids, 'MATH-B'];
   const isSafeToApply = isCurrentCandidate([...CATALOG_INITIAL_DRAFT], tamperedIds, cat);
   assert.equal(isSafeToApply, false, 'click-time revalidation must reject candidate with injected extra ID');
 });
@@ -1152,7 +1166,7 @@ test('click-time Apply revalidation: rejects candidate if user altered backgroun
   const cat = getCatalogForScenario('main');
   const [candidate] = enumerateRepairs([...CATALOG_INITIAL_DRAFT], cat);
 
-  // User changed draft in background before clicking Apply (e.g. removed CHEM-A)
+  // User changed draft in background before clicking Apply (e.g. removed MATH-A)
   const alteredDraft = ['STAT-A'];
   const isSafeToApply = isCurrentCandidate(alteredDraft, candidate.ids, cat);
   assert.equal(isSafeToApply, false, 'click-time revalidation must reject candidate when draft state has changed');
@@ -1177,9 +1191,9 @@ test('Gate A verification: confirms all 7 correctness and safety thresholds pass
   // 1. Exact expected main candidate
   const candidates = enumerateRepairs(initialDraft, mainCat);
   assert.equal(candidates.length, 1);
-  assert.deepEqual(candidates[0].ids, ['BIO-214', 'BIO-214L-B', 'CHEM-A', 'STAT-B']);
+  assert.deepEqual(candidates[0].ids, ['BIO-214', 'BIO-214L-B', 'MATH-A', 'STAT-B']);
   assert.deepEqual(candidates[0].swap, { old: 'STAT-A', replacement: 'STAT-B' });
-  assert.deepEqual(candidates[0].kept, ['CHEM-A']);
+  assert.deepEqual(candidates[0].kept, ['MATH-A']);
 
   // 2. Zero candidate for known-data no-repair scenario
   const noRepairCat = getCatalogForScenario('noRepair');
@@ -1207,7 +1221,7 @@ test('Gate A verification: confirms all 7 correctness and safety thresholds pass
   assert.equal(new Set(keys).size, keys.length);
 
   // 6. Independent validator rejects mutated candidate
-  const mutatedIds = ['BIO-214', 'BIO-214L-B', 'CHEM-A', 'STAT-A'];
+  const mutatedIds = ['BIO-214', 'BIO-214L-B', 'MATH-A', 'STAT-A'];
   assert.equal(validateDraft(mutatedIds, mainCat).ok, false);
 
   // 7. Click-time Apply revalidation rejects candidate corrupted after preview

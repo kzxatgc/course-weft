@@ -7,7 +7,7 @@
  */
 
 export const REQUESTED_SECTION_ID = 'BIO-214';
-export const INITIAL_DRAFT = Object.freeze(['CHEM-A', 'STAT-A']);
+export const INITIAL_DRAFT = Object.freeze(['MATH-A', 'STAT-A']);
 
 /**
  * Derive seat status from enrolled/capacity counts.
@@ -40,13 +40,13 @@ const section = (id, course, title, component, day, start, end, enrolled, capaci
   });
 
 export const MAIN_CATALOG = Object.freeze([
-  section('CHEM-A', 'CHEM', 'General Chemistry', 'lecture', 'Tue', 600, 660, 14, 30, {
+  section('MATH-A', 'MATH', 'Mathematics', 'lecture', 'Tue', 600, 660, 14, 30, {
     sectionName: 'Section A',
-    alternates: ['CHEM-B'],
+    alternates: ['MATH-B'],
   }),
-  section('CHEM-B', 'CHEM', 'General Chemistry', 'lecture', 'Thu', 600, 660, 22, 30, {
+  section('MATH-B', 'MATH', 'Mathematics', 'lecture', 'Thu', 600, 660, 22, 30, {
     sectionName: 'Section B',
-    alternates: ['CHEM-A'],
+    alternates: ['MATH-A'],
   }),
   section('STAT-A', 'STAT', 'Introductory Statistics', 'lecture', 'Mon', 780, 840, 18, 30, {
     sectionName: 'Section A',
@@ -56,7 +56,7 @@ export const MAIN_CATALOG = Object.freeze([
     sectionName: 'Section B',
     alternates: ['STAT-A'],
   }),
-  section('BIO-214', 'BIO', 'Cell Biology', 'lecture', 'Mon', 780, 840, 20, 30, {
+  section('BIO-214', 'BIO', 'Cell Biology', 'lecture', 'Mon', 780, 840, 34, 60, {
     sectionName: 'Lecture',
     requires: [{ component: 'lab', linkedGroup: 'BIO-214-labs', min: 1, max: 1 }],
   }),
@@ -79,14 +79,14 @@ export const MAIN_CATALOG = Object.freeze([
  * Prevents shared mutations across callers.
  *
  * Scenarios:
- * - 'main'     : successful-repair scenario; all sections have counts; BIO-214L-B has seats (22/30).
- * - 'noRepair' : known-data no-repair scenario; BIO-214L-B and STAT-B are full.
+ * - 'main'     : STAT-B is open and BIO-214 enrollment matches its lab sections (34/60).
+ * - 'noRepair' : MATH-B and BIO-214L-B are full; STAT-B has vacancies; BIO-214 remains open (42/60).
  *
  * @param {'main' | 'noRepair'} scenario
  * @returns {Array<object>}
  */
 export function catalogForScenario(scenario = 'main') {
-  return MAIN_CATALOG.map((item) => {
+  const catalog = MAIN_CATALOG.map((item) => {
     const base = {
       ...item,
       requires: item.requires ? item.requires.map((r) => ({ ...r })) : undefined,
@@ -96,10 +96,24 @@ export function catalogForScenario(scenario = 'main') {
     if (scenario === 'noRepair' && item.id === 'BIO-214L-B') {
       return { ...base, enrolled: 30, capacity: 30, seat: 'full' };
     }
-    if (scenario === 'noRepair' && item.id === 'STAT-B') {
+    if (scenario === 'noRepair' && item.id === 'MATH-B') {
       return { ...base, enrolled: 30, capacity: 30, seat: 'full' };
     }
 
     return base;
+  });
+
+  const labEnrollment = catalog
+    .filter((item) => item.linkedGroup === 'BIO-214-labs')
+    .reduce((total, lab) => total + lab.enrolled, 0);
+
+  return catalog.map((item) => {
+    if (item.id !== REQUESTED_SECTION_ID) return item;
+    return {
+      ...item,
+      enrolled: labEnrollment,
+      capacity: 60,
+      seat: deriveSeat(labEnrollment, 60),
+    };
   });
 }

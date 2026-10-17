@@ -154,6 +154,12 @@ describe('SELECT_SCENARIO', () => {
     assert.equal(labB.seat, 'full');
     assert.equal(labB.enrolled, 30);
     assert.equal(labB.capacity, 30);
+    assert.equal(s.availableCourses.find((c) => c.id === 'MATH-B').seat, 'full');
+    assert.equal(s.availableCourses.find((c) => c.id === 'STAT-B').seat, 'open');
+    const bio = s.availableCourses.find((c) => c.id === 'BIO-214');
+    assert.equal(bio.enrolled, 42);
+    assert.equal(bio.capacity, 60);
+    assert.equal(bio.seat, 'open');
   });
 
   it('main availableCourses has BIO-214L-B as open', () => {
@@ -278,7 +284,7 @@ describe('request and candidate', () => {
 
   it('SET_REQUEST clears any existing candidate', () => {
     const s = dispatch([
-      { type: ACTION.SET_CANDIDATE, payload: { ids: ['CHEM-A'] } },
+      { type: ACTION.SET_CANDIDATE, payload: { ids: ['MATH-A'] } },
       { type: ACTION.SET_REQUEST, payload: 'BIO-214' },
     ]);
     assert.equal(s.candidate, null);
@@ -296,8 +302,8 @@ describe('request and candidate', () => {
   });
 
   it('SET_CANDIDATE stores candidate', () => {
-    const s = dispatch([{ type: ACTION.SET_CANDIDATE, payload: { ids: ['CHEM-A', 'BIO-214'] } }]);
-    assert.deepEqual(s.candidate, { ids: ['CHEM-A', 'BIO-214'] });
+    const s = dispatch([{ type: ACTION.SET_CANDIDATE, payload: { ids: ['MATH-A', 'BIO-214'] } }]);
+    assert.deepEqual(s.candidate, { ids: ['MATH-A', 'BIO-214'] });
   });
 
   it('SET_CANDIDATE with null clears candidate', () => {
@@ -405,16 +411,16 @@ describe('snapshot and undo', () => {
 
 describe('ADD_SECTION', () => {
   it('adds a valid section to draft after removal of other', () => {
-    // Start with CHEM-A and STAT-A. Remove STAT-A, then add STAT-B.
+    // Start with MATH-A and STAT-A. Remove STAT-A, then add STAT-B.
     const s1 = reduce(initialState(), { type: ACTION.REMOVE_SECTION, payload: 'STAT-A' });
     const s2 = reduce(s1, { type: ACTION.ADD_SECTION, payload: 'STAT-B' });
-    assert.deepEqual(s2.draft, ['CHEM-A', 'STAT-B']);
+    assert.deepEqual(s2.draft, ['MATH-A', 'STAT-B']);
     assert.equal(s2.notice.kind, 'success');
   });
 
   it('rejects adding an already-selected section without mutating draft', () => {
     const s = initialState();
-    const next = reduce(s, { type: ACTION.ADD_SECTION, payload: 'CHEM-A' });
+    const next = reduce(s, { type: ACTION.ADD_SECTION, payload: 'MATH-A' });
     assert.deepEqual(next.draft, s.draft);
     assert.equal(next.notice.kind, 'info');
     assert.match(next.notice.message, /already selected/i);
@@ -429,10 +435,10 @@ describe('ADD_SECTION', () => {
 
   it('rejects adding to wrong day without mutating draft', () => {
     const s = initialState();
-    // CHEM-B meets on Thu; try dropping it on Mon
+    // MATH-B meets on Thu; try dropping it on Mon
     const next = reduce(s, {
       type: ACTION.ADD_SECTION,
-      payload: { sectionId: 'CHEM-B', dropDay: 'Mon' },
+      payload: { sectionId: 'MATH-B', dropDay: 'Mon' },
     });
     assert.deepEqual(next.draft, s.draft);
     assert.equal(next.notice.kind, 'error');
@@ -441,7 +447,7 @@ describe('ADD_SECTION', () => {
 
   it('adds standalone lab to draft and prompts for lecture', () => {
     const s = initialState();
-    // Use BIO-214L-B (Wed 840-960) which does not conflict with CHEM-A (Tue) or STAT-A (Mon)
+    // Use BIO-214L-B (Wed 840-960) which does not conflict with MATH-A (Tue) or STAT-A (Mon)
     const next = reduce(s, { type: ACTION.ADD_SECTION, payload: 'BIO-214L-B' });
     assert.deepEqual(next.draft, [...s.draft, 'BIO-214L-B']);
     assert.equal(next.notice.kind, 'info');
@@ -472,7 +478,7 @@ describe('ADD_SECTION', () => {
     const s1 = reduce(initialState(), { type: ACTION.REMOVE_SECTION, payload: 'STAT-A' });
     // Adding BIO-214 places it on the draft so the linked lab outline can guide the user
     const s2 = reduce(s1, { type: ACTION.ADD_SECTION, payload: 'BIO-214' });
-    assert.deepEqual(s2.draft, ['CHEM-A', 'BIO-214']);
+    assert.deepEqual(s2.draft, ['MATH-A', 'BIO-214']);
     assert.equal(s2.request, null);
     assert.equal(s2.notice.kind, 'info');
     assert.match(nextNoticeTitleOrMessage(s2), /lab/i);
@@ -490,12 +496,12 @@ function nextNoticeTitleOrMessage(state) {
 describe('SWITCH_SECTION', () => {
   it('switches to declared alternate after whole-draft validation', () => {
     const s = initialState();
-    // STAT-A has declared alternate STAT-B; switching produces valid draft ['CHEM-A', 'STAT-B']
+    // STAT-A has declared alternate STAT-B; switching produces valid draft ['MATH-A', 'STAT-B']
     const next = reduce(s, {
       type: ACTION.SWITCH_SECTION,
       payload: { fromId: 'STAT-A', toId: 'STAT-B' },
     });
-    assert.deepEqual(next.draft, ['CHEM-A', 'STAT-B']);
+    assert.deepEqual(next.draft, ['MATH-A', 'STAT-B']);
     assert.equal(next.notice.kind, 'success');
   });
 
@@ -505,16 +511,16 @@ describe('SWITCH_SECTION', () => {
       type: ACTION.SWITCH_SECTION,
       payload: 'STAT-B',
     });
-    assert.deepEqual(next.draft, ['CHEM-A', 'STAT-B']);
+    assert.deepEqual(next.draft, ['MATH-A', 'STAT-B']);
     assert.equal(next.notice.kind, 'success');
   });
 
   it('refuses switch to a non-declared alternate without mutating draft', () => {
     const s = initialState();
-    // STAT-A declared alternate is STAT-B, NOT CHEM-B
+    // STAT-A declared alternate is STAT-B, NOT MATH-B
     const next = reduce(s, {
       type: ACTION.SWITCH_SECTION,
-      payload: { fromId: 'STAT-A', toId: 'CHEM-B' },
+      payload: { fromId: 'STAT-A', toId: 'MATH-B' },
     });
     assert.deepEqual(next.draft, s.draft);
     assert.equal(next.notice.kind, 'error');
@@ -550,7 +556,7 @@ describe('REMOVE_SECTION', () => {
   it('removes section from draft', () => {
     const s = initialState();
     const next = reduce(s, { type: ACTION.REMOVE_SECTION, payload: 'STAT-A' });
-    assert.deepEqual(next.draft, ['CHEM-A']);
+    assert.deepEqual(next.draft, ['MATH-A']);
     assert.equal(next.notice.kind, 'success');
   });
 
@@ -564,19 +570,19 @@ describe('REMOVE_SECTION', () => {
     // Manually create a state with a linked lecture and lab in draft
     const s = {
       ...initialState(),
-      draft: Object.freeze(['CHEM-A', 'BIO-214', 'BIO-214L-A']),
+      draft: Object.freeze(['MATH-A', 'BIO-214', 'BIO-214L-A']),
     };
     const next = reduce(s, { type: ACTION.REMOVE_SECTION, payload: 'BIO-214' });
-    assert.deepEqual(next.draft, ['CHEM-A']);
+    assert.deepEqual(next.draft, ['MATH-A']);
   });
 
   it('removing child lab keeps parent lecture in draft to restore link outlines', () => {
     const s = {
       ...initialState(),
-      draft: Object.freeze(['CHEM-A', 'BIO-214', 'BIO-214L-A']),
+      draft: Object.freeze(['MATH-A', 'BIO-214', 'BIO-214L-A']),
     };
     const next = reduce(s, { type: ACTION.REMOVE_SECTION, payload: 'BIO-214L-A' });
-    assert.deepEqual(next.draft, ['CHEM-A', 'BIO-214']);
+    assert.deepEqual(next.draft, ['MATH-A', 'BIO-214']);
   });
 });
 
@@ -592,7 +598,7 @@ describe('RESET_DRAFT', () => {
       { type: ACTION.SET_SEARCH, payload: 'bio' },
       { type: ACTION.SET_CANDIDATE, payload: { ids: ['test'] } },
     ]);
-    assert.deepEqual(mutated.draft, ['CHEM-A', 'STAT-B']);
+    assert.deepEqual(mutated.draft, ['MATH-A', 'STAT-B']);
     assert.equal(mutated.search, 'bio');
 
     const reset = reduce(mutated, { type: ACTION.RESET_DRAFT });
@@ -619,15 +625,15 @@ describe('case-insensitive search and card preservation on refusal', () => {
     const upperIds = filteredAvailableCourses(sUpper).map((c) => c.id);
     const mixedIds = filteredAvailableCourses(sMixed).map((c) => c.id);
 
-    assert.deepEqual(lowerIds, ['CHEM-A', 'CHEM-B']);
-    assert.deepEqual(upperIds, ['CHEM-A', 'CHEM-B']);
-    assert.deepEqual(mixedIds, ['CHEM-A', 'CHEM-B']);
+    assert.deepEqual(lowerIds, ['MATH-A', 'MATH-B']);
+    assert.deepEqual(upperIds, ['MATH-A', 'MATH-B']);
+    assert.deepEqual(mixedIds, ['MATH-A', 'MATH-B']);
   });
 
   it('matches sectionName in search filter', () => {
     const s = reduce(initialState(), { type: ACTION.SET_SEARCH, payload: 'Section B' });
     const ids = filteredAvailableCourses(s).map((c) => c.id);
-    assert.ok(ids.includes('CHEM-B'));
+    assert.ok(ids.includes('MATH-B'));
     assert.ok(ids.includes('STAT-B'));
   });
 
@@ -642,10 +648,10 @@ describe('case-insensitive search and card preservation on refusal', () => {
     // 2. Wrong-day rejection
     const afterWrongDay = reduce(initialState(), {
       type: ACTION.ADD_SECTION,
-      payload: { sectionId: 'CHEM-B', dropDay: 'Mon' },
+      payload: { sectionId: 'MATH-B', dropDay: 'Mon' },
     });
     assert.equal(filteredAvailableCourses(afterWrongDay).length, initialAvailableCount);
-    assert.ok(filteredAvailableCourses(afterWrongDay).some((c) => c.id === 'CHEM-B'));
+    assert.ok(filteredAvailableCourses(afterWrongDay).some((c) => c.id === 'MATH-B'));
 
     // 3. Standalone lab rejection
     const afterStandaloneLab = reduce(initialState(), {
@@ -664,29 +670,29 @@ describe('case-insensitive search and card preservation on refusal', () => {
 describe('suggestion, apply, exact undo, dismiss', () => {
   it('main flow: suggest finds first repair step, apply updates draft and snapshots, undo restores exact pre-apply state', () => {
     const s0 = initialState();
-    assert.deepEqual(s0.draft, ['CHEM-A', 'STAT-A']);
+    assert.deepEqual(s0.draft, ['MATH-A', 'STAT-A']);
 
     // 1. Suggest repair for BIO-214
     const s1 = reduce(s0, { type: ACTION.SUGGEST_REPAIR, payload: 'BIO-214' });
     assert.ok(s1.candidate !== null, 'candidate was generated');
-    assert.deepEqual(s1.candidate.ids, ['BIO-214', 'CHEM-A', 'STAT-B']);
+    assert.deepEqual(s1.candidate.ids, ['BIO-214', 'MATH-A', 'STAT-B']);
     assert.deepEqual(s1.candidate.swap, { old: 'STAT-A', replacement: 'STAT-B' });
     assert.equal(s1.notice.kind, 'info');
     assert.equal(s1.isApplied, false);
     // Suggestion does NOT mutate draft
-    assert.deepEqual(s1.draft, ['CHEM-A', 'STAT-A']);
+    assert.deepEqual(s1.draft, ['MATH-A', 'STAT-A']);
 
     // 2. Apply repair
     const s2 = reduce(s1, { type: ACTION.APPLY_REPAIR });
-    assert.deepEqual(s2.draft, ['BIO-214', 'CHEM-A', 'STAT-B']);
+    assert.deepEqual(s2.draft, ['BIO-214', 'MATH-A', 'STAT-B']);
     assert.equal(s2.isApplied, true);
     assert.ok(s2.snapshot !== null, 'snapshot created');
-    assert.deepEqual(s2.snapshot.draft, ['CHEM-A', 'STAT-A']);
+    assert.deepEqual(s2.snapshot.draft, ['MATH-A', 'STAT-A']);
     assert.equal(s2.notice.kind, 'success');
 
     // 3. Exact Undo
     const s3 = reduce(s2, { type: ACTION.UNDO_REPAIR });
-    assert.deepEqual(s3.draft, ['CHEM-A', 'STAT-A']);
+    assert.deepEqual(s3.draft, ['MATH-A', 'STAT-A']);
     assert.equal(s3.candidate, null, 'applied preview cleared');
     assert.equal(s3.snapshot, null);
     assert.equal(s3.isApplied, false);
@@ -695,15 +701,15 @@ describe('suggestion, apply, exact undo, dismiss', () => {
 
   it('stale Apply is rejected and does not mutate draft', () => {
     const s0 = initialState();
-    // Suggest repair based on initial draft ['CHEM-A', 'STAT-A']
+    // Suggest repair based on initial draft ['MATH-A', 'STAT-A']
     const s1 = reduce(s0, { type: ACTION.SUGGEST_REPAIR, payload: 'BIO-214' });
     assert.ok(s1.candidate !== null);
 
-    // Before Apply, mutate draft by removing CHEM-A
-    const s2 = reduce(s1, { type: ACTION.REMOVE_SECTION, payload: 'CHEM-A' });
+    // Before Apply, mutate draft by removing MATH-A
+    const s2 = reduce(s1, { type: ACTION.REMOVE_SECTION, payload: 'MATH-A' });
     assert.deepEqual(s2.draft, ['STAT-A']);
 
-    // Now attempt Apply with the stale candidate (which assumed CHEM-A was present)
+    // Now attempt Apply with the stale candidate (which assumed MATH-A was present)
     const s3 = reduce(s2, { type: ACTION.APPLY_REPAIR });
     // Must refuse to mutate draft!
     assert.deepEqual(s3.draft, ['STAT-A']);
@@ -722,7 +728,7 @@ describe('suggestion, apply, exact undo, dismiss', () => {
     // Attempt Apply with an invalid candidate (e.g. unknown section or clashing IDs)
     const sWithInvalid = {
       ...s0,
-      candidate: Object.freeze({ ids: ['CHEM-A', 'NONEXISTENT-999'] }),
+      candidate: Object.freeze({ ids: ['MATH-A', 'NONEXISTENT-999'] }),
     };
     const afterInvalid = reduce(sWithInvalid, { type: ACTION.APPLY_REPAIR });
     assert.deepEqual(afterInvalid.draft, s0.draft);
@@ -738,10 +744,10 @@ describe('suggestion, apply, exact undo, dismiss', () => {
       assert.ok(s.candidate !== null);
 
       s = reduce(s, { type: ACTION.APPLY_REPAIR });
-      assert.deepEqual(s.draft, ['BIO-214', 'CHEM-A', 'STAT-B']);
+      assert.deepEqual(s.draft, ['BIO-214', 'MATH-A', 'STAT-B']);
 
       s = reduce(s, { type: ACTION.UNDO_REPAIR });
-      assert.deepEqual(s.draft, ['CHEM-A', 'STAT-A']);
+      assert.deepEqual(s.draft, ['MATH-A', 'STAT-A']);
       assert.equal(s.candidate, null);
       assert.equal(s.snapshot, null);
     }
@@ -754,7 +760,7 @@ describe('suggestion, apply, exact undo, dismiss', () => {
       type: ACTION.SWITCH_SECTION,
       payload: { fromId: 'STAT-A', toId: 'STAT-B' },
     });
-    assert.deepEqual(sSwitched.draft, ['CHEM-A', 'STAT-B']);
+    assert.deepEqual(sSwitched.draft, ['MATH-A', 'STAT-B']);
 
     // 2. Student requests repair for BIO-214
     const sSuggested = reduce(sSwitched, { type: ACTION.SUGGEST_REPAIR, payload: 'BIO-214' });
@@ -768,7 +774,7 @@ describe('suggestion, apply, exact undo, dismiss', () => {
     // 4. Undo repair
     const sUndone = reduce(sApplied, { type: ACTION.UNDO_REPAIR });
     // Prior STAT-B switch MUST be completely preserved!
-    assert.deepEqual(sUndone.draft, ['CHEM-A', 'STAT-B']);
+    assert.deepEqual(sUndone.draft, ['MATH-A', 'STAT-B']);
     assert.equal(sUndone.candidate, null);
     assert.equal(sUndone.snapshot, null);
   });
@@ -779,7 +785,7 @@ describe('suggestion, apply, exact undo, dismiss', () => {
     assert.ok(s1.candidate !== null);
 
     const sDismissed = reduce(s1, { type: ACTION.DISMISS_REPAIR });
-    assert.deepEqual(sDismissed.draft, ['CHEM-A', 'STAT-A']);
+    assert.deepEqual(sDismissed.draft, ['MATH-A', 'STAT-A']);
     assert.equal(sDismissed.candidate, null);
     assert.equal(sDismissed.notice.kind, 'info');
     assert.match(sDismissed.notice.title, /no changes made/i);
@@ -797,6 +803,6 @@ describe('suggestion, apply, exact undo, dismiss', () => {
     assert.equal(sSuggested.candidate, null);
     assert.equal(sSuggested.notice.kind, 'error');
     assert.match(sSuggested.notice.title, /no suitable timetable/i);
-    assert.deepEqual(sSuggested.draft, ['CHEM-A', 'STAT-A']);
+    assert.deepEqual(sSuggested.draft, ['MATH-A', 'STAT-A']);
   });
 });

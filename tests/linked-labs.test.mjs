@@ -1,4 +1,4 @@
-﻿/**
+/**
  * tests/linked-labs.test.mjs
  *
  * Unit tests — Handle full-lab drag attempts.
@@ -35,11 +35,11 @@ function getById(catalog, id) { return catalog.find((s) => s.id === id); }
 
 describe('isBio214MissingLab', () => {
   it('returns false when BIO-214 is not in draft', () => {
-    assert.equal(isBio214MissingLab(['CHEM-A', 'STAT-A'], mainCatalog()), false);
+    assert.equal(isBio214MissingLab(['MATH-A', 'STAT-A'], mainCatalog()), false);
   });
 
   it('returns true when BIO-214 is in draft with no lab', () => {
-    assert.equal(isBio214MissingLab(['BIO-214', 'CHEM-A'], mainCatalog()), true);
+    assert.equal(isBio214MissingLab(['BIO-214', 'MATH-A'], mainCatalog()), true);
   });
 
   it('returns false when BIO-214 and BIO-214L-A are both in draft', () => {
@@ -65,7 +65,7 @@ describe('isBio214MissingLab', () => {
 
 describe('getLinkedOutlineSectionIds — main scenario', () => {
   it('returns [] when neither lecture nor lab is in draft', () => {
-    const ids = getLinkedOutlineSectionIds(['CHEM-A', 'STAT-A'], mainCatalog());
+    const ids = getLinkedOutlineSectionIds(['MATH-A', 'STAT-A'], mainCatalog());
     assert.deepEqual(ids, []);
   });
 
@@ -75,14 +75,14 @@ describe('getLinkedOutlineSectionIds — main scenario', () => {
   });
 
   it('outlines BIO-214 and all non-full labs when lecture in draft, lab missing', () => {
-    const ids = getLinkedOutlineSectionIds(['BIO-214', 'CHEM-A'], mainCatalog());
+    const ids = getLinkedOutlineSectionIds(['BIO-214', 'MATH-A'], mainCatalog());
     assert.ok(ids.includes('BIO-214'), 'lecture should be outlined');
     assert.ok(ids.includes('BIO-214L-A'), 'Lab A (open) should be outlined');
     assert.ok(ids.includes('BIO-214L-B'), 'Lab B (22/30) should be outlined in main scenario');
   });
 
   it('outlines lab and lecture when lab in draft, lecture missing', () => {
-    const ids = getLinkedOutlineSectionIds(['BIO-214L-A', 'CHEM-A'], mainCatalog());
+    const ids = getLinkedOutlineSectionIds(['BIO-214L-A', 'MATH-A'], mainCatalog());
     assert.ok(ids.includes('BIO-214L-A'), 'selected lab should be in outline');
     assert.ok(ids.includes('BIO-214'), 'BIO-214 lecture should be outlined');
   });
@@ -101,19 +101,19 @@ describe('getLinkedOutlineSectionIds — noRepair scenario (Lab B full)', () => 
   });
 
   it('excludes full BIO-214L-B from outline when lecture is in draft', () => {
-    const ids = getLinkedOutlineSectionIds(['BIO-214', 'CHEM-A'], noRepairCatalog());
+    const ids = getLinkedOutlineSectionIds(['BIO-214', 'MATH-A'], noRepairCatalog());
     assert.ok(ids.includes('BIO-214'), 'lecture should still be outlined');
     assert.ok(ids.includes('BIO-214L-A'), 'Lab A (open) should still be outlined');
     assert.ok(!ids.includes('BIO-214L-B'), 'Full Lab B must NOT be outlined');
   });
 
   it('non-full Lab A keeps its outline even when Lab B is full', () => {
-    const ids = getLinkedOutlineSectionIds(['BIO-214', 'CHEM-A'], noRepairCatalog());
+    const ids = getLinkedOutlineSectionIds(['BIO-214', 'MATH-A'], noRepairCatalog());
     assert.ok(ids.includes('BIO-214L-A'));
   });
 
   it('returns [] when both lecture and lab are in draft', () => {
-    const ids = getLinkedOutlineSectionIds(['BIO-214', 'BIO-214L-A', 'CHEM-A'], noRepairCatalog());
+    const ids = getLinkedOutlineSectionIds(['BIO-214', 'BIO-214L-A', 'MATH-A'], noRepairCatalog());
     assert.deepEqual(ids, []);
   });
 });

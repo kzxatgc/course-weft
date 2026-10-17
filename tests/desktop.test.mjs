@@ -235,8 +235,8 @@ describe('Timetable — section positioning math', () => {
     assert.equal(toPercent(720), 40);
   });
 
-  it('CHEM-A (Tue 10:00–11:00 AM) left = 20%, width = 10%', () => {
-    const sec = MAIN_CATALOG.find((s) => s.id === 'CHEM-A');
+  it('MATH-A (Tue 10:00–11:00 AM) left = 20%, width = 10%', () => {
+    const sec = MAIN_CATALOG.find((s) => s.id === 'MATH-A');
     assert.equal(toPercent(sec.start), 20);
     const widthPct = ((sec.end - sec.start) / TOTAL_MINUTES) * 100;
     assert.equal(widthPct, 10);
@@ -321,9 +321,9 @@ describe('Timetable — remove control (domain side)', () => {
   it('dispatching REMOVE_SECTION for a draft section removes it', async () => {
     const { initialState, reduce, ACTION } = await import('../src/state/draft-controller.mjs');
     const s0 = initialState();
-    assert.ok(s0.draft.includes('CHEM-A'), 'CHEM-A must be in initial draft');
-    const s1 = reduce(s0, { type: ACTION.REMOVE_SECTION, payload: 'CHEM-A' });
-    assert.ok(!s1.draft.includes('CHEM-A'), 'CHEM-A must be removed after REMOVE_SECTION');
+    assert.ok(s0.draft.includes('MATH-A'), 'MATH-A must be in initial draft');
+    const s1 = reduce(s0, { type: ACTION.REMOVE_SECTION, payload: 'MATH-A' });
+    assert.ok(!s1.draft.includes('MATH-A'), 'MATH-A must be removed after REMOVE_SECTION');
   });
 
   it('dispatching REMOVE_SECTION for a non-draft section leaves draft unchanged', async () => {
@@ -336,7 +336,7 @@ describe('Timetable — remove control (domain side)', () => {
   it('REMOVE_SECTION produces a notice with kind="success"', async () => {
     const { initialState, reduce, ACTION } = await import('../src/state/draft-controller.mjs');
     const s0 = initialState();
-    const s1 = reduce(s0, { type: ACTION.REMOVE_SECTION, payload: 'CHEM-A' });
+    const s1 = reduce(s0, { type: ACTION.REMOVE_SECTION, payload: 'MATH-A' });
     assert.equal(s1.notice?.kind, 'success');
   });
 });
@@ -359,7 +359,7 @@ describe('Available Courses and search', () => {
   });
 
   it('filters available courses by course code (case-insensitive)', () => {
-    const draft = ['CHEM-A', 'CHEM-LAB-A'];
+    const draft = ['MATH-A', 'CHEM-LAB-A'];
     const nonDraft = MAIN_CATALOG.filter((c) => !draft.includes(c.id));
     const query = 'chem';
     const matches = nonDraft.filter((item) => {
@@ -446,7 +446,7 @@ describe('Repair Preview impact groups and controller wiring', () => {
 
     // Unchanged sections remain part of the candidate without a Keep panel:
     const keepIds = s1.candidate.kept || [];
-    assert.deepEqual(keepIds, ['CHEM-A']);
+    assert.deepEqual(keepIds, ['MATH-A']);
 
     // Total post-repair draft matches full candidate ids:
     const finalSet = [...addIds, swap.replacement, ...keepIds].sort();
@@ -875,8 +875,8 @@ describe('drop-preview domain', () => {
       );
       assert.ok(src.includes('DT_SECTION_ID'), 'AvailableCourses must import DT_SECTION_ID');
       assert.ok(
-        src.includes('draggable={true}') || src.includes('draggable={!isFullLab}'),
-        'AvailableCourses must mark cards as draggable (or conditionally non-draggable for full labs)'
+        src.includes('draggable={true}') || src.includes('draggable={!isFullSection}'),
+        'AvailableCourses must mark cards as draggable (or conditionally non-draggable for full sections)'
       );
     });
 
@@ -951,9 +951,9 @@ describe('Fixed-slot time-conflict preview', () => {
 
   describe('green non-overlap', () => {
     it('returns status ok and hasConflict false when timetable has no overlaps', () => {
-      const chemB = { id: 'CHEM-B', day: 'Thu', start: 600, end: 660 };
+      const chemB = { id: 'MATH-B', day: 'Thu', start: 600, end: 660 };
       const selected = [
-        { id: 'CHEM-A', day: 'Tue', start: 600, end: 660 },
+        { id: 'MATH-A', day: 'Tue', start: 600, end: 660 },
         { id: 'STAT-A', day: 'Mon', start: 780, end: 840 },
       ];
       const preview = buildFixedPreview(chemB, selected);
@@ -1023,7 +1023,7 @@ describe('Fixed-slot time-conflict preview', () => {
     it('recalculates from conflict to ok when conflicting section is removed from draft', () => {
       const bio214 = { id: 'BIO-214', day: 'Mon', start: 780, end: 840 };
       let selected = [
-        { id: 'CHEM-A', day: 'Tue', start: 600, end: 660 },
+        { id: 'MATH-A', day: 'Tue', start: 600, end: 660 },
         { id: 'STAT-A', day: 'Mon', start: 780, end: 840 }, // conflicts
       ];
 
@@ -1041,7 +1041,7 @@ describe('Fixed-slot time-conflict preview', () => {
     it('recalculates from ok to conflict when a conflicting section is added to draft', () => {
       const bio214 = { id: 'BIO-214', day: 'Mon', start: 780, end: 840 };
       let selected = [
-        { id: 'CHEM-A', day: 'Tue', start: 600, end: 660 },
+        { id: 'MATH-A', day: 'Tue', start: 600, end: 660 },
       ];
 
       const previewBefore = buildFixedPreview(bio214, selected);
@@ -1154,7 +1154,7 @@ describe('Available Courses drag, drop, and cancel', () => {
   describe('placeholder and list order', () => {
     it('dragged card leaves placeholder preserving original list order and indices', () => {
       const items = [
-        { id: 'CHEM-B', title: 'Chemistry B' },
+        { id: 'MATH-B', title: 'Chemistry B' },
         { id: 'STAT-B', title: 'Statistics B' },
         { id: 'BIO-214', title: 'Biology' },
       ];
@@ -1169,7 +1169,7 @@ describe('Available Courses drag, drop, and cancel', () => {
       });
 
       assert.strictEqual(renderedSlots.length, 3);
-      assert.strictEqual(renderedSlots[0].id, 'CHEM-B');
+      assert.strictEqual(renderedSlots[0].id, 'MATH-B');
       assert.strictEqual(renderedSlots[0].type, 'card');
       assert.strictEqual(renderedSlots[1].id, 'STAT-B');
       assert.strictEqual(renderedSlots[1].type, 'placeholder');
@@ -1249,17 +1249,17 @@ describe('Available Courses drag, drop, and cancel', () => {
     });
 
     it('green drop dispatches ADD_SECTION or SWITCH_SECTION to update draft', () => {
-      const draft = ['CHEM-A', 'STAT-A'];
-      const nonConflictingSec = { id: 'CHEM-B', course: 'CHEM' };
+      const draft = ['MATH-A', 'STAT-A'];
+      const nonConflictingSec = { id: 'MATH-B', course: 'CHEM' };
 
       const dropResult = evaluateDrop({ touchesTimetable: true, hasConflict: false });
       assert.strictEqual(dropResult.success, true);
 
       let updatedDraft;
       if (dropResult.success) {
-        updatedDraft = draft.map(id => id === 'CHEM-A' ? nonConflictingSec.id : id);
+        updatedDraft = draft.map(id => id === 'MATH-A' ? nonConflictingSec.id : id);
       }
-      assert.deepStrictEqual(updatedDraft, ['CHEM-B', 'STAT-A']);
+      assert.deepStrictEqual(updatedDraft, ['MATH-B', 'STAT-A']);
     });
   });
 
@@ -1271,7 +1271,7 @@ describe('Available Courses drag, drop, and cancel', () => {
     });
 
     it('rejected red drop does not mutate draft and restores card to origin', () => {
-      const initialDraft = Object.freeze(['CHEM-A', 'STAT-A']);
+      const initialDraft = Object.freeze(['MATH-A', 'STAT-A']);
       const draft = [...initialDraft];
 
       const dropResult = evaluateDrop({ touchesTimetable: true, hasConflict: true });
@@ -1288,7 +1288,7 @@ describe('Available Courses drag, drop, and cancel', () => {
     });
 
     it('release outside does not mutate draft and triggers restore animation', () => {
-      const initialDraft = Object.freeze(['CHEM-A', 'STAT-A']);
+      const initialDraft = Object.freeze(['MATH-A', 'STAT-A']);
       const draft = [...initialDraft];
 
       const dropResult = evaluateDrop({ touchesTimetable: false, hasConflict: false });
@@ -1301,7 +1301,7 @@ describe('Available Courses drag, drop, and cancel', () => {
   describe('successful list reflow', () => {
     it('removes added section from available courses and closes the gap', () => {
       const catalog = [
-        { id: 'CHEM-B', title: 'General Chemistry B' },
+        { id: 'MATH-B', title: 'Mathematics B' },
         { id: 'STAT-B', title: 'Introductory Statistics B' },
         { id: 'BIO-214', title: 'Cell Biology' },
       ];
@@ -1315,14 +1315,14 @@ describe('Available Courses drag, drop, and cancel', () => {
 
       available = catalog.filter(c => !draft.includes(c.id));
       assert.strictEqual(available.length, 2);
-      assert.strictEqual(available[0].id, 'CHEM-B');
+      assert.strictEqual(available[0].id, 'MATH-B');
       assert.strictEqual(available[1].id, 'BIO-214');
     });
   });
 
   describe('touch and pointer cancellation', () => {
     it('pointer cancel resets drag state and restores card to source without draft mutation', () => {
-      const initialDraft = Object.freeze(['CHEM-A', 'STAT-A']);
+      const initialDraft = Object.freeze(['MATH-A', 'STAT-A']);
       const draft = [...initialDraft];
       let heldCard = { item: { id: 'BIO-214' }, isDragging: true, isRestoring: false };
 
@@ -1420,12 +1420,12 @@ describe('Available Courses drag, drop, and cancel', () => {
     it('evaluateSwap rejects non-alternate swap and leaves draft untouched', async () => {
       const { evaluateSwap } = await import('../src/domain/drop-preview.mjs');
       const { MAIN_CATALOG, INITIAL_DRAFT } = await import('../src/domain/available-courses.mjs');
-      // CHEM-A is not an alternate for STAT-A
+      // MATH-A is not an alternate for STAT-A
       const result = evaluateSwap({
         draft: INITIAL_DRAFT,
         availableCourses: MAIN_CATALOG,
         fromId: 'STAT-A',
-        toId: 'CHEM-B',
+        toId: 'MATH-B',
       });
       assert.strictEqual(result.valid, false);
       assert.strictEqual(result.reason, 'not-declared-alternate');
@@ -1553,7 +1553,7 @@ describe('Available Courses drag, drop, and cancel', () => {
     it('no BIO-214 means no link outline', async () => {
       const { getLinkedOutlineSectionIds } = await import('../src/domain/linked-labs.mjs');
       const { MAIN_CATALOG, INITIAL_DRAFT } = await import('../src/domain/available-courses.mjs');
-      // INITIAL_DRAFT is ['CHEM-A', 'STAT-A'] — no BIO-214
+      // INITIAL_DRAFT is ['MATH-A', 'STAT-A'] — no BIO-214
       const result = getLinkedOutlineSectionIds(INITIAL_DRAFT, MAIN_CATALOG);
       assert.deepStrictEqual(result, []);
     });
@@ -1562,7 +1562,7 @@ describe('Available Courses drag, drop, and cancel', () => {
       const { getLinkedOutlineSectionIds } = await import('../src/domain/linked-labs.mjs');
       const { MAIN_CATALOG } = await import('../src/domain/available-courses.mjs');
       // In main catalog, both BIO-214L-A and BIO-214L-B have available seats
-      const result = getLinkedOutlineSectionIds(['CHEM-A', 'BIO-214'], MAIN_CATALOG);
+      const result = getLinkedOutlineSectionIds(['MATH-A', 'BIO-214'], MAIN_CATALOG);
       assert.deepStrictEqual(result, ['BIO-214', 'BIO-214L-A', 'BIO-214L-B']);
     });
 
@@ -1571,7 +1571,7 @@ describe('Available Courses drag, drop, and cancel', () => {
       const { catalogForScenario } = await import('../src/domain/available-courses.mjs');
       // In noRepair catalog, BIO-214L-B is full (30/30)
       const noRepairCatalog = catalogForScenario('noRepair');
-      const result = getLinkedOutlineSectionIds(['CHEM-A', 'BIO-214'], noRepairCatalog);
+      const result = getLinkedOutlineSectionIds(['MATH-A', 'BIO-214'], noRepairCatalog);
       assert.deepStrictEqual(result, ['BIO-214', 'BIO-214L-A']);
       assert.ok(!result.includes('BIO-214L-B'), 'full lab BIO-214L-B must be omitted from outlines');
     });
@@ -1580,18 +1580,18 @@ describe('Available Courses drag, drop, and cancel', () => {
       const { getLinkedOutlineSectionIds } = await import('../src/domain/linked-labs.mjs');
       const { MAIN_CATALOG } = await import('../src/domain/available-courses.mjs');
       // Adding BIO-214L-A satisfies the requirement -> outlines stop
-      const result = getLinkedOutlineSectionIds(['CHEM-A', 'BIO-214', 'BIO-214L-A'], MAIN_CATALOG);
+      const result = getLinkedOutlineSectionIds(['MATH-A', 'BIO-214', 'BIO-214L-A'], MAIN_CATALOG);
       assert.deepStrictEqual(result, []);
     });
 
     it('removing lab restores them', async () => {
       const { getLinkedOutlineSectionIds } = await import('../src/domain/linked-labs.mjs');
       const { MAIN_CATALOG } = await import('../src/domain/available-courses.mjs');
-      const beforeRemoval = getLinkedOutlineSectionIds(['CHEM-A', 'BIO-214', 'BIO-214L-A'], MAIN_CATALOG);
+      const beforeRemoval = getLinkedOutlineSectionIds(['MATH-A', 'BIO-214', 'BIO-214L-A'], MAIN_CATALOG);
       assert.deepStrictEqual(beforeRemoval, []);
 
       // Remove lab -> outlines restored immediately
-      const afterRemoval = getLinkedOutlineSectionIds(['CHEM-A', 'BIO-214'], MAIN_CATALOG);
+      const afterRemoval = getLinkedOutlineSectionIds(['MATH-A', 'BIO-214'], MAIN_CATALOG);
       assert.deepStrictEqual(afterRemoval, ['BIO-214', 'BIO-214L-A', 'BIO-214L-B']);
     });
 

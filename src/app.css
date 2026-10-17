@@ -1433,7 +1433,7 @@ body {
 }
 
 
-/* ── Full-lab shake & blocked-drag styles ─────────────── */
+/* ── Full-section shake & blocked-drag styles ─────────────── */
 
 @keyframes nb-shake {
   0%   { transform: translate(0,       0); }
@@ -1447,13 +1447,13 @@ body {
   100% { transform: translate(0,       0); }
 }
 
-/* Applied briefly via JS when the user tries to drag a full lab */
+/* Applied briefly via JS when the user tries to drag a full section */
 .nb-shake {
   animation: nb-shake 0.42s cubic-bezier(0.36, 0.07, 0.19, 0.97) both !important;
 }
 
-/* Full-lab card: dimmed, locked look */
-.nb-course-card.nb-full-lab {
+/* Full-section card: dimmed, locked look */
+.nb-course-card.nb-full-section {
   cursor: not-allowed !important;
   opacity: 0.62;
   background-color: color-mix(in srgb, var(--color-cream) 85%, #888 15%) !important;
@@ -1462,13 +1462,13 @@ body {
   pointer-events: auto; /* keep so shake can fire on click/press */
 }
 
-.nb-course-card.nb-full-lab:hover {
+.nb-course-card.nb-full-section:hover {
   transform: none !important;
   box-shadow: none !important;
   background-color: color-mix(in srgb, var(--color-cream) 85%, #888 15%) !important;
 }
 
-/* "FULL" status badge inside full-lab card */
+/* "FULL" status badge inside full-section card */
 .nb-full-badge {
   display: inline-flex;
   align-items: center;

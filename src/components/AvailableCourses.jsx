@@ -18,6 +18,11 @@ import {
 
 export { formatCourseSlot };
 
+function isSectionFull(item) {
+  return item.seat === 'full' ||
+    (typeof item.capacity === 'number' && item.enrolled >= item.capacity);
+}
+
 /**
  * AvailableCourses
  *
@@ -63,7 +68,7 @@ export default function AvailableCourses({
   const draggedCardIdRef = useRef(null);
   const previousDraftRef = useRef(draft);
 
-  // Shaking card id (briefly set on full-lab drag attempt)
+  // Shaking card id (briefly set when a full section is dragged).
   const [shakingId, setShakingId] = useState(null);
   const shakeTimerRef = useRef(null);
 
@@ -112,7 +117,7 @@ export default function AvailableCourses({
   }, []);
 
   /**
-   * Trigger shake on a full-lab card (e.g. when drag is attempted).
+   * Trigger shake on a full-section card (e.g. when drag is attempted).
    * Removes the class after the animation completes (420 ms).
    * No-op when prefers-reduced-motion is active (CSS handles it already,
    * but we still want the class added so screen readers get the aria-live ping).
@@ -141,8 +146,9 @@ export default function AvailableCourses({
 
   // Filter sections that are not already in draft
   const availableItems = availableCourses.filter((item) => !draft.includes(item.id));
+  const availableCount = availableItems.filter((item) => !isSectionFull(item)).length;
 
-  // Search by course code (e.g. "CHEM", "CHEM-B", "BIO") and course name (e.g. "Chemistry", "Statistics")
+  // Search by course code (e.g. "MATH", "MATH-B", "BIO") and course name (e.g. "Mathematics", "Statistics")
   const filteredCourses = availableItems.filter((item) => {
     if (!query) return true;
     const codeMatch =
@@ -269,12 +275,7 @@ export default function AvailableCourses({
   function handlePointerDown(e, item) {
     if (e.button !== 0) return; // Only primary button
 
-    // Block drag entirely for full lab sections
-    const isFullLab =
-      (item.seat === 'full' ||
-        (typeof item.capacity === 'number' && item.enrolled >= item.capacity)) &&
-      (item.linkedGroup === 'BIO-214-labs' || item.requiredBy === 'BIO-214');
-    if (isFullLab) {
+    if (isSectionFull(item)) {
       e.preventDefault();
       triggerShake(item.id);
       return;
@@ -493,9 +494,9 @@ export default function AvailableCourses({
             </h2>
             <span
               className="nb-courses-count"
-              aria-label={`${availableItems.length} ${availableItems.length === 1 ? 'course' : 'courses'} available`}
+              aria-label={`${availableCount} ${availableCount === 1 ? 'course' : 'courses'} available`}
             >
-              {availableItems.length}
+              {availableCount}
             </span>
             {repairPreviewId && dispatch && (
               <button
@@ -622,11 +623,7 @@ export default function AvailableCourses({
                 );
               });
 
-              // Setect full linked-lab sections
-              const isFullLab =
-                (item.seat === 'full' ||
-                  (typeof item.capacity === 'number' && item.enrolled >= item.capacity)) &&
-                (item.linkedGroup === 'BIO-214-labs' || item.requiredBy === 'BIO-214');
+              const isFullSection = isSectionFull(item);
 
               const hasLinkedOutline = Boolean(linkedOutlineIds?.includes(item.id));
               const isShaking = shakingId === item.id;
@@ -635,9 +632,9 @@ export default function AvailableCourses({
                 <button
                   key={item.id}
                   type="button"
-                  draggable={!isFullLab}
+                  draggable={!isFullSection}
                   onDragStart={(e) => {
-                    if (isFullLab) {
+                    if (isFullSection) {
                       e.preventDefault();
                       triggerShake(item.id);
                       return;
@@ -654,7 +651,7 @@ export default function AvailableCourses({
                   }}
                   onFocus={() => {
                     preservePreviewOnBlurRef.current = false;
-                    if (!isFullLab) onPreviewSectionChange?.(item.id);
+                    if (!isFullSection) onPreviewSectionChange?.(item.id);
                   }}
                   onBlur={(event) => {
                     if (
@@ -666,8 +663,8 @@ export default function AvailableCourses({
                   }}
                   onPointerDown={(e) => handlePointerDown(e, item)}
                   className={`nb-course-card w-[195px] min-w-[195px] shrink-0 bg-[var(--color-cream)] border-2 border-[var(--color-navy)] rounded p-2 flex flex-col justify-between gap-1.5 text-left transition-colors duration-75 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-blue)] touch-none ${
-                    isFullLab
-                      ? 'nb-full-lab'
+                    isFullSection
+                      ? 'nb-full-section'
                       : 'cursor-grab hover:bg-[var(--color-yellow)]'
                   } ${
                     hasLinkedOutline ? 'nb-linked-outline' : ''
@@ -685,14 +682,14 @@ export default function AvailableCourses({
                       : undefined
                   }
                   data-linked-outline={hasLinkedOutline ? 'true' : 'false'}
-                  data-full-lab={isFullLab ? 'true' : 'false'}
+                  data-full-section={isFullSection ? 'true' : 'false'}
                   role="listitem"
                   aria-label={
-                    isFullLab
+                    isFullSection
                       ? `${item.title} (${item.id}), ${formatCourseSlot(item)}, FULL — no seats available`
                       : `${item.title} (${item.id}), ${formatCourseSlot(item)}, ${seatsRemaining} seats remaining — drag onto timetable to add`
                   }
-                  aria-disabled={isFullLab ? 'true' : undefined}
+                  aria-disabled={isFullSection ? 'true' : undefined}
                 >
                   <div>
                     <div className="flex items-center justify-between gap-1.5">
@@ -717,7 +714,7 @@ export default function AvailableCourses({
                       {formatCourseSlot(item)}
                     </span>
                     <div className="flex items-center gap-1">
-                      {isFullLab ? (
+                      {isFullSection ? (
                         <span className="nb-full-badge" aria-hidden="true">FULL</span>
                       ) : (
                         <>
@@ -737,7 +734,7 @@ export default function AvailableCourses({
                       aria-live="assertive"
                       className="sr-only"
                     >
-                      {item.id} lab section is full. No seats available.
+                      {item.id} is full. No seats available.
                     </span>
                   )}
                 </button>
