@@ -1,20 +1,16 @@
 import React from 'react';
-import { RotateCcw, CheckCircle2, AlertTriangle, Sparkles } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, Sparkles } from 'lucide-react';
 import { ACTION } from '../state/draft-controller.mjs';
 
 /**
- * Scenario window content — allows switching between demo test scenarios
- * and resetting the timetable draft.
+ * Scenario window content — allows switching between demo test scenarios.
  */
 export default function ScenarioWindow({ scenario, dispatch }) {
   const scenarios = [
     {
       id: 'main',
-      name: 'Successful repair available',
-      tag: 'Primary flow',
+      name: 'Repair available',
       icon: <Sparkles size={18} aria-hidden="true" />,
-      desc: 'Demonstrates schedule repair with available alternate sections. STAT-B has open seats, and BIO-214 enrollment reflects the combined enrollment of its two lab sections.',
-      bullet: 'BIO-214: 34/60 students across Lab A and Lab B',
     },
     {
       id: 'noRepair',
@@ -28,15 +24,10 @@ export default function ScenarioWindow({ scenario, dispatch }) {
 
   return (
     <div className="nb-win-section">
-      <div className="nb-win-header">
-        <h2 className="nb-win-heading">Demo Scenarios</h2>
-        <span className="nb-badge">Evaluation mode</span>
-      </div>
-
-      <p className="nb-win-desc">
+      <div className="nb-scenario-intro">
         Select a test scenario to evaluate the Course Weft timetable repair engine.
         Changing scenarios updates the catalog and current schedule draft.
-      </p>
+      </div>
 
       {/* Scenario cards */}
       <div className="nb-scenario-list" role="radiogroup" aria-label="Demo scenarios">
@@ -81,35 +72,13 @@ export default function ScenarioWindow({ scenario, dispatch }) {
                 )}
               </div>
 
-              <p className="nb-scenario-card-desc">{sc.desc}</p>
-              <div className="nb-scenario-card-bullet">{sc.bullet}</div>
+              {sc.desc && <p className="nb-scenario-card-desc">{sc.desc}</p>}
+              {sc.bullet && <div className="nb-scenario-card-bullet">{sc.bullet}</div>}
             </div>
           );
         })}
       </div>
 
-      <div className="nb-divider" />
-
-      {/* Reset button action */}
-      <div className="nb-scenario-reset-box">
-        <div>
-          <strong className="nb-scenario-reset-title">Reset Timetable</strong>
-          <p className="nb-win-desc" style={{ marginTop: '2px', marginBottom: 0 }}>
-            Restore selections back to initial un-repaired state and clear transient notices.
-          </p>
-        </div>
-        <button
-          type="button"
-          id="reset-button"
-          className="nb-reset-btn"
-          onClick={() => dispatch && dispatch({ type: ACTION.RESET_DRAFT })}
-          aria-label="Reset timetable to starting selections"
-          title="Reset timetable to starting selections"
-        >
-          <RotateCcw size={12} aria-hidden="true" />
-          <span>Reset Draft</span>
-        </button>
-      </div>
     </div>
   );
 }

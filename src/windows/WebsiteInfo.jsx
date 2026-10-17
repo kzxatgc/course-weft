@@ -26,9 +26,10 @@ export default function WebsiteInfo() {
           SYNTHETIC SAMPLE DATA — NO REAL REGISTRATION IS SUBMITTED
         </p>
         <p className="nb-info-disclosure-body">
-          All courses, meeting times, and capacity figures shown in this
-          application are fictional sample data for local demonstration only.
-          This portal does not connect to live university registration records.
+          Student and lecturer names, course details, meeting times, and seat
+          availability shown here are fictional sample data for local
+          demonstration only. This portal does not connect to live university
+          registration records.
         </p>
       </div>
 

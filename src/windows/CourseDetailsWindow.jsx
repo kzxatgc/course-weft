@@ -1,50 +1,74 @@
-import React from 'react';
-import { MAIN_CATALOG } from '../domain/available-courses.mjs';
+import React, { useState } from 'react';
 
 /**
  * Course Details window — provides a read-only overview of all sections
- * in the synthetic catalogue. Will add interactive features later here.
+ * in the active scenario catalogue.
  */
-export default function CourseDetailsWindow() {
+export default function CourseDetailsWindow({ availableCourses }) {
+  const [search, setSearch] = useState('');
+  const query = search.trim().toLowerCase();
+  const filteredCourses = query
+    ? availableCourses.filter((section) =>
+        [section.id, section.course, section.title, section.component, section.sectionName]
+          .filter(Boolean)
+          .some((value) => value.toLowerCase().includes(query))
+      )
+    : availableCourses;
+
   return (
     <div className="nb-win-section">
-      <div className="nb-win-header">
-        <h2 className="nb-win-heading">Course Details</h2>
-        <span className="nb-badge">Synthetic sample data</span>
-      </div>
-
-      <p className="nb-win-desc">
-        All sections shown are fictional sample data for local demonstration only.
-        Enrolled/capacity counts do not reflect live availability.
-      </p>
-
+      <label className="nb-course-search-label" htmlFor="course-details-search">
+        Search Courses
+      </label>
+      <form
+        className="nb-course-search-form"
+        role="search"
+        onSubmit={(event) => event.preventDefault()}
+      >
+        <input
+          id="course-details-search"
+          className="nb-course-search"
+          type="search"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder="Search by course code or title..."
+        />
+        <button className="nb-course-search-button" type="submit">
+          Search
+        </button>
+      </form>
       <div className="nb-divider" />
-
       <div className="nb-course-list" role="list">
-        {MAIN_CATALOG.map((section) => (
-          <div key={section.id} className="nb-course-row" role="listitem">
-            <div className="nb-course-row-top">
-              <span className="nb-course-id">{section.id}</span>
-              <span className="nb-course-component">{section.component.toUpperCase()}</span>
-              <span className="nb-course-enroll">{section.enrolled}/{section.capacity}</span>
+        {filteredCourses.map((section) => {
+          const isFull = section.seat === 'full' || section.enrolled >= section.capacity;
+          return (
+            <div key={section.id} className="nb-course-row" role="listitem">
+              <div className="nb-course-row-top">
+                <span className="nb-course-id">{section.id}</span>
+                <span className="nb-course-component">{section.component.toUpperCase()}</span>
+                <span className={`nb-course-enroll${isFull ? ' nb-course-enroll--full' : ''}`}>
+                  {section.enrolled}/{section.capacity}
+                </span>
+              </div>
+              <div className="nb-course-title">{section.title}</div>
+              <div className="nb-course-meta-row">
+                <div className="nb-course-meta">
+                  {section.days
+                    ? section.days.join(', ')
+                    : section.day ?? '—'}
+                  {' · '}
+                  {section.start != null
+                    ? `${fmtMin(section.start)} – ${fmtMin(section.end)}`
+                    : 'TBD'}
+                </div>
+                {isFull && <span className="nb-full-label">FULL</span>}
+              </div>
             </div>
-            <div className="nb-course-title">{section.title}</div>
-            <div className="nb-course-meta">
-              {section.days
-                ? section.days.join(', ')
-                : section.day ?? '—'}
-              {' · '}
-              {section.start != null
-                ? `${fmtMin(section.start)} – ${fmtMin(section.end)}`
-                : 'TBD'}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <div className="nb-win-footer-note">
-        Interactive add/switch controls arrive in a later update. These counts are
-        sample figures only and do not reflect live seat availability.
+          );
+        })}
+        {filteredCourses.length === 0 && (
+          <p className="nb-course-empty" role="status">No courses match your search.</p>
+        )}
       </div>
     </div>
   );

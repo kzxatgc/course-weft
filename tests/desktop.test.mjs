@@ -141,8 +141,16 @@ describe('WebsiteInfo window config', () => {
   it('websiteInfo title mentions information (not registration action)', () => {
     // Title should NOT contain words that imply a real registration action.
     const title = infoCfg.title.toLowerCase();
+    assert.equal(infoCfg.title, 'Information');
     assert.ok(!title.includes('submit'), 'title must not imply submission');
     assert.ok(!title.includes('register'), 'title must not imply registration action');
+  });
+
+  it('information window states student and lecturer names and course details are fictional', async () => {
+    const { readFileSync } = await import('node:fs');
+    const infoSource = readFileSync(new URL('../src/windows/WebsiteInfo.jsx', import.meta.url), 'utf8');
+    assert.ok(infoSource.includes('Student and lecturer names, course details, meeting times, and seat'));
+    assert.ok(infoSource.includes('availability shown here are fictional sample data'));
   });
 });
 
@@ -588,6 +596,48 @@ describe('Apply / Undo / Dismiss / Reset wiring', () => {
     assert.ok(windowSource.includes('targetRect.left + (targetRect.width - windowWidth) / 2'));
     assert.ok(windowSource.includes('targetRect.top + (targetRect.height - windowHeight) / 2'));
     assert.ok(windowSource.includes('onMove(id, { x, y })'), 'Centered position is persisted so the repair window remains draggable');
+  });
+
+  it('Course Details uses the active scenario catalogue', async () => {
+    const { readFileSync } = await import('node:fs');
+    const shellSource = readFileSync(new URL('../src/AppShell.jsx', import.meta.url), 'utf8');
+    const detailsSource = readFileSync(
+      new URL('../src/windows/CourseDetailsWindow.jsx', import.meta.url),
+      'utf8'
+    );
+    assert.ok(shellSource.includes('const { notice, scenario, availableCourses } = state;'));
+    assert.ok(shellSource.includes('<CourseDetailsWindow availableCourses={availableCourses} />'));
+    assert.ok(detailsSource.includes('{filteredCourses.map((section) => {'));
+    assert.ok(!detailsSource.includes('MAIN_CATALOG'));
+    assert.ok(detailsSource.includes('{section.enrolled}/{section.capacity}'));
+    assert.ok(detailsSource.includes('{isFull && <span className="nb-full-label">FULL</span>}'));
+    assert.ok(detailsSource.includes('availableCourses.filter((section) =>'));
+    assert.ok(detailsSource.includes('id="course-details-search"'));
+    assert.ok(detailsSource.includes('const query = search.trim().toLowerCase();'));
+    assert.ok(detailsSource.includes('className="nb-course-search-button" type="submit"'));
+    assert.ok(detailsSource.includes('<div className="nb-divider" />'));
+    assert.ok(detailsSource.includes("isFull ? ' nb-course-enroll--full' : ''"));
+    assert.ok(!detailsSource.includes('Interactive add/switch controls arrive in a later update.'));
+    assert.ok(!detailsSource.includes('Synthetic sample data'));
+    assert.ok(!detailsSource.includes('All sections shown are fictional sample data'));
+    const windowSource = readFileSync(new URL('../src/components/DesktopWindow.jsx', import.meta.url), 'utf8');
+    assert.ok(windowSource.includes("id === 'courseDetails' ? 'nb-win-body--course-details' : ''"));
+    const cssSource = readFileSync(new URL('../src/app.css', import.meta.url), 'utf8');
+    assert.ok(cssSource.includes('.nb-course-row:nth-child(even)'));
+    assert.ok(cssSource.includes('background-color: var(--color-yellow);'));
+    assert.ok(cssSource.includes('.nb-course-component {'));
+    assert.ok(cssSource.includes('background-color: var(--color-yellow);'));
+    assert.ok(cssSource.includes('.nb-course-row:nth-child(even) .nb-course-component'));
+    assert.ok(cssSource.includes('background-color: #fff;'));
+    assert.ok(cssSource.includes('.nb-course-search-button {'));
+    assert.ok(cssSource.includes('font-size: 18px;'));
+    assert.ok(cssSource.includes('.nb-course-enroll--full {'));
+    assert.ok(cssSource.includes('color: #dc2626;'));
+    assert.ok(cssSource.includes('.nb-win-body--course-details {'));
+    assert.ok(cssSource.includes('scrollbar-gutter: stable;'));
+    assert.ok(cssSource.includes('*::-webkit-scrollbar-thumb {'));
+    assert.ok(cssSource.includes('background-color: var(--color-navy);'));
+    assert.ok(cssSource.includes('scrollbar-color: var(--color-navy) var(--color-yellow);'));
   });
 
   it('repair alert emphasizes the course ID in its message', async () => {

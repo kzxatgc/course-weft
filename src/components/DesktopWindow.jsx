@@ -178,7 +178,7 @@ export default function DesktopWindow({
       {/* ── Window Body ───────────────────────────────────────── */}
       {!isMinimized && (
         <div
-          className={`nb-win-body min-h-0 flex-1 overflow-y-auto bg-[var(--color-cream)] ${id === 'repair' ? 'p-[24px]' : 'p-1.5'} text-[var(--color-charcoal)]`}
+          className={`nb-win-body min-h-0 flex-1 overflow-y-auto bg-[var(--color-cream)] ${id === 'repair' ? 'p-[24px]' : 'p-1.5'} ${id === 'courseDetails' ? 'nb-win-body--course-details' : ''} text-[var(--color-charcoal)]`}
           onPointerDown={locked ? (event) => event.stopPropagation() : undefined}
           style={{
             maxHeight: maxBodyHeight,

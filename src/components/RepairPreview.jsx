@@ -103,7 +103,7 @@ export default function RepairPreview({ state, dispatch, onClose }) {
         animate={{ opacity: 1, y: 0 }}
         exit={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: -8 }}
         transition={motionTransition}
-        className="nb-repair-preview my-1 rounded-lg border-[2.5px] border-[var(--color-navy)] bg-[color-mix(in_srgb,color-mix(in_srgb,var(--color-cream)_65%,var(--color-yellow))_94%,var(--color-charcoal))] shadow-[4px_4px_0px_0px_var(--color-navy)] overflow-hidden font-mono"
+        className="nb-repair-preview my-1 rounded-none border-[2.5px] border-[var(--color-navy)] bg-[color-mix(in_srgb,color-mix(in_srgb,var(--color-cream)_65%,var(--color-yellow))_94%,var(--color-charcoal))] shadow-[4px_4px_0px_0px_var(--color-navy)] overflow-hidden font-mono"
       >
         {/* ── Panel Header Bar ────────────────────────────────────── */}
         <div className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2 bg-[color-mix(in_srgb,var(--color-yellow)_76%,var(--color-charcoal))] border-b-2 border-[var(--color-navy)]">
@@ -227,7 +227,7 @@ export default function RepairPreview({ state, dispatch, onClose }) {
                             <div className="truncate font-['Archivo_Black',sans-serif] text-[var(--color-charcoal)]/60 line-through">
                               {oldSection.id}
                             </div>
-                            <div className="mt-1 text-[10px] text-[var(--color-charcoal)]/75">
+                            <div className="mt-1 text-[10px] font-semibold text-[var(--color-charcoal)]/75">
                               {formatCourseSlot(oldSection)}
                             </div>
                           </div>
@@ -238,7 +238,7 @@ export default function RepairPreview({ state, dispatch, onClose }) {
                             <div className="truncate font-['Archivo_Black',sans-serif] text-[var(--color-navy)]">
                               {replacementSection.id}
                             </div>
-                            <div className="mt-1 text-[10px] text-[var(--color-charcoal)]/75">
+                            <div className="mt-1 text-[10px] font-semibold text-[var(--color-charcoal)]/75">
                               {formatCourseSlot(replacementSection)}
                             </div>
                           </div>

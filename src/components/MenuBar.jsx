@@ -20,15 +20,20 @@ export default function MenuBar() {
       {/* ── Left: Brand ───────────────────────────────── */}
       <div className="flex items-center gap-2">
         <span className="flex shrink-0 items-center gap-[7px] font-['Archivo_Black',sans-serif] text-sm font-black tracking-[0.02em] text-[var(--color-navy)]">
-          <span className="grid h-[22px] w-[22px] shrink-0 place-items-center bg-[var(--color-navy)] font-['Archivo_Black',sans-serif] text-xs font-black text-[var(--color-yellow)]" aria-hidden="true">E</span>
+          <img
+            className="h-[22px] w-[22px] shrink-0"
+            src="./course-weft-icon.svg"
+            alt=""
+            aria-hidden="true"
+          />
           Course Weft
         </span>
       </div>
 
       {/* ── Right: Semester + Live Clock ─────────────── */}
       <div className="mr-3 flex shrink-0 items-center gap-2">
-        <span className="inline-block whitespace-nowrap border-[1.75px] border-[var(--color-navy)] bg-[var(--color-yellow)] px-[7px] py-0.5 font-mono text-[10px] font-bold uppercase tracking-[0.07em] text-[var(--color-navy)]" aria-label="Current semester: 202520261">
-          Semester&nbsp;·&nbsp;202520261
+        <span className="inline-block whitespace-nowrap border-[1.75px] border-[var(--color-navy)] bg-[var(--color-yellow)] px-[7px] py-0.5 font-mono text-[10px] font-bold uppercase tracking-[0.07em] text-[var(--color-navy)]" aria-label="Current semester: 202620271">
+          Semester&nbsp;·&nbsp;202620271
         </span>
 
         <time

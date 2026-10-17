@@ -35,7 +35,7 @@ import WebsiteInfo from './windows/WebsiteInfo.jsx';
  */
 export default function AppShell({ state, dispatch, children }) {
   useZoom();
-  const { notice, scenario } = state;
+  const { notice, scenario, availableCourses } = state;
   const { themeId, selectTheme, themes } = useTheme();
   const {
     windows,
@@ -208,7 +208,7 @@ export default function AppShell({ state, dispatch, children }) {
             onMove={moveWindow}
             inert={isRepairFlowLocked}
           >
-            <CourseDetailsWindow />
+            <CourseDetailsWindow availableCourses={availableCourses} />
           </DesktopWindow>
         )}
 

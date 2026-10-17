@@ -52,6 +52,26 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+* {
+  scrollbar-width: auto;
+  scrollbar-color: var(--color-navy) var(--color-yellow);
+}
+
+*::-webkit-scrollbar {
+  width: 20px;
+  height: 20px;
+}
+
+*::-webkit-scrollbar-track,
+*::-webkit-scrollbar-corner {
+  background-color: var(--color-yellow);
+}
+
+*::-webkit-scrollbar-thumb {
+  border: 2px solid var(--color-yellow);
+  background-color: var(--color-navy);
+}
+
 :focus-visible {
   outline: 3px solid var(--color-blue);
   outline-offset: 2px;
@@ -151,7 +171,7 @@ body {
   margin-right: 12px;
 }
 
-/* Yellow rectangular badge — 'SEMESTER · 202520261' (sharp neo-brutalist box) */
+/* Yellow rectangular badge — 'SEMESTER · 202620271' (sharp neo-brutalist box) */
 .nb-menubar-semester {
   display: inline-block;
   padding: 2px 7px;
@@ -292,8 +312,15 @@ body {
   background-color: var(--color-cream);
   color: var(--color-charcoal);
   overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--color-navy) 55%, transparent) var(--color-cream);
+  scrollbar-width: auto;
+  scrollbar-color: var(--color-navy) var(--color-yellow);
+}
+.nb-win-body::-webkit-scrollbar {
+  width: 20px;
+  height: 20px;
+}
+.nb-win-body--course-details {
+  scrollbar-gutter: stable;
 }
 
 /* ════════════════════════════════════════════════════════════════
@@ -535,6 +562,16 @@ body {
   flex-direction: column;
   gap: 10px;
 }
+.nb-scenario-intro {
+  padding: 10px 12px;
+  border: 2px solid var(--color-navy);
+  background-color: color-mix(in srgb, var(--color-yellow) 35%, #f8f9fa);
+  box-shadow: 3px 3px 0 var(--color-navy);
+  color: var(--color-charcoal);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.6;
+}
 .nb-scenario-card {
   display: flex;
   flex-direction: column;
@@ -760,6 +797,53 @@ body {
   flex-direction: column;
   gap: 8px;
 }
+.nb-course-search-label {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--color-navy);
+  font-size: 18px;
+  font-weight: 800;
+}
+.nb-course-search-form {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+.nb-course-search {
+  box-sizing: border-box;
+  min-width: 0;
+  flex: 1;
+  padding: 6px 8px;
+  border: 2px solid var(--color-navy);
+  background-color: #fff;
+  color: var(--color-charcoal);
+  font: inherit;
+  font-size: 12px;
+}
+.nb-course-search-button {
+  padding: 6px 12px;
+  border: 2px solid var(--color-navy);
+  background-color: var(--color-yellow);
+  color: var(--color-navy);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.nb-course-search-button:hover {
+  background-color: var(--color-blue);
+  color: #fff;
+}
+.nb-course-search::placeholder {
+  color: var(--color-charcoal);
+  opacity: 0.55;
+}
+.nb-course-empty {
+  margin: 0;
+  padding: 10px 0;
+  color: var(--color-charcoal);
+  font-size: 11px;
+}
 .nb-course-row {
   border: 2px solid var(--color-navy);
   padding: 10px;
@@ -768,6 +852,9 @@ body {
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+.nb-course-row:nth-child(even) {
+  background-color: var(--color-yellow);
 }
 .nb-course-row-top {
   display: flex;
@@ -791,11 +878,17 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
+.nb-course-row:nth-child(even) .nb-course-component {
+  background-color: #fff;
+}
 .nb-course-enroll {
   margin-left: auto;
   font-size: 11px;
   font-weight: 600;
   color: var(--color-charcoal);
+}
+.nb-course-enroll--full {
+  color: #dc2626;
 }
 .nb-course-title {
   font-size: 11px;
@@ -807,6 +900,12 @@ body {
   font-size: 10px;
   color: var(--color-charcoal);
   opacity: 0.65;
+}
+.nb-course-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 /* ════════════════════════════════════════════════════════════════

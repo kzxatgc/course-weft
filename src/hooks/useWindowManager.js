@@ -31,7 +31,7 @@ export const WINDOW_CONFIGS = [
   },
   {
     id: 'profile',
-    title: 'Profile — Bill Andrew',
+    title: 'Profile',
     icon: '👤',
     label: 'Profile',
     defaultOpen: false,
@@ -49,7 +49,7 @@ export const WINDOW_CONFIGS = [
   },
   {
     id: 'websiteInfo',
-    title: 'Website Information',
+    title: 'Information',
     icon: 'ℹ',
     label: 'Info',
     defaultOpen: false,
