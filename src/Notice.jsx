@@ -12,7 +12,7 @@ import { playSound } from './audio/optional-sounds.js';
  * directly above all desktop windows, including the Schedule Repair window.
  *
  * @param {{
- *   notice: { kind: 'error' | 'success' | 'info', title: string, message: string, action?: string, emphasizedCourseId?: string } | null,
+ *   notice: { kind: 'error' | 'success' | 'info', title: string, message: string, action?: string, emphasizedCourseId?: string, emphasizedCourseIds?: string[] } | null,
  *   onDismiss?: () => void,
  *   onAction?: () => void,
  * }} props
@@ -24,7 +24,7 @@ export default function Notice({ notice, onDismiss, onAction }) {
   useEffect(() => {
     if (notice) {
       setAnnouncement(`${notice.title}. ${notice.message}`);
-      if (notice.action === 'suggest') playSound('popup');
+      if (notice.action === 'suggest' || notice.action === 'acknowledge') playSound('popup');
     }
   }, [notice]);
 
@@ -50,24 +50,103 @@ export default function Notice({ notice, onDismiss, onAction }) {
 
   function renderNoticeMessage() {
     const message = notice?.message ?? '';
-    const courseId = notice?.emphasizedCourseId;
-    if (!courseId) return message;
+    const courseIds = [
+      ...new Set([
+        ...(notice?.emphasizedCourseIds ?? []),
+        ...(notice?.emphasizedCourseId ? [notice.emphasizedCourseId] : []),
+      ]),
+    ].filter((courseId) => courseId.length > 0);
+    if (courseIds.length === 0) return message;
 
-    const courseIdIndex = message.indexOf(courseId);
-    if (courseIdIndex === -1) return message;
+    const parts = [];
+    let remaining = message;
+    while (remaining.length > 0) {
+      const nextCourse = courseIds
+        .map((courseId) => ({ courseId, index: remaining.indexOf(courseId) }))
+        .filter(({ index }) => index >= 0)
+        .sort((left, right) => left.index - right.index)[0];
 
-    return (
-      <>
-        {message.slice(0, courseIdIndex)}
-        <strong className="font-bold text-[var(--color-navy)]">{courseId}</strong>
-        {message.slice(courseIdIndex + courseId.length)}
-      </>
-    );
+      if (!nextCourse) {
+        parts.push(remaining);
+        break;
+      }
+
+      parts.push(remaining.slice(0, nextCourse.index));
+      parts.push(
+        <strong key={`${nextCourse.courseId}-${parts.length}`} className="font-bold text-[var(--color-navy)]">
+          {nextCourse.courseId}
+        </strong>
+      );
+      remaining = remaining.slice(nextCourse.index + nextCourse.courseId.length);
+    }
+
+    return parts;
   }
 
   // Render centered conflict alert when repair is available.
   function renderModalContent() {
     if (!notice) return null;
+
+    if (notice.action === 'acknowledge') {
+      return (
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-[1.5px] p-4"
+          onPointerDown={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
+        >
+          <div
+            role="alertdialog"
+            aria-labelledby="alert-dialog-title"
+            aria-describedby="alert-dialog-desc"
+            onPointerDown={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
+            onTouchStart={(e) => e.stopPropagation()}
+            className="nb-conflict-dialog w-full max-w-md rounded-none border-[3px] border-[var(--color-navy)] bg-[#fffdf8] shadow-[6px_6px_0px_0px_var(--color-navy)] overflow-hidden font-mono"
+          >
+            <div className="flex items-center gap-1.5 px-4 py-2.5 bg-[var(--color-yellow)] text-[var(--color-navy)] border-b-[3px] border-[var(--color-navy)] select-none">
+              <AlertTriangle className="w-4 h-4 text-rose-700" aria-hidden="true" />
+              <span className="font-['Archivo_Black',sans-serif] text-[11px] uppercase tracking-wider font-black">
+                Schedule Alert
+              </span>
+            </div>
+            <div className="p-4 sm:p-5">
+              <div className="flex items-start gap-3.5">
+                <div className="shrink-0 flex items-center justify-center w-11 h-11 rounded-none bg-rose-50 border-2 border-rose-600 text-rose-700 shadow-xs mt-0.5">
+                  <AlertTriangle className="w-7 h-7" aria-hidden="true" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3
+                    id="alert-dialog-title"
+                    className="font-['Archivo_Black',sans-serif] text-xs sm:text-sm text-[var(--color-navy)] uppercase tracking-tight m-0"
+                  >
+                    {notice.title}
+                  </h3>
+                  <p
+                    id="alert-dialog-desc"
+                    className="mt-1.5 text-xs text-slate-800 leading-relaxed font-sans"
+                  >
+                    {renderNoticeMessage()}
+                  </p>
+                </div>
+              </div>
+              <div className="mt-5 pt-3.5 border-t border-[var(--color-navy)]/15 flex justify-end">
+                {onDismiss && (
+                  <button
+                    type="button"
+                    autoFocus
+                    onClick={onDismiss}
+                    className="min-w-20 px-4 py-1.5 text-xs font-black font-mono uppercase rounded-none border-2 border-[var(--color-navy)] bg-[var(--color-navy)] text-[var(--color-cream)] hover:opacity-90 active:translate-x-0.5 active:translate-y-0.5 transition-all cursor-pointer shadow-xs"
+                  >
+                    OK
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
 
     // Conflict alert dialog
     if (notice.action === 'suggest') {

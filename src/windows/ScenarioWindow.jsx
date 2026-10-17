@@ -21,8 +21,8 @@ export default function ScenarioWindow({ scenario, dispatch }) {
       name: 'No repair available',
       tag: 'Refusal flow',
       icon: <AlertTriangle size={18} aria-hidden="true" />,
-      desc: 'Demonstrates graceful refusal with full alternate sections. MATH-B and BIO-214 Lab B are full, while STAT-B has vacancies; BIO-214 remains open based on total enrollment across both labs.',
-      bullet: 'MATH-B: Full · STAT-B: Vacancies · BIO-214: 42/60 students',
+      desc: 'Demonstrates when the required biology lab cannot fit: Lab A overlaps MATH-A, Lab B is full, and STAT-B is open but cannot resolve the missing-lab conflict.',
+      bullet: 'MATH-A: Tue 10:00–11:00 · Lab A: Tue 10:00–12:00 · Lab B: Full',
     },
   ];
 

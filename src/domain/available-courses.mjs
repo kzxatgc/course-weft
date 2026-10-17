@@ -99,7 +99,6 @@ export function catalogForScenario(scenario = 'main') {
     if (scenario === 'noRepair' && item.id === 'MATH-B') {
       return { ...base, enrolled: 30, capacity: 30, seat: 'full' };
     }
-
     return base;
   });
 

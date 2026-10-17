@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useId, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { Search, X, Users, Undo2, Redo2, RotateCcw, Wrench, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, X, Users, Undo2, Redo2, RotateCcw, Wrench, AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { ACTION, canUndo, canRedo } from '../state/draft-controller.mjs';
 import { INITIAL_DRAFT } from '../domain/available-courses.mjs';
 
@@ -44,7 +44,9 @@ function isSectionFull(item) {
  *   dispatch: function,
  *   search?: string,
  *   state?: object,
- *   onPreviewSectionChange?: function
+ *   onPreviewSectionChange?: function,
+ *   unavailableLinkedLabPreviewId?: string | null,
+ *   previewConflictNames?: string[]
  * }} props
  */
 export default function AvailableCourses({
@@ -56,6 +58,8 @@ export default function AvailableCourses({
   onPreviewSectionChange,
   selectionResetKey = 0,
   repairPreviewId = null,
+  unavailableLinkedLabPreviewId = null,
+  previewConflictNames = [],
   onRequestSwap,
   animatingReturnId = null,
   returningCardId = null,
@@ -146,7 +150,6 @@ export default function AvailableCourses({
 
   // Filter sections that are not already in draft
   const availableItems = availableCourses.filter((item) => !draft.includes(item.id));
-  const availableCount = availableItems.filter((item) => !isSectionFull(item)).length;
 
   // Search by course code (e.g. "MATH", "MATH-B", "BIO") and course name (e.g. "Mathematics", "Statistics")
   const filteredCourses = availableItems.filter((item) => {
@@ -157,6 +160,7 @@ export default function AvailableCourses({
     const nameMatch = item.title?.toLowerCase().includes(query);
     return Boolean(codeMatch || nameMatch);
   });
+  const availableCount = filteredCourses.filter((item) => !isSectionFull(item)).length;
 
   const updateCourseScrollState = useCallback(() => {
     const track = coursesTrackRef.current;
@@ -527,6 +531,47 @@ export default function AvailableCourses({
                 <Wrench size={12} strokeWidth={2.5} aria-hidden="true" />
               </button>
             )}
+            {unavailableLinkedLabPreviewId && dispatch && (
+              <button
+                type="button"
+                onPointerDown={(event) => event.preventDefault()}
+                onBlur={() => {
+                  preservePreviewOnBlurRef.current = false;
+                  onPreviewSectionChange?.(null);
+                }}
+                onClick={() => {
+                  const lab = availableCourses.find((item) => item.id === unavailableLinkedLabPreviewId);
+                  const parent = availableCourses.find((item) => item.id === lab?.requiredBy);
+                  const otherLabs = availableCourses.filter((item) =>
+                    item.id !== lab?.id &&
+                    (item.requiredBy === parent?.id || item.linkedGroup === lab?.linkedGroup)
+                  );
+                  const alternativesMessage = otherLabs.length > 0 && otherLabs.every(isSectionFull)
+                    ? 'All other linked lab sections are full.'
+                    : 'No compatible linked lab placement is currently available.';
+                  const conflictsMessage = previewConflictNames.length > 0
+                    ? `${lab?.id || 'This lab'} conflicts with ${previewConflictNames.join(', ')}. `
+                    : '';
+
+                  dispatch({
+                    type: ACTION.SET_NOTICE,
+                    payload: {
+                      kind: 'error',
+                      title: 'No compatible lab placement',
+                      message: `${conflictsMessage}${alternativesMessage} Please contact your academic advisor or registration office for help.`,
+                      emphasizedCourseIds: [lab?.id, ...previewConflictNames].filter(Boolean),
+                      action: 'acknowledge',
+                    },
+                  });
+                }}
+                aria-label={`Get help finding a compatible lab for ${unavailableLinkedLabPreviewId}`}
+                title="No compatible lab placement — contact your academic advisor or registration office"
+                data-preview-alert-action
+                className="nb-preview-alert-action inline-flex h-6 w-5 items-center justify-center border-0 bg-transparent p-0 hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--color-navy)] transition-opacity cursor-pointer shrink-0"
+              >
+                <AlertTriangle size={12} strokeWidth={2.5} aria-hidden="true" />
+              </button>
+            )}
           </div>
 
           {/* Search bar on top right replacing static text */}
@@ -656,7 +701,7 @@ export default function AvailableCourses({
                   onBlur={(event) => {
                     if (
                       !preservePreviewOnBlurRef.current &&
-                      !event.relatedTarget?.closest?.('[data-repair-action]')
+                      !event.relatedTarget?.closest?.('[data-repair-action], [data-preview-alert-action]')
                     ) {
                       onPreviewSectionChange?.(null);
                     }

@@ -19,6 +19,8 @@ import {
 } from '../src/state/draft-controller.mjs';
 
 import { INITIAL_DRAFT, MAIN_CATALOG } from '../src/domain/catalog.mjs';
+import { buildFixedPreview } from '../src/domain/drop-preview.mjs';
+import { enumerateRepairs } from '../src/domain/repairs.mjs';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -160,6 +162,62 @@ describe('SELECT_SCENARIO', () => {
     assert.equal(bio.enrolled, 42);
     assert.equal(bio.capacity, 60);
     assert.equal(bio.seat, 'open');
+  });
+
+  it('noRepair offers and applies the STAT-A to STAT-B first step for BIO-214', () => {
+    const selected = dispatch([{ type: ACTION.SELECT_SCENARIO, payload: 'noRepair' }]);
+    const suggested = reduce(selected, { type: ACTION.SUGGEST_REPAIR, payload: 'BIO-214' });
+    assert.deepEqual(suggested.candidate?.swap, { old: 'STAT-A', replacement: 'STAT-B' });
+    assert.equal(suggested.candidate?.validation.stagedLinkedRequirement, true);
+
+    const applied = reduce(suggested, { type: ACTION.APPLY_REPAIR });
+    assert.deepEqual(applied.draft, ['BIO-214', 'MATH-A', 'STAT-B']);
+    assert.equal(applied.notice?.kind, 'success');
+    assert.equal(applied.notice?.message, 'BIO-214 has been added to your timetable.');
+  });
+
+  it('main suggests and applies moving MATH-A to MATH-B to place Lab A', () => {
+    const base = initialState();
+    const suggested = reduce(base, { type: ACTION.SUGGEST_REPAIR, payload: 'BIO-214L-A' });
+
+    assert.deepEqual(suggested.candidate?.swap, { old: 'MATH-A', replacement: 'MATH-B' });
+    assert.ok(suggested.candidate?.ids.includes('BIO-214L-A'));
+
+    const applied = reduce(suggested, { type: ACTION.APPLY_REPAIR });
+    assert.deepEqual(applied.draft, suggested.candidate.ids);
+    assert.equal(applied.notice?.kind, 'success');
+  });
+
+  it('noRepair linked lab preview has a conflict alert and no repair candidates', () => {
+    const selected = dispatch([{ type: ACTION.SELECT_SCENARIO, payload: 'noRepair' }]);
+    const suggested = reduce(selected, { type: ACTION.SUGGEST_REPAIR, payload: 'BIO-214' });
+    const applied = reduce(suggested, { type: ACTION.APPLY_REPAIR });
+    const labA = applied.availableCourses.find((item) => item.id === 'BIO-214L-A');
+    const selectedSections = applied.availableCourses.filter((item) => applied.draft.includes(item.id));
+
+    assert.ok(applied.draft.includes(labA.requiredBy));
+    assert.equal(buildFixedPreview(labA, selectedSections).hasConflict, true);
+    assert.deepEqual(enumerateRepairs(applied.draft, applied.availableCourses, labA.id, { firstStep: true }), []);
+    assert.equal(applied.availableCourses.find((item) => item.id === 'BIO-214L-B').seat, 'full');
+  });
+
+  it('main scenario offers and applies the Lab B then MATH-A two-swap repair', () => {
+    const base = initialState();
+    const prepared = {
+      ...base,
+      draft: Object.freeze(['BIO-214', 'BIO-214L-A', 'MATH-B', 'STAT-B']),
+    };
+    const suggested = reduce(prepared, { type: ACTION.SUGGEST_REPAIR, payload: 'MATH-A' });
+    assert.deepEqual(
+      suggested.candidate?.swaps.map(({ old, replacement }) => [old, replacement]),
+      [
+        ['BIO-214L-A', 'BIO-214L-B'],
+        ['MATH-B', 'MATH-A'],
+      ]
+    );
+
+    const applied = reduce(suggested, { type: ACTION.APPLY_REPAIR });
+    assert.deepEqual(applied.draft, ['BIO-214', 'BIO-214L-B', 'MATH-A', 'STAT-B']);
   });
 
   it('main availableCourses has BIO-214L-B as open', () => {
@@ -617,9 +675,9 @@ describe('RESET_DRAFT', () => {
 
 describe('case-insensitive search and card preservation on refusal', () => {
   it('case-insensitive search matches uppercase, lowercase, and mixed case', () => {
-    const sLower = reduce(initialState(), { type: ACTION.SET_SEARCH, payload: 'chem' });
-    const sUpper = reduce(initialState(), { type: ACTION.SET_SEARCH, payload: 'CHEM' });
-    const sMixed = reduce(initialState(), { type: ACTION.SET_SEARCH, payload: 'ChEm' });
+    const sLower = reduce(initialState(), { type: ACTION.SET_SEARCH, payload: 'math' });
+    const sUpper = reduce(initialState(), { type: ACTION.SET_SEARCH, payload: 'MATH' });
+    const sMixed = reduce(initialState(), { type: ACTION.SET_SEARCH, payload: 'MaTh' });
 
     const lowerIds = filteredAvailableCourses(sLower).map((c) => c.id);
     const upperIds = filteredAvailableCourses(sUpper).map((c) => c.id);
@@ -791,7 +849,7 @@ describe('suggestion, apply, exact undo, dismiss', () => {
     assert.match(sDismissed.notice.title, /no changes made/i);
   });
 
-  it('suggest in noRepair scenario returns safe refusal and null candidate', () => {
+  it('suggest in noRepair scenario offers the valid next step despite the unavailable lab', () => {
     const sNoRepair = reduce(initialState(), {
       type: ACTION.SELECT_SCENARIO,
       payload: 'noRepair',
@@ -800,9 +858,10 @@ describe('suggestion, apply, exact undo, dismiss', () => {
       type: ACTION.SUGGEST_REPAIR,
       payload: 'BIO-214',
     });
-    assert.equal(sSuggested.candidate, null);
-    assert.equal(sSuggested.notice.kind, 'error');
-    assert.match(sSuggested.notice.title, /no suitable timetable/i);
+    assert.deepEqual(sSuggested.candidate?.swap, { old: 'STAT-A', replacement: 'STAT-B' });
+    assert.equal(sSuggested.candidate?.validation.stagedLinkedRequirement, true);
+    assert.equal(sSuggested.notice.kind, 'info');
+    assert.match(sSuggested.notice.title, /suggested timetable ready/i);
     assert.deepEqual(sSuggested.draft, ['MATH-A', 'STAT-A']);
   });
 });

@@ -105,7 +105,7 @@ export default function AppShell({ state, dispatch, children }) {
                 notice={notice}
                 onDismiss={() => {
                   dispatch({ type: ACTION.CLEAR_NOTICE });
-                  closeWindow('repair');
+                  if (notice?.action !== 'acknowledge') closeWindow('repair');
                 }}
                 onAction={() => {
                   dispatch({ type: ACTION.SUGGEST_REPAIR });

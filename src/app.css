@@ -1556,7 +1556,17 @@ body {
 }
 
 .nb-repair-action {
+  color: #000;
+  background-color: transparent;
+  border: 0;
   animation: nb-repair-flash 0.8s steps(1, end) infinite;
+}
+
+.nb-preview-alert-action {
+  color: #dc2626;
+  background-color: transparent;
+  border: 0;
+  animation: nb-preview-alert-flash 0.8s steps(1, end) infinite;
 }
 
 @keyframes nb-repair-flash {
@@ -1565,10 +1575,26 @@ body {
   }
 }
 
+@keyframes nb-preview-alert-flash {
+  50% {
+    color: #fff;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .nb-repair-action {
+  .nb-repair-action,
+  .nb-preview-alert-action {
     animation: none;
+  }
+
+  .nb-repair-action {
     color: #000;
+    background-color: transparent;
+  }
+
+  .nb-preview-alert-action {
+    color: #dc2626;
+    background-color: transparent;
   }
 }
 

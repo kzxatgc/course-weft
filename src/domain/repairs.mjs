@@ -7,8 +7,9 @@
  * courses support exactly one child requirement (min:1, max:1). Multiple linked requirements are unsupported
  * and yield no candidates.
  *
- * All complete schedules are independently validated before inclusion. Results
- * are deduplicated by sorted ID set and ordered by fewest swaps, then IDs.
+ * Complete schedules are independently validated before inclusion. First-step
+ * suggestions validate only the immediate change and defer linked requirements.
+ * Results are deduplicated by sorted ID set and ordered by fewest swaps, then IDs.
  */
 
 import { validateDraft } from './validate.mjs';
@@ -126,7 +127,7 @@ export function enumerateRepairs(
   if (draftIds.some((id) => !byId.get(id))) return [];
 
   // Determine the linked-child option sets for the requested section
-  const optionSets = linkedOptionSets(requested, byId);
+  const optionSets = firstStep ? [[]] : linkedOptionSets(requested, byId);
   if (optionSets.length === 0) return [];
 
   const swapChoices = draftIds.map((oldId) =>
@@ -162,23 +163,48 @@ export function enumerateRepairs(
         const uniqueIds = [...new Set(next)];
         if (uniqueIds.length !== next.length) continue;
 
-        // A complete valid schedule must be reachable from this step.
-        const validation = validateDraft(uniqueIds, catalog);
-        if (!validation.ok) continue;
-
         const linkedIdsToAdd = new Set(linkedIds.filter((id) => !draftIds.includes(id)));
         const stepIds = uniqueIds.filter((id) => !linkedIdsToAdd.has(id));
         const candidateIds = firstStep ? stepIds : uniqueIds;
+        let validation = validateDraft(uniqueIds, catalog);
+
+        if (!validation.ok) {
+          if (
+            !firstStep ||
+            !['linked-group-invalid', 'orphan-linked-section'].includes(validation.reason)
+          ) continue;
+
+          const stagedValidation = validateDraft(candidateIds, catalog);
+          const withoutRequested = validateDraft(
+            candidateIds.filter((id) => id !== requestedId),
+            catalog
+          );
+          if (
+            !['linked-group-invalid', 'orphan-linked-section'].includes(stagedValidation.reason) ||
+            !withoutRequested.ok
+          ) continue;
+
+          validation = {
+            ...stagedValidation,
+            ok: true,
+            reason: null,
+            stagedLinkedRequirement: true,
+            completionPending: true,
+          };
+        } else {
+          validation = {
+            ...validation,
+            stagedLinkedRequirement: firstStep && linkedIdsToAdd.size > 0,
+          };
+        }
+
         candidates.push({
           ids: candidateIds.slice().sort((a, b) => a.localeCompare(b)),
           swap: swaps[0] || null,
           swaps,
           added: candidateIds.filter((id) => !draftIds.includes(id)).sort((a, b) => a.localeCompare(b)),
           kept: draftIds.filter((id) => !swappedOutIds.has(id)).slice().sort((a, b) => a.localeCompare(b)),
-          validation: Object.freeze({
-            ...validation,
-            stagedLinkedRequirement: firstStep && linkedIdsToAdd.size > 0,
-          }),
+          validation: Object.freeze(validation),
         });
       }
     }
@@ -186,9 +212,22 @@ export function enumerateRepairs(
   }
 
   const singleSwapCandidates = findCandidates(1);
-  const results = singleSwapCandidates.length > 0
-    ? singleSwapCandidates
-    : findCandidates(2);
+  const completeSingleSwapCandidates = singleSwapCandidates.filter(
+    (candidate) => !candidate.validation.completionPending
+  );
+  let results = completeSingleSwapCandidates;
+
+  if (results.length === 0) {
+    const twoSwapCandidates = findCandidates(2);
+    const completeTwoSwapCandidates = twoSwapCandidates.filter(
+      (candidate) => !candidate.validation.completionPending
+    );
+    results = completeTwoSwapCandidates.length > 0
+      ? completeTwoSwapCandidates
+      : firstStep
+        ? singleSwapCandidates
+        : [];
+  }
 
   // Deduplicate by final sorted ID key
   const deduplicated = new Map();

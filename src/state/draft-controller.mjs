@@ -589,7 +589,7 @@ export function reduce(state, action) {
 
       // Revalidate whole-draft against current catalog
       const finalCheck = validateDraft(candidate.ids, state.availableCourses);
-      const isValidFirstStep = finalCheck.reason === 'linked-group-invalid' &&
+      const isValidFirstStep = ['linked-group-invalid', 'orphan-linked-section'].includes(finalCheck.reason) &&
         candidate.ids.includes(requestedId) &&
         validateDraft(
           candidate.ids.filter((id) => id !== requestedId),
@@ -625,7 +625,7 @@ export function reduce(state, action) {
           kind: 'success',
           title: 'Timetable updated',
           message: isValidFirstStep
-            ? `${requestedId} has been added in this repair step. Choose its linked lab from Available Courses to complete your schedule.`
+            ? `${requestedId} has been added to your timetable.`
             : 'The changes are saved.',
         }),
       });

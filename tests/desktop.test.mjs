@@ -359,9 +359,9 @@ describe('Available Courses and search', () => {
   });
 
   it('filters available courses by course code (case-insensitive)', () => {
-    const draft = ['MATH-A', 'CHEM-LAB-A'];
+    const draft = ['MATH-A', 'MATH-LAB-A'];
     const nonDraft = MAIN_CATALOG.filter((c) => !draft.includes(c.id));
-    const query = 'chem';
+    const query = 'math';
     const matches = nonDraft.filter((item) => {
       const codeMatch =
         item.id?.toLowerCase().includes(query) ||
@@ -371,7 +371,7 @@ describe('Available Courses and search', () => {
     });
 
     assert.ok(matches.length > 0);
-    assert.ok(matches.every((m) => m.id.toLowerCase().includes('chem') || m.course?.toLowerCase().includes('chem')));
+    assert.ok(matches.every((m) => m.id.toLowerCase().includes('math') || m.course?.toLowerCase().includes('math')));
   });
 
   it('filters available courses by course title (case-insensitive)', () => {
@@ -593,8 +593,42 @@ describe('Apply / Undo / Dismiss / Reset wiring', () => {
     );
     assert.ok(coursesSource.includes('emphasizedCourseId: repairPreviewId'));
     assert.ok(noticeSource.includes('notice?.emphasizedCourseId'));
-    assert.ok(noticeSource.includes('<strong className="font-bold text-[var(--color-navy)]">{courseId}</strong>'));
+    assert.ok(noticeSource.includes('<strong key={`${nextCourse.courseId}-${parts.length}`} className="font-bold text-[var(--color-navy)]">'));
+    assert.ok(noticeSource.includes('{nextCourse.courseId}'));
     assert.ok(noticeSource.includes('{renderNoticeMessage()}'));
+  });
+
+  it('offers advisor alert for a conflicting linked lab without a repair', async () => {
+    const { readFileSync } = await import('node:fs');
+    const previewSource = readFileSync(new URL('../src/EarlySchedulePreview.jsx', import.meta.url), 'utf8');
+    const coursesSource = readFileSync(
+      new URL('../src/components/AvailableCourses.jsx', import.meta.url),
+      'utf8'
+    );
+    assert.ok(previewSource.includes('unavailableLinkedLabPreviewId'));
+    assert.ok(previewSource.includes('displayDraft.includes(previewSection.requiredBy)'));
+    assert.ok(previewSource.includes("state?.scenario === 'noRepair'"));
+    assert.ok(previewSource.includes("previewConflictNames.includes('MATH-A')"));
+    assert.ok(previewSource.includes('!displayDraft.includes(previewSection.requiredBy)'));
+    assert.ok(previewSource.includes('!scenarioTwoLabWithoutLecture'));
+    assert.ok(coursesSource.includes('Get help finding a compatible lab'));
+    assert.ok(coursesSource.includes('academic advisor or registration office'));
+    assert.ok(previewSource.includes('.map((section) => section.id)'));
+    assert.ok(coursesSource.includes('${lab?.id || \'This lab\'} conflicts with ${previewConflictNames.join(\', \')}'));
+    assert.ok(coursesSource.includes('emphasizedCourseIds: [lab?.id, ...previewConflictNames].filter(Boolean)'));
+    assert.ok(coursesSource.includes("action: 'acknowledge'"));
+    assert.ok(coursesSource.includes('ACTION.SET_NOTICE'));
+    const noticeSource = readFileSync(new URL('../src/Notice.jsx', import.meta.url), 'utf8');
+    assert.ok(noticeSource.includes("notice.action === 'acknowledge'"));
+    assert.ok(noticeSource.includes('                    OK'));
+    const cssSource = readFileSync(new URL('../src/app.css', import.meta.url), 'utf8');
+    assert.ok(cssSource.includes('.nb-repair-action'));
+    assert.ok(cssSource.includes('background-color: transparent;'));
+    assert.ok(cssSource.includes('@keyframes nb-repair-flash'));
+    assert.ok(cssSource.includes('.nb-preview-alert-action'));
+    assert.ok(cssSource.includes('color: #000;'));
+    assert.ok(cssSource.includes('@keyframes nb-preview-alert-flash'));
+    assert.ok(coursesSource.includes('nb-preview-alert-action inline-flex h-6 w-5 items-center justify-center border-0 bg-transparent'));
   });
 
   it('AvailableCourses includes inline Undo, Redo, and Reset icon buttons wired to correct actions', async () => {
@@ -1114,7 +1148,7 @@ describe('Fixed-slot time-conflict preview', () => {
       );
       assert.ok(src.includes('previewSectionId'), 'EarlySchedulePreview manages previewSectionId state');
       assert.ok(src.includes('onPreviewSectionChange={setPreviewSectionId}'), 'EarlySchedulePreview wires AvailableCourses');
-      assert.ok(src.includes('fixedPreviewSectionId={previewSectionId}'), 'EarlySchedulePreview wires Timetable');
+      assert.ok(src.includes('fixedPreviewSectionId={activePreviewSectionId}'), 'EarlySchedulePreview wires Timetable');
     });
   });
 

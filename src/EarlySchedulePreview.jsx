@@ -9,6 +9,7 @@ import { ACTION } from './state/draft-controller.mjs';
 import {
   evaluateSwap,
   buildFixedPreview,
+  getConflictingSections,
 } from './domain/drop-preview.mjs';
 import { enumerateRepairs } from './domain/repairs.mjs';
 import {
@@ -112,13 +113,39 @@ export default function EarlySchedulePreview({ state, dispatch }) {
       selectedSections.filter((section) => !previewReplacedIds.includes(section.id))
     )?.hasConflict
     : false;
-  const repairPreviewId = previewConflict &&
-    enumerateRepairs(
+  const previewRepairs = previewConflict
+    ? enumerateRepairs(
       draft,
       availableCourses,
       activePreviewSectionId,
       { firstStep: true }
-    ).length > 0
+    )
+    : [];
+  const previewConflictNames = previewSection
+    ? getConflictingSections(
+      previewSection,
+      selectedSections.filter((section) => !previewReplacedIds.includes(section.id))
+    ).map((section) => section.id)
+    : [];
+  const scenarioTwoLabWithoutLecture =
+    state?.scenario === 'noRepair' &&
+    previewSection?.id === 'BIO-214L-A' &&
+    previewSection.requiredBy &&
+    !displayDraft.includes(previewSection.requiredBy) &&
+    previewConflictNames.includes('MATH-A');
+  const unavailableLinkedLabPreviewId =
+    previewConflict &&
+    (
+      scenarioTwoLabWithoutLecture ||
+      (
+        previewSection?.requiredBy &&
+        displayDraft.includes(previewSection.requiredBy) &&
+        previewRepairs.length === 0
+      )
+    )
+      ? activePreviewSectionId
+      : null;
+  const repairPreviewId = previewRepairs.length > 0 && !scenarioTwoLabWithoutLecture
     ? activePreviewSectionId
     : null;
 
@@ -279,6 +306,8 @@ export default function EarlySchedulePreview({ state, dispatch }) {
             onPreviewSectionChange={setPreviewSectionId}
             selectionResetKey={traySelectionResetKey}
             repairPreviewId={repairPreviewId}
+            unavailableLinkedLabPreviewId={unavailableLinkedLabPreviewId}
+            previewConflictNames={previewConflictNames}
             onRequestSwap={handleRequestSwap}
             onSectionDragStart={handleTimetableDragStart}
             animatingReturnId={returningCardId}

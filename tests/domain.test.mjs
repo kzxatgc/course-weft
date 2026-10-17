@@ -103,6 +103,56 @@ test('noRepair scenario makes copy without shared mutation', () => {
   assert.equal(PRODUCTION_CATALOG.find((s) => s.id === 'BIO-214L-B').seat, 'open');
 });
 
+test('noRepair scenario offers a valid first step when no linked lab currently fits', () => {
+  const scenario = getCatalogForScenario('noRepair');
+  const mainLabA = getCatalogForScenario('main').find((section) => section.id === 'BIO-214L-A');
+  const noRepairLabA = scenario.find((section) => section.id === 'BIO-214L-A');
+  assert.equal(noRepairLabA.start, mainLabA.start);
+  assert.equal(noRepairLabA.end, mainLabA.end);
+
+  const mathA = scenario.find((section) => section.id === 'MATH-A');
+  assert.equal(mathA.start, 600);
+  assert.equal(mathA.end, 660);
+  assert.equal(noRepairLabA.day, mathA.day);
+  assert.ok(noRepairLabA.start < mathA.end && noRepairLabA.end > mathA.start);
+  assert.equal(scenario.find((section) => section.id === 'BIO-214L-B').seat, 'full');
+  assert.equal(scenario.find((section) => section.id === 'STAT-B').seat, 'open');
+
+  const repairs = enumerateRepairs(INITIAL_DRAFT, scenario, 'BIO-214', { firstStep: true });
+  assert.equal(repairs.length, 1);
+  assert.deepEqual(repairs[0].swap, { old: 'STAT-A', replacement: 'STAT-B' });
+  assert.ok(repairs[0].ids.includes('BIO-214'));
+  assert.ok(repairs[0].ids.includes('STAT-B'));
+  assert.equal(repairs[0].validation.stagedLinkedRequirement, true);
+  assert.deepEqual(
+    enumerateRepairs(INITIAL_DRAFT, scenario, 'BIO-214'),
+    [],
+    'there is still no complete schedule while Lab A conflicts and Lab B is full'
+  );
+});
+
+test('first-step repairs do not depend on linked sections fitting yet', () => {
+  const scenario = getCatalogForScenario('noRepair').map((section) => {
+    if (section.id === 'BIO-214L-A') return { ...section, start: 600, end: 720 };
+    return section;
+  });
+  const steps = enumerateRepairs(INITIAL_DRAFT, scenario, 'BIO-214', { firstStep: true });
+
+  assert.equal(steps.length, 1);
+  assert.deepEqual(steps[0].swap, { old: 'STAT-A', replacement: 'STAT-B' });
+  assert.ok(steps[0].ids.includes('BIO-214'));
+});
+
+test('main scenario offers a first-step repair for placing Lab A over MATH-A', () => {
+  const repairs = enumerateRepairs(INITIAL_DRAFT, PRODUCTION_CATALOG, 'BIO-214L-A', { firstStep: true });
+
+  assert.equal(repairs.length, 1);
+  assert.deepEqual(repairs[0].swap, { old: 'MATH-A', replacement: 'MATH-B' });
+  assert.ok(repairs[0].ids.includes('BIO-214L-A'));
+  assert.ok(repairs[0].ids.includes('MATH-B'));
+  assert.ok(repairs[0].validation.completionPending);
+});
+
 // --- Validate IDs and catalogue records ---
 
 test('validateDraft accepts a valid empty draft', () => {
@@ -413,8 +463,11 @@ test('validateDraft rejects draft with timetable clash (STAT-A and BIO-214 confl
 });
 
 test('validateDraft rejects draft with overlapping lecture and lab (MATH-A and BIO-214L-A on Tuesday)', () => {
-  // MATH-A: Tue 600..660; BIO-214L-A: Tue 600..720
-  const result = validateDraft(['MATH-A', 'BIO-214', 'BIO-214L-A'], PRODUCTION_CATALOG);
+  const overlappingCatalog = PRODUCTION_CATALOG.map((section) =>
+    section.id === 'MATH-A' ? { ...section, day: 'Tue', start: 600, end: 660 } : section
+  );
+  // Overlapping MATH-A: Tue 600..660; BIO-214L-A: Tue 600..720
+  const result = validateDraft(['MATH-A', 'BIO-214', 'BIO-214L-A'], overlappingCatalog);
   assert.equal(result.ok, false);
   assert.equal(result.reason, 'time-conflict');
 });
@@ -642,7 +695,7 @@ test('enumerateRepairs stops after finding a valid single-swap plan', () => {
   assert.ok(candidates.every((candidate) => candidate.swaps.length <= 1));
 });
 
-test('enumerateRepairs falls back to two swaps only when no single-swap plan works', () => {
+test('enumerateRepairs first-step suggestion supports the two swaps needed to restore MATH-A', () => {
   const cat = getCatalogForScenario('main').map((section) => {
     if (section.id === 'BIO-214') {
       return { ...section, day: 'Mon', start: 780, end: 840 };
@@ -650,25 +703,21 @@ test('enumerateRepairs falls back to two swaps only when no single-swap plan wor
     if (section.id === 'BIO-214L-A') {
       return { ...section, day: 'Tue', start: 600, end: 720 };
     }
-    if (section.id === 'BIO-214L-B') {
-      return { ...section, enrolled: 30, capacity: 30, seat: 'full' };
-    }
     return section;
   });
   const candidates = enumerateRepairs(
-    [...CATALOG_INITIAL_DRAFT],
+    ['BIO-214', 'BIO-214L-A', 'MATH-B', 'STAT-B'],
     cat,
-    'BIO-214',
+    'MATH-A',
     { firstStep: true }
   );
 
   assert.equal(candidates.length, 1);
-  assert.equal(candidates[0].swaps.length, 2);
   assert.deepEqual(
     candidates[0].swaps.map(({ old, replacement }) => [old, replacement]),
     [
-      ['MATH-A', 'MATH-B'],
-      ['STAT-A', 'STAT-B'],
+      ['BIO-214L-A', 'BIO-214L-B'],
+      ['MATH-B', 'MATH-A'],
     ]
   );
 });
@@ -716,7 +765,7 @@ test('enumerateRepairs rejects swap where alternate has a different course or co
 
 test('enumerateRepairs: direct add (no swap) is supported when no swap needed', () => {
   // Draft already has STAT-B (which does not conflict with BIO-214); direct add should work
-  // MATH-A Tue 10-11, STAT-B Thu 13-14, BIO-214 Mon 13-14, BIO-214L-B Wed 14-16 -> no conflicts
+  // MATH-A Tue 08-09, STAT-B Thu 13-14, BIO-214 Mon 13-14, BIO-214L-B Wed 14-16 -> no conflicts
   const cat = getCatalogForScenario('main');
   // Request BIO-214 from draft ['MATH-A', 'STAT-B'] — should find direct add candidate (no swap)
   const candidates = enumerateRepairs(['MATH-A', 'STAT-B'], cat);
