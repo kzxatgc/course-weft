@@ -896,8 +896,8 @@ describe('drop-preview domain', () => {
       assert.ok(typeof DT_SECTION_ID === 'string' && DT_SECTION_ID.length > 0);
     });
 
-    it('contains enrollfix to avoid MIME collision', () => {
-      assert.ok(DT_SECTION_ID.includes('enrollfix'));
+    it('contains course-weft to avoid MIME collision', () => {
+      assert.ok(DT_SECTION_ID.includes('course-weft'));
     });
   });
 

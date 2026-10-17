@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 
 /**
  * Top menu bar — fixed 34px edge-to-edge:
- *   Left:  EnrollFix Brand logo
+ *   Left:  Course Weft brand logo
  *   Right: Semester badge + Live Clock
  */
 export default function MenuBar() {
@@ -21,7 +21,7 @@ export default function MenuBar() {
       <div className="flex items-center gap-2">
         <span className="flex shrink-0 items-center gap-[7px] font-['Archivo_Black',sans-serif] text-sm font-black tracking-[0.02em] text-[var(--color-navy)]">
           <span className="grid h-[22px] w-[22px] shrink-0 place-items-center bg-[var(--color-navy)] font-['Archivo_Black',sans-serif] text-xs font-black text-[var(--color-yellow)]" aria-hidden="true">E</span>
-          EnrollFix
+          Course Weft
         </span>
       </div>
 

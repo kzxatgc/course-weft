@@ -19,7 +19,7 @@ import ScenarioWindow from './windows/ScenarioWindow.jsx';
 import WebsiteInfo from './windows/WebsiteInfo.jsx';
 
 /**
- * AppShell — neo-brutalist desktop OS container for EnrollFix.
+ * AppShell — neo-brutalist desktop OS container for Course Weft.
  *
  * Provides:
  * - Fixed top MenuBar (brand + clock)

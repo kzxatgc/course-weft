@@ -1,5 +1,5 @@
 /**
- * Time formatting utilities for EnrollFix course meeting times.
+ * Time formatting utilities for Course Weft course meeting times.
  *
  * Times are represented as integer minutes from midnight (0–1440).
  * Formatting is explicit and locale/time-zone independent.
@@ -59,4 +59,3 @@ export function formatCourseSlot(item) {
   const dayStr = item.day ? item.day.toUpperCase() : '';
   return `${dayStr} ${format24hTime(item.start)} - ${format24hTime(item.end)}`;
 }
-

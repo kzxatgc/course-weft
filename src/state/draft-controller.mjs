@@ -1,7 +1,7 @@
 /**
  * draft-controller.mjs
  *
- * Pure, framework-independent state/reducer for the EnrollFix planning workspace.
+ * Pure, framework-independent state/reducer for the Course Weft planning workspace.
  * All state transitions return a new state object; the previous state is never mutated.
  *
  * Gate A decision: Plan A — dynamic candidate generation passed the fixed adversarial

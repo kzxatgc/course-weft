@@ -1,5 +1,5 @@
 /**
- * Synthetic course and section catalogue for EnrollFix course registration.
+ * Synthetic course and section catalogue for Course Weft registration.
  * Ported cleanly to course-weft with isolated deep cloning for scenarios.
  *
  * Enrollment and capacity values are fictional sample data only.

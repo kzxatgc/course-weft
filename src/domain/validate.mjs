@@ -1,5 +1,5 @@
 /**
- * Nonthrowing catalogue-record and draft-ID validation for EnrollFix.
+ * Nonthrowing catalogue-record and draft-ID validation for Course Weft.
  * All functions return { ok: boolean, reason: string | null }.
  */
 

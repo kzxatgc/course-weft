@@ -1,5 +1,5 @@
 /**
- * Neo-brutalist five-token color themes for EnrollFix.
+ * Neo-brutalist five-token color themes for Course Weft.
  *
  * Each theme supplies exactly five semantic tokens:
  *   yellow   — title bars, active badges, highlights

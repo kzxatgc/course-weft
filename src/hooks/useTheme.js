@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { THEMES, DEFAULT_THEME_ID } from '../theme/themes.js';
 
-const STORAGE_KEY = 'enrollfix-theme';
+const STORAGE_KEY = 'course-weft-theme';
 
 /** Write five CSS custom properties onto :root from a theme object. */
 function applyTheme(theme) {

@@ -7,4 +7,4 @@ The audio cues in this directory were generated mathematically in Node.js using 
 3. **`undo.wav`** (24.7 KB): Gentle descending tone (E5 659.25 Hz descending to A4 440.00 Hz with soft decay) played on Undo repair.
 
 ## Licence
-All generated cues are original works created specifically for EnrollFix and released under **Creative Commons Zero v1.0 Universal (CC0 1.0 — Public Domain Dedication)**. No external stock audio or licensed third-party clips are used.
+All generated cues are original works created specifically for Course Weft and released under **Creative Commons Zero v1.0 Universal (CC0 1.0 — Public Domain Dedication)**. No external stock audio or licensed third-party clips are used.

@@ -8,7 +8,7 @@
  *
  * Constraints & Design Rules:
  *   - Default ON (sound enabled by default)
- *   - Persistent via localStorage ('enrollfix_sound_enabled')
+ *   - Persistent via localStorage ('course_weft_sound_enabled')
  *   - User-controlled toggle/mute
  *   - Plays ONLY after user gesture
  *   - Playback failure NEVER blocks state or throws
@@ -18,7 +18,7 @@
 
 import { Howl } from 'howler';
 
-const STORAGE_KEY = 'enrollfix_sound_enabled';
+const STORAGE_KEY = 'course_weft_sound_enabled';
 
 // Listeners for sound enabled state changes
 const listeners = new Set();

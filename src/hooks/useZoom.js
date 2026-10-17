@@ -14,7 +14,7 @@ export function useZoom() {
 
     // Detect or retrieve baseline DPR (devicePixelRatio at 100% zoom)
     let baseDpr = 1;
-    const stored = sessionStorage.getItem('enrollfix_base_dpr');
+    const stored = sessionStorage.getItem('course_weft_base_dpr');
     if (stored) {
       baseDpr = parseFloat(stored) || 1;
     } else {
@@ -24,10 +24,10 @@ export function useZoom() {
           : 1;
       if (Math.abs(ratio - 1) < 0.12) {
         baseDpr = window.devicePixelRatio || 1;
-        sessionStorage.setItem('enrollfix_base_dpr', String(baseDpr));
+        sessionStorage.setItem('course_weft_base_dpr', String(baseDpr));
       } else {
         baseDpr = (window.devicePixelRatio || 1) / ratio;
-        sessionStorage.setItem('enrollfix_base_dpr', String(baseDpr));
+        sessionStorage.setItem('course_weft_base_dpr', String(baseDpr));
       }
     }
 

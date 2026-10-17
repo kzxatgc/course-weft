@@ -1,5 +1,5 @@
 /**
- * Repair enumeration for EnrollFix course registration.
+ * Repair enumeration for Course Weft registration.
  *
  * Enumerates valid schedule repairs as a direct add or explicitly declared
  * same-course/component swaps, preferring plans with at most one swap and

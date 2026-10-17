@@ -34,7 +34,7 @@ export default function ScenarioWindow({ scenario, dispatch }) {
       </div>
 
       <p className="nb-win-desc">
-        Select a test scenario to evaluate the EnrollFix timetable repair engine.
+        Select a test scenario to evaluate the Course Weft timetable repair engine.
         Changing scenarios updates the catalog and current schedule draft.
       </p>
 

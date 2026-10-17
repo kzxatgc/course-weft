@@ -20,7 +20,7 @@ export const DAY_END_MIN    = 18 * 60;  // 1080
 export const TOTAL_SPAN_MIN = DAY_END_MIN - DAY_START_MIN; // 600
 
 /** DataTransfer MIME type used to carry the dragged section ID. */
-export const DT_SECTION_ID = 'text/x-enrollfix-section-id';
+export const DT_SECTION_ID = 'text/x-course-weft-section-id';
 
 /**
  * Snap a minute value to the nearest 15-minute boundary.
@@ -363,4 +363,3 @@ export function evaluateSwap({ draft, availableCourses, fromId, toId }) {
     nextDraft,
   };
 }
-
