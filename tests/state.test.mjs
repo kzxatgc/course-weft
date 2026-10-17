@@ -16,6 +16,7 @@ import {
   ACTION,
   filteredAvailableCourses,
   canUndo,
+  canRedo,
 } from '../src/state/draft-controller.mjs';
 
 import { INITIAL_DRAFT, MAIN_CATALOG } from '../src/domain/catalog.mjs';
@@ -794,6 +795,94 @@ describe('suggestion, apply, exact undo, dismiss', () => {
     assert.equal(s3.snapshot, null);
     assert.equal(s3.isApplied, false);
     assert.equal(s3.notice, null);
+
+    const s3Complete = reduce(s3, { type: ACTION.COMPLETE_HISTORY_TRANSITION });
+    const s4 = reduce(s3Complete, { type: ACTION.REDO_REPAIR });
+    assert.deepEqual(s4.draft, ['BIO-214', 'MATH-A', 'STAT-B']);
+    assert.equal(s4.isApplied, true);
+    assert.equal(s4.historyTransition.direction, 'redo');
+    assert.equal(canUndo(s4), true);
+  });
+
+  it('records ordinary timetable edits and clears redo after a new edit', () => {
+    const initial = initialState();
+    const removed = reduce(initial, { type: ACTION.REMOVE_SECTION, payload: 'STAT-A' });
+    assert.deepEqual(removed.draft, ['MATH-A']);
+    assert.equal(canUndo(removed), true);
+
+    const undone = reduce(removed, { type: ACTION.UNDO_REPAIR });
+    assert.deepEqual(undone.draft, initial.draft);
+    assert.equal(undone.historyTransition.direction, 'undo');
+    assert.equal(canRedo(undone), true);
+
+    const completedUndo = reduce(undone, { type: ACTION.COMPLETE_HISTORY_TRANSITION });
+    assert.equal(completedUndo.historyTransition, null);
+    assert.strictEqual(
+      reduce(completedUndo, { type: ACTION.COMPLETE_HISTORY_TRANSITION }),
+      completedUndo
+    );
+
+    const redone = reduce(completedUndo, { type: ACTION.REDO_REPAIR });
+    assert.deepEqual(redone.draft, ['MATH-A']);
+    assert.equal(redone.historyTransition.direction, 'redo');
+    assert.equal(canUndo(redone), true);
+    assert.equal(canRedo(redone), false);
+
+    const redoneComplete = reduce(redone, { type: ACTION.COMPLETE_HISTORY_TRANSITION });
+    const undoneAgain = reduce(redoneComplete, { type: ACTION.UNDO_REPAIR });
+    const undoneAgainComplete = reduce(undoneAgain, { type: ACTION.COMPLETE_HISTORY_TRANSITION });
+    const branched = reduce(undoneAgainComplete, { type: ACTION.REMOVE_SECTION, payload: 'MATH-A' });
+    assert.deepEqual(branched.draft, ['STAT-A']);
+    assert.equal(canRedo(branched), false);
+  });
+
+  it('records successful additions so they can be undone and redone', () => {
+    const withoutMath = reduce(initialState(), {
+      type: ACTION.REMOVE_SECTION,
+      payload: 'MATH-A',
+    });
+    const addedMath = reduce(withoutMath, {
+      type: ACTION.ADD_SECTION,
+      payload: 'MATH-A',
+    });
+    assert.deepEqual(addedMath.draft, ['STAT-A', 'MATH-A']);
+
+    const undone = reduce(addedMath, { type: ACTION.UNDO_REPAIR });
+    assert.deepEqual(undone.draft, ['STAT-A']);
+    const redone = reduce(
+      reduce(undone, { type: ACTION.COMPLETE_HISTORY_TRANSITION }),
+      { type: ACTION.REDO_REPAIR }
+    );
+    assert.deepEqual(redone.draft, ['STAT-A', 'MATH-A']);
+  });
+
+  it('keeps only the latest 50 undo and redo entries', () => {
+    let state = initialState();
+    for (let index = 0; index < 55; index += 1) {
+      const fromId = state.draft.includes('STAT-A') ? 'STAT-A' : 'STAT-B';
+      const toId = fromId === 'STAT-A' ? 'STAT-B' : 'STAT-A';
+      state = reduce(state, {
+        type: ACTION.SWITCH_SECTION,
+        payload: { fromId, toId },
+      });
+    }
+
+    assert.equal(state.undoStack.length, 50);
+    assert.deepEqual(state.draft, ['MATH-A', 'STAT-B']);
+
+    for (let index = 0; index < 50; index += 1) {
+      state = reduce(state, { type: ACTION.UNDO_REPAIR });
+    }
+    assert.equal(state.undoStack.length, 0);
+    assert.equal(state.redoStack.length, 50);
+    assert.deepEqual(state.draft, ['MATH-A', 'STAT-B']);
+
+    for (let index = 0; index < 50; index += 1) {
+      state = reduce(state, { type: ACTION.REDO_REPAIR });
+    }
+    assert.equal(state.undoStack.length, 50);
+    assert.equal(state.redoStack.length, 0);
+    assert.deepEqual(state.draft, ['MATH-A', 'STAT-B']);
   });
 
   it('stale Apply is rejected and does not mutate draft', () => {

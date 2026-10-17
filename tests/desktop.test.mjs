@@ -1787,6 +1787,27 @@ describe('Available Courses drag, drop, and cancel', () => {
       assert.ok(src.includes('remainingIncomingIds.length * 280'), 'Animation duration accounts for added courses');
     });
 
+    it('undo and redo animate section swaps and additions in the reverse or forward direction', async () => {
+      const { readFileSync } = await import('node:fs');
+      const previewSource = readFileSync(
+        new URL('../src/EarlySchedulePreview.jsx', import.meta.url),
+        'utf8'
+      );
+      const coursesSource = readFileSync(
+        new URL('../src/components/AvailableCourses.jsx', import.meta.url),
+        'utf8'
+      );
+      assert.ok(previewSource.includes('const transition = state?.historyTransition'));
+      assert.ok(previewSource.includes('const fromDraft = [...transition.fromDraft]'));
+      assert.ok(previewSource.includes('const toDraft = [...transition.toDraft]'));
+      assert.ok(previewSource.includes('setAnimatingSwap({ outgoingId: swap.old, incomingId: swap.replacement })'));
+      assert.ok(previewSource.includes('const incomingIds = toDraft.filter((id) => !stageDraft.includes(id))'));
+      assert.ok(previewSource.includes('const outgoingIds = stageDraft.filter((id) => !toDraft.includes(id))'));
+      assert.ok(previewSource.includes('type: ACTION.COMPLETE_HISTORY_TRANSITION'));
+      assert.ok(coursesSource.includes('disabled={!canUndoRepair || historyTransitionInProgress}'));
+      assert.ok(coursesSource.includes('disabled={!canRedoRepair || historyTransitionInProgress}'));
+    });
+
     it('scenario switching animates selected sections back before revealing the new course list', async () => {
       const { readFileSync } = await import('node:fs');
       const src = readFileSync(

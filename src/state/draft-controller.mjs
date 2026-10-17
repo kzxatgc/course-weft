@@ -23,6 +23,8 @@ import { INITIAL_DRAFT, REQUESTED_SECTION_ID, catalogForScenario } from '../doma
 import { validateDraft, overlaps } from '../domain/validate.mjs';
 import { enumerateRepairs, isCurrentCandidate } from '../domain/repairs.mjs';
 
+const MAX_HISTORY_ENTRIES = 50;
+
 // ---------------------------------------------------------------------------
 // Initial state factory
 // ---------------------------------------------------------------------------
@@ -44,8 +46,45 @@ export function initialState() {
     candidate: null,
     snapshot: null,
     redoSnapshot: null,
+    undoStack: Object.freeze([]),
+    redoStack: Object.freeze([]),
+    historyTransition: null,
     search: '',
     isApplied: false,
+  });
+}
+
+function createHistoryEntry(state) {
+  return Object.freeze({
+    draft: Object.freeze([...state.draft]),
+    scenario: state.scenario,
+    snapshot: state.snapshot,
+    candidate: state.candidate,
+    request: state.request,
+    isApplied: state.isApplied,
+  });
+}
+
+function appendHistoryEntry(stack, state) {
+  return Object.freeze([
+    ...stack,
+    createHistoryEntry(state),
+  ].slice(-MAX_HISTORY_ENTRIES));
+}
+
+function recordDraftChange(state, draft, updates = {}) {
+  return Object.freeze({
+    ...state,
+    draft: Object.freeze([...draft]),
+    undoStack: appendHistoryEntry(state.undoStack || [], state),
+    redoStack: Object.freeze([]),
+    historyTransition: null,
+    snapshot: null,
+    redoSnapshot: null,
+    candidate: null,
+    request: null,
+    isApplied: false,
+    ...updates,
   });
 }
 
@@ -56,6 +95,7 @@ export function initialState() {
 export const ACTION = Object.freeze({
   SELECT_SCENARIO: 'SELECT_SCENARIO',
   COMPLETE_SCENARIO_TRANSITION: 'COMPLETE_SCENARIO_TRANSITION',
+  COMPLETE_HISTORY_TRANSITION: 'COMPLETE_HISTORY_TRANSITION',
   SET_SEARCH: 'SET_SEARCH',
   SET_NOTICE: 'SET_NOTICE',
   CLEAR_NOTICE: 'CLEAR_NOTICE',
@@ -114,6 +154,10 @@ export function reduce(state, action) {
         request: null,
         candidate: null,
         snapshot: null,
+        redoSnapshot: null,
+        undoStack: Object.freeze([]),
+        redoStack: Object.freeze([]),
+        historyTransition: null,
         search: '',
         isApplied: false,
       });
@@ -132,6 +176,10 @@ export function reduce(state, action) {
         });
       }
       return Object.freeze({ ...state, scenarioTransition: null });
+
+    case ACTION.COMPLETE_HISTORY_TRANSITION:
+      if (!state.historyTransition) return state;
+      return Object.freeze({ ...state, historyTransition: null });
 
     // Update the Available Courses search filter string
     case ACTION.SET_SEARCH: {
@@ -297,9 +345,7 @@ export function reduce(state, action) {
         ) {
           const parent = item.requiredBy ? state.availableCourses.find((c) => c.id === item.requiredBy) : null;
           const parentLabel = parent ? `${parent.title} (${item.requiredBy})` : 'its lecture';
-          return Object.freeze({
-            ...state,
-            draft: Object.freeze(nextDraft),
+          return recordDraftChange(state, nextDraft, {
             notice: Object.freeze({
               kind: 'info',
               title: 'Class added',
@@ -328,9 +374,7 @@ export function reduce(state, action) {
         });
       }
 
-      return Object.freeze({
-        ...state,
-        draft: Object.freeze(nextDraft),
+      return recordDraftChange(state, nextDraft, {
         notice: Object.freeze({
           kind: 'success',
           title: 'Class added',
@@ -427,9 +471,7 @@ export function reduce(state, action) {
             .find((c) => c && overlaps(toItem, c));
           const hasSeat = toItem.capacity > toItem.enrolled;
           if (!clash && hasSeat) {
-            return Object.freeze({
-              ...state,
-              draft: Object.freeze(nextDraft),
+            return recordDraftChange(state, nextDraft, {
               notice: Object.freeze({
                 kind: 'success',
                 title: 'Section updated',
@@ -464,9 +506,7 @@ export function reduce(state, action) {
         });
       }
 
-      return Object.freeze({
-        ...state,
-        draft: Object.freeze(nextDraft),
+      return recordDraftChange(state, nextDraft, {
         notice: Object.freeze({
           kind: 'success',
           title: 'Section updated',
@@ -488,9 +528,9 @@ export function reduce(state, action) {
       const item = byId.get(sectionId);
       const nextDraft = state.draft.filter((id) => id !== sectionId);
 
-      return Object.freeze({
-        ...state,
-        draft: Object.freeze(nextDraft),
+      return recordDraftChange(state, nextDraft, {
+        candidate: state.candidate,
+        request: state.request,
         notice: Object.freeze({
           kind: 'success',
           title: 'Class removed',
@@ -516,6 +556,9 @@ export function reduce(state, action) {
         request: null,
         snapshot: null,
         redoSnapshot: null,
+        undoStack: Object.freeze([]),
+        redoStack: Object.freeze([]),
+        historyTransition: null,
         search: '',
         isApplied: false,
         notice: null,
@@ -625,16 +668,20 @@ export function reduce(state, action) {
 
       // Snapshot exact current draft and scenario before applying
       const snapshot = Object.freeze({
-        draft: Object.freeze([...state.draft]),
-        scenario: state.scenario,
+        ...createHistoryEntry(state),
         candidate: Object.freeze({ ...candidate }),
       });
-
-      return Object.freeze({
+      const historyBase = Object.freeze({
         ...state,
-        draft: Object.freeze([...candidate.ids]),
+        candidate: null,
+        request: null,
+        isApplied: false,
+        snapshot: null,
+      });
+      return recordDraftChange(historyBase, candidate.ids, {
         snapshot,
         redoSnapshot: null,
+        candidate: Object.freeze({ ...candidate }),
         isApplied: true,
         notice: null,
       });
@@ -643,12 +690,31 @@ export function reduce(state, action) {
     // Undo repair: restore exact pre-apply draft and scenario; clear applied preview
     case ACTION.UNDO_REPAIR:
     case ACTION.UNDO_SUGGESTION: {
+      const undoStack = state.undoStack || [];
+      if (undoStack.length > 0) {
+        const previous = undoStack[undoStack.length - 1];
+        return Object.freeze({
+          ...state,
+          draft: Object.freeze([...previous.draft]),
+          scenario: previous.scenario,
+          availableCourses: Object.freeze(catalogForScenario(previous.scenario)),
+          snapshot: previous.snapshot ?? null,
+          candidate: previous.candidate ?? null,
+          request: previous.request ?? null,
+          isApplied: previous.isApplied ?? false,
+          undoStack: Object.freeze(undoStack.slice(0, -1)),
+          redoStack: appendHistoryEntry(state.redoStack || [], state),
+          redoSnapshot: null,
+          historyTransition: Object.freeze({
+            direction: 'undo',
+            fromDraft: Object.freeze([...state.draft]),
+            toDraft: Object.freeze([...previous.draft]),
+          }),
+          notice: null,
+        });
+      }
       if (!state.snapshot) return state;
       const { draft, scenario } = state.snapshot;
-      const redoSnapshot = Object.freeze({
-        draft: Object.freeze([...state.draft]),
-        scenario: state.scenario,
-      });
       return Object.freeze({
         ...state,
         draft: Object.freeze([...draft]),
@@ -656,8 +722,14 @@ export function reduce(state, action) {
         availableCourses: Object.freeze(catalogForScenario(scenario)),
         candidate: null,
         snapshot: null,
-        redoSnapshot,
+        redoSnapshot: null,
         isApplied: false,
+        redoStack: appendHistoryEntry(state.redoStack || [], state),
+        historyTransition: Object.freeze({
+          direction: 'undo',
+          fromDraft: Object.freeze([...state.draft]),
+          toDraft: Object.freeze([...draft]),
+        }),
         notice: null,
       });
     }
@@ -665,6 +737,29 @@ export function reduce(state, action) {
     // Redo repair: reapply undone repair timetable
     case ACTION.REDO_REPAIR:
     case ACTION.REDO_SUGGESTION: {
+      const redoStack = state.redoStack || [];
+      if (redoStack.length > 0) {
+        const next = redoStack[redoStack.length - 1];
+        return Object.freeze({
+          ...state,
+          draft: Object.freeze([...next.draft]),
+          scenario: next.scenario,
+          availableCourses: Object.freeze(catalogForScenario(next.scenario)),
+          snapshot: next.snapshot ?? null,
+          candidate: next.candidate ?? null,
+          request: next.request ?? null,
+          isApplied: next.isApplied ?? false,
+          undoStack: appendHistoryEntry(state.undoStack || [], state),
+          redoStack: Object.freeze(redoStack.slice(0, -1)),
+          redoSnapshot: null,
+          historyTransition: Object.freeze({
+            direction: 'redo',
+            fromDraft: Object.freeze([...state.draft]),
+            toDraft: Object.freeze([...next.draft]),
+          }),
+          notice: null,
+        });
+      }
       if (!state.redoSnapshot) return state;
       const { draft, scenario } = state.redoSnapshot;
       const snapshot = Object.freeze({
@@ -680,6 +775,11 @@ export function reduce(state, action) {
         snapshot,
         redoSnapshot: null,
         isApplied: true,
+        historyTransition: Object.freeze({
+          direction: 'redo',
+          fromDraft: Object.freeze([...state.draft]),
+          toDraft: Object.freeze([...draft]),
+        }),
         notice: null,
       });
     }
@@ -737,7 +837,11 @@ export function filteredAvailableCourses(state) {
  * @returns {boolean}
  */
 export function canUndo(state) {
-  return Boolean(state && state.snapshot !== null && state.snapshot !== undefined);
+  return Boolean(
+    state &&
+    ((Array.isArray(state.undoStack) && state.undoStack.length > 0) ||
+      (state.snapshot !== null && state.snapshot !== undefined))
+  );
 }
 
 /**
@@ -747,5 +851,9 @@ export function canUndo(state) {
  * @returns {boolean}
  */
 export function canRedo(state) {
-  return Boolean(state && state.redoSnapshot !== null && state.redoSnapshot !== undefined);
+  return Boolean(
+    state &&
+    ((Array.isArray(state.redoStack) && state.redoStack.length > 0) ||
+      (state.redoSnapshot !== null && state.redoSnapshot !== undefined))
+  );
 }

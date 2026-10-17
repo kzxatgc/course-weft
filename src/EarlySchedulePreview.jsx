@@ -35,6 +35,7 @@ export default function EarlySchedulePreview({ state, dispatch }) {
   const [repairTransition, setRepairTransition] = useState('idle');
   const [repairDisplayDraft, setRepairDisplayDraft] = useState(null);
   const repairTransitionTimersRef = useRef([]);
+  const historyTransitionTimersRef = useRef([]);
   const wasAppliedRef = useRef(false);
   const [returningCard, setReturningCard] = useState(null);
   const [returningCardId, setReturningCardId] = useState(null);
@@ -67,6 +68,10 @@ export default function EarlySchedulePreview({ state, dispatch }) {
   }, [scenarioTransition]);
 
   useLayoutEffect(() => {
+    if (state?.isApplied && state?.historyTransition) {
+      wasAppliedRef.current = true;
+      return undefined;
+    }
     if (!state?.isApplied) {
       wasAppliedRef.current = false;
       repairTransitionTimersRef.current.forEach((timer) => window.clearTimeout(timer));
@@ -157,8 +162,107 @@ export default function EarlySchedulePreview({ state, dispatch }) {
     return undefined;
   }, [state?.isApplied, state?.snapshot, draft]);
 
+  useLayoutEffect(() => {
+    const transition = state?.historyTransition;
+    if (!transition) return undefined;
+
+    historyTransitionTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+    historyTransitionTimersRef.current = [];
+    const timers = historyTransitionTimersRef.current;
+    const fromDraft = [...transition.fromDraft];
+    const toDraft = [...transition.toDraft];
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    let stageDraft = [...fromDraft];
+
+    const finishTransition = () => {
+      setAnimatingSwap(null);
+      setRepairDisplayDraft(null);
+      setRepairTransition('idle');
+      dispatch?.({ type: ACTION.COMPLETE_HISTORY_TRANSITION });
+    };
+
+    if (prefersReducedMotion) {
+      finishTransition();
+      return undefined;
+    }
+
+    const removed = fromDraft.filter((id) => !toDraft.includes(id));
+    const added = toDraft.filter((id) => !fromDraft.includes(id));
+    const unmatchedAdded = new Set(added);
+    const swaps = [];
+    const byId = new Map(availableCourses.map((section) => [section.id, section]));
+    for (const oldId of removed) {
+      const oldSection = byId.get(oldId);
+      const replacementId = added.find((newId) => {
+        if (!unmatchedAdded.has(newId)) return false;
+        const newSection = byId.get(newId);
+        return Boolean(
+          newSection &&
+          (
+            oldSection?.alternates?.includes(newId) ||
+            newSection.alternates?.includes(oldId) ||
+            (oldSection?.course === newSection.course && oldSection?.component === newSection.component)
+          )
+        );
+      });
+      if (replacementId) {
+        swaps.push({ old: oldId, replacement: replacementId });
+        unmatchedAdded.delete(replacementId);
+      }
+    }
+    const unmatchedRemoved = removed.filter((id) => !swaps.some((swap) => swap.old === id));
+
+    setRepairDisplayDraft(fromDraft);
+    setRepairTransition('swapping');
+
+    const finishRemaining = () => {
+      const incomingIds = toDraft.filter((id) => !stageDraft.includes(id));
+      const outgoingIds = stageDraft.filter((id) => !toDraft.includes(id));
+      if (incomingIds.length === 0 && outgoingIds.length === 0) {
+        finishTransition();
+        return;
+      }
+
+      setAnimatingSwap({ incomingIds, outgoingIds });
+      timers.push(window.setTimeout(() => {
+        stageDraft = [...toDraft];
+        setRepairDisplayDraft(stageDraft);
+        finishTransition();
+      }, Math.max(280, incomingIds.length * 280)));
+    };
+
+    const runSwap = (index) => {
+      if (index >= swaps.length) {
+        finishRemaining();
+        return;
+      }
+      const swap = swaps[index];
+      setAnimatingSwap({ outgoingId: swap.old, incomingId: swap.replacement });
+      timers.push(window.setTimeout(() => {
+        stageDraft = [
+          ...stageDraft.filter((id) => id !== swap.old),
+          ...(stageDraft.includes(swap.replacement) ? [] : [swap.replacement]),
+        ];
+        setRepairDisplayDraft([...stageDraft]);
+        setAnimatingSwap(null);
+        timers.push(window.setTimeout(() => runSwap(index + 1), 40));
+      }, 280));
+    };
+
+    if (swaps.length === 0 && unmatchedRemoved.length === 0 && unmatchedAdded.size === 0) {
+      finishTransition();
+    } else {
+      runSwap(0);
+    }
+
+    return () => {
+      timers.forEach((timer) => window.clearTimeout(timer));
+    };
+  }, [state?.historyTransition, availableCourses, dispatch]);
+
   useEffect(() => () => {
     repairTransitionTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+    historyTransitionTimersRef.current.forEach((timer) => window.clearTimeout(timer));
   }, []);
 
   useEffect(() => {

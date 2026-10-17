@@ -142,6 +142,7 @@ export default function AvailableCourses({
   // Undo / Redo / Reset derivations (only when state is wired in)
   const canUndoRepair = state ? canUndo(state) : false;
   const canRedoRepair = state ? canRedo(state) : false;
+  const historyTransitionInProgress = Boolean(state?.historyTransition);
   const isDraftChanged = state
     ? !arraysEqual(draft, INITIAL_DRAFT)
     : false;
@@ -886,13 +887,19 @@ export default function AvailableCourses({
         <button
           id="undo-repair-button"
           type="button"
-          disabled={!canUndoRepair}
+          disabled={!canUndoRepair || historyTransitionInProgress}
           onClick={() => {
             playSound('undo');
             if (dispatch) dispatch({ type: ACTION.UNDO_REPAIR });
           }}
-          aria-label="Undo last repair — restore previous timetable"
-          title={canUndoRepair ? 'Undo repair' : 'Nothing to undo'}
+          aria-label="Undo last timetable change"
+          title={
+            historyTransitionInProgress
+              ? 'Timetable is updating'
+              : canUndoRepair
+                ? 'Undo last change'
+                : 'Nothing to undo'
+          }
           className={`flex items-center justify-center w-5 h-5 border-2 transition-colors ${canUndoRepair
             ? 'border-[var(--color-navy)] bg-[var(--color-navy)] text-[var(--color-yellow)] hover:bg-[var(--color-yellow)] hover:text-[var(--color-navy)] cursor-pointer'
             : 'border-[var(--color-navy)]/30 bg-transparent text-[var(--color-navy)]/35 cursor-not-allowed'
@@ -904,13 +911,19 @@ export default function AvailableCourses({
         <button
           id="redo-repair-button"
           type="button"
-          disabled={!canRedoRepair}
+          disabled={!canRedoRepair || historyTransitionInProgress}
           onClick={() => {
             playSound('redo');
             if (dispatch) dispatch({ type: ACTION.REDO_REPAIR });
           }}
-          aria-label="Redo repair — reapply timetable repair"
-          title={canRedoRepair ? 'Redo repair' : 'Nothing to redo'}
+          aria-label="Redo last timetable change"
+          title={
+            historyTransitionInProgress
+              ? 'Timetable is updating'
+              : canRedoRepair
+                ? 'Redo last change'
+                : 'Nothing to redo'
+          }
           className={`flex items-center justify-center w-5 h-5 border-2 transition-colors ${canRedoRepair
             ? 'border-[var(--color-navy)] bg-[var(--color-navy)] text-[var(--color-yellow)] hover:bg-[var(--color-yellow)] hover:text-[var(--color-navy)] cursor-pointer'
             : 'border-[var(--color-navy)]/30 bg-transparent text-[var(--color-navy)]/35 cursor-not-allowed'

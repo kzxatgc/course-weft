@@ -8,7 +8,7 @@ import { INITIAL_DRAFT } from '../domain/available-courses.mjs';
  *
  * Renders the Undo and Reset action bar above the timetable.
  * Shows:
- *  - Undo button when a repair snapshot is available (canUndo === true)
+ *  - Undo button when a timetable history entry is available (canUndo === true)
  *  - Reset button when the draft differs from INITIAL_DRAFT
  *  - Local-effect disclosure when any modification is active
  *
@@ -71,11 +71,11 @@ export default function TimetableControls({ state, dispatch }) {
             id="undo-repair-button"
             type="button"
             onClick={handleUndo}
-            aria-label="Undo last repair — restore previous timetable"
+            aria-label="Undo last timetable change"
             className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-black uppercase tracking-wider rounded-none border-2 border-[var(--color-navy)] bg-[var(--color-yellow)] text-[var(--color-navy)] hover:brightness-95 active:translate-x-0.5 active:translate-y-0.5 transition-all cursor-pointer shadow-xs"
           >
             <Undo2 className="w-3.5 h-3.5" aria-hidden="true" />
-            Undo repair
+            Undo
           </button>
         )}
 
