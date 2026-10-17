@@ -4,28 +4,8 @@
  * Logic and helpers — BIO-214 and linked lab relationship outlines.
  * While BIO-214 is selected in the timetable and lacks its required lab,
  * BIO-214 and each available non-full linked lab choice are highlighted with
- * an animated chasing border of two adjacent rainbow colors.
+ * an animated outline using the active theme's outline colors.
  */
-
-/**
- * Adjacent rainbow color pairs (vibrant, high contrast across light/cream/white themes).
- * Each pair contains two adjacent hues from the spectrum.
- */
-export const RAINBOW_ADJACENT_PAIRS = [
-  ['#ec4899', '#6d28d9'], // Hot Pink & Deep Purple
-  ['#f472b6', '#6b21a8'], // Light Pink & Dark Violet
-];
-
-/**
- * Returns a randomized starting adjacent rainbow color pair.
- *
- * @param {() => number} [rng=Math.random] - Optional RNG for deterministic testing
- * @returns {[string, string]}
- */
-export function getRandomAdjacentRainbowPair(rng = Math.random) {
-  const index = Math.floor(rng() * RAINBOW_ADJACENT_PAIRS.length);
-  return RAINBOW_ADJACENT_PAIRS[index] || RAINBOW_ADJACENT_PAIRS[0];
-}
 
 /**
  * Checks whether BIO-214 is in the draft schedule and missing its required lab.

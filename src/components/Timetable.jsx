@@ -55,7 +55,6 @@ export default function Timetable({
   onRequestSwap = null,
   onSectionDragStart,
   linkedOutlineIds = [],
-  rainbowPair = null,
 }) {
   function handleRemove(id) {
     dispatch({ type: ACTION.REMOVE_SECTION, payload: id });
@@ -369,7 +368,6 @@ export default function Timetable({
                 repairInteractionLocked={repairInteractionLocked}
                 replacedSectionIds={replacedSectionIds}
                 linkedOutlineIds={linkedOutlineIds}
-                rainbowPair={rainbowPair}
                 onDragOver={handleDayDragOver}
                 onDragLeave={clearGhost}
                 onDrop={clearGhost}
@@ -428,7 +426,6 @@ function DayRow({
   repairInteractionLocked,
   replacedSectionIds,
   linkedOutlineIds,
-  rainbowPair,
   onDragOver,
   onDragLeave,
   onDrop,
@@ -505,7 +502,6 @@ function DayRow({
               isReplaced={isReplaced}
               isRepairLocked={repairInteractionLocked || repairLockedIds.includes(sec.id)}
               linkedOutlineIds={linkedOutlineIds}
-              rainbowPair={rainbowPair}
               onRemove={onRemove}
               onPointerDown={(e) => onSectionPointerDown?.(e, sec)}
             />
@@ -600,7 +596,6 @@ function SectionBlock({
   isReplaced = false,
   isRepairLocked = false,
   linkedOutlineIds = [],
-  rainbowPair = null,
   onRemove,
   onPointerDown,
 }) {
@@ -621,12 +616,6 @@ function SectionBlock({
       style={{
         left: `${leftPct}%`,
         width: `${widthPct}%`,
-        ...(hasLinkedOutline && rainbowPair
-          ? {
-              '--rainbow-c1': rainbowPair[0],
-              '--rainbow-c2': rainbowPair[1],
-            }
-          : {}),
       }}
       aria-label={`${sec.title} (${sec.id}), ${sec.day} ${timeLabel}`}
       title={`${sec.title} (${sec.id})\n${sec.day} ${timeLabel}`}

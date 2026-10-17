@@ -15,22 +15,97 @@ import assert from 'node:assert/strict';
 import { THEMES, DEFAULT_THEME_ID } from '../src/theme/themes.js';
 
 describe('Theme catalogue', () => {
-  it('contains 3 themes', () => {
-    assert.equal(THEMES.length, 3);
+  it('contains lavender, mint, rose, peach, sky, and custard palettes', () => {
+    assert.deepEqual(
+      THEMES.map((theme) => theme.id),
+      ['custard', 'lavender', 'mint', 'rose', 'peach', 'sky']
+    );
   });
 
-  it('first theme is Coastal (user-supplied palette)', () => {
-    assert.equal(THEMES[0].id, 'coastal');
-    assert.equal(THEMES[0].yellow, '#F9C74F');
-    assert.equal(THEMES[0].navy,   '#003049');
-    assert.equal(THEMES[0].blue,   '#669BBC');
-    assert.equal(THEMES[0].cream,  '#FDF0D5');
-    assert.equal(THEMES[0].charcoal, '#2F3E46');
+  it('first theme is the unchanged Custard Cream default palette', () => {
+    assert.equal(THEMES[0].id, 'custard');
+    assert.equal(THEMES[0].yellow, '#FDF0D5');
+    assert.equal(THEMES[0].navy, '#003049');
+    assert.equal(THEMES[0].blue, '#4361EE');
+    assert.equal(THEMES[0].cream, '#F8F9FA');
+    assert.equal(THEMES[0].charcoal, '#1E293B');
   });
 
   it('default theme ID matches first theme', () => {
-    assert.equal(DEFAULT_THEME_ID, 'coastal');
+    assert.equal(DEFAULT_THEME_ID, 'custard');
     assert.ok(THEMES.some((t) => t.id === DEFAULT_THEME_ID), 'DEFAULT_THEME_ID must be present in THEMES');
+  });
+
+  it('light-green palette uses a pale green highlight and a contrasting blue accent', () => {
+    const mint = THEMES.find((theme) => theme.id === 'mint');
+    assert.equal(mint.yellow, '#E8F2E8');
+    assert.equal(mint.blue, '#36727C');
+    assert.notEqual(mint.yellow, mint.blue);
+  });
+
+  it('keeps the custard highlight unchanged', () => {
+    const custard = THEMES.find((theme) => theme.id === 'custard');
+    assert.equal(custard.yellow, '#FDF0D5');
+  });
+
+  it('light-rose palette uses a pale rose highlight and contrasting blue accent', () => {
+    const rose = THEMES.find((theme) => theme.id === 'rose');
+    assert.equal(rose.yellow, '#F4E4E8');
+    assert.equal(rose.blue, '#536F8C');
+    assert.notEqual(rose.yellow, rose.blue);
+  });
+
+  it('peach and sky palettes use light highlights with distinct course-card accents', () => {
+    const peach = THEMES.find((theme) => theme.id === 'peach');
+    assert.equal(peach.yellow, '#F6E6D9');
+    assert.equal(peach.navy, '#604539');
+    assert.equal(peach.blue, '#3B6F78');
+
+    const sky = THEMES.find((theme) => theme.id === 'sky');
+    assert.equal(sky.yellow, '#E5EEF4');
+    assert.equal(sky.navy, '#344957');
+    assert.equal(sky.blue, '#53668E');
+  });
+
+  it('keeps timetable course-card text at WCAG AA contrast or better', () => {
+    const luminance = (hex) => {
+      const channels = hex.slice(1).match(/../g).map((channel) => parseInt(channel, 16) / 255);
+      const linear = channels.map((channel) =>
+        channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4
+      );
+      return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2];
+    };
+    const contrast = (first, second) => {
+      const firstLuminance = luminance(first);
+      const secondLuminance = luminance(second);
+      return (
+        (Math.max(firstLuminance, secondLuminance) + 0.05) /
+        (Math.min(firstLuminance, secondLuminance) + 0.05)
+      );
+    };
+
+    for (const theme of THEMES) {
+      assert.ok(
+        contrast(theme.cream, theme.blue) >= 4.5,
+        `${theme.name} timetable text must meet 4.5:1 contrast`
+      );
+      assert.ok(
+        contrast(theme.blue, theme.cream) >= 4.5,
+        `${theme.name} blue accent text must meet 4.5:1 contrast on cream`
+      );
+      assert.ok(
+        contrast(theme.cream, theme.navy) >= 4.5,
+        `${theme.name} light text must meet 4.5:1 contrast on navy controls`
+      );
+      assert.ok(
+        contrast(theme.charcoal, theme.cream) >= 4.5,
+        `${theme.name} body text must meet 4.5:1 contrast`
+      );
+      assert.ok(
+        contrast(theme.navy, theme.yellow) >= 4.5,
+        `${theme.name} title-bar text must meet 4.5:1 contrast`
+      );
+    }
   });
 
   it('every theme has the five required colour tokens as #RRGGBB hex strings', () => {
@@ -42,6 +117,23 @@ describe('Theme catalogue', () => {
           `Theme "${theme.id}".${key} = "${theme[key]}" is not a valid #RRGGBB colour`
         );
       }
+    }
+  });
+
+  it('every theme defines a distinct two-color linked lecture/lab outline', () => {
+    const HEX_RE = /^#[0-9A-Fa-f]{6}$/;
+    const rainbow = ['#EF4444', '#F97316', '#EAB308', '#22C55E', '#3B82F6', '#4F46E5', '#8B5CF6'];
+    for (const theme of THEMES) {
+      assert.equal(theme.linkedOutline.length, 2, `${theme.name} needs a two-color outline`);
+      for (const color of theme.linkedOutline) {
+        assert.ok(HEX_RE.test(color), `${theme.name} has an invalid outline color: ${color}`);
+      }
+      const firstIndex = rainbow.indexOf(theme.linkedOutline[0]);
+      const secondIndex = rainbow.indexOf(theme.linkedOutline[1]);
+      assert.ok(
+        firstIndex >= 0 && secondIndex === firstIndex + 1,
+        `${theme.name} outline colors must be consecutive rainbow hues`
+      );
     }
   });
 
@@ -58,13 +150,9 @@ describe('Theme catalogue', () => {
     assert.equal(new Set(ids).size, ids.length);
   });
 
-  it('Coastal yellow is warmer (more red) than blue channel — basic palette sanity', () => {
-    const coastal = THEMES.find((t) => t.id === 'coastal');
-    const r = parseInt(coastal.yellow.slice(1, 3), 16);
-    const g = parseInt(coastal.yellow.slice(3, 5), 16);
-    const b = parseInt(coastal.yellow.slice(5, 7), 16);
-    assert.ok(r > b, 'Coastal yellow should have more red than blue');
-    assert.ok(g > b, 'Coastal yellow should have more green than blue (warm amber)');
+  it('legacy Coastal and Paper White themes are no longer available', () => {
+    assert.equal(THEMES.some((theme) => theme.id === 'coastal'), false);
+    assert.equal(THEMES.some((theme) => theme.id === 'paper'), false);
   });
 });
 
@@ -1935,15 +2023,14 @@ describe('Available Courses drag, drop, and cancel', () => {
       assert.deepStrictEqual(afterRemoval, ['BIO-214', 'BIO-214L-A', 'BIO-214L-B']);
     });
 
-    it('returns a randomized adjacent rainbow color pair from the spectrum', async () => {
-      const { getRandomAdjacentRainbowPair, RAINBOW_ADJACENT_PAIRS } = await import(
-        '../src/domain/linked-labs.mjs'
+    it('applies the active theme outline colors to linked sections', async () => {
+      const { readFileSync } = await import('node:fs');
+      const themeSource = readFileSync(
+        new URL('../src/hooks/useTheme.js', import.meta.url),
+        'utf8'
       );
-      const pair = getRandomAdjacentRainbowPair();
-      assert.strictEqual(Array.isArray(pair), true);
-      assert.strictEqual(pair.length, 2);
-      assert.ok(RAINBOW_ADJACENT_PAIRS.some((p) => p[0] === pair[0] && p[1] === pair[1]));
-      assert.deepStrictEqual(RAINBOW_ADJACENT_PAIRS.map(([, purple]) => purple), ['#6d28d9', '#6b21a8']);
+      assert.ok(themeSource.includes("setProperty('--rainbow-c1', theme.linkedOutline[0])"));
+      assert.ok(themeSource.includes("setProperty('--rainbow-c2', theme.linkedOutline[1])"));
     });
 
     it('moving outline follows pointer independently of fixed preview', async () => {

@@ -66,7 +66,6 @@ export default function AvailableCourses({
   animatingReturnId = null,
   returningCardId = null,
   linkedOutlineIds = [],
-  rainbowPair = null,
 }) {
   const [localSearch, setLocalSearch] = useState(controlledSearch);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
@@ -795,14 +794,6 @@ export default function AvailableCourses({
                   } ${
                     isShaking ? 'nb-shake' : ''
                   }`}
-                  style={
-                    hasLinkedOutline && rainbowPair
-                      ? {
-                          '--rainbow-c1': rainbowPair[0],
-                          '--rainbow-c2': rainbowPair[1],
-                        }
-                      : undefined
-                  }
                   data-linked-outline={hasLinkedOutline ? 'true' : 'false'}
                   data-full-section={isFullSection ? 'true' : 'false'}
                   data-repair-locked={isRepairLocked ? 'true' : 'false'}
@@ -1075,7 +1066,6 @@ export default function AvailableCourses({
                 })}
                 formatCourseSlot={formatCourseSlot}
                 hasLinkedOutline={Boolean(linkedOutlineIds?.includes(heldCard.item.id))}
-                rainbowPair={rainbowPair}
               />
             </div>,
             document.body
@@ -1088,7 +1078,7 @@ export default function AvailableCourses({
 
 // ── Held card floating content───────────────────────────────────
 
-function HeldCardContent({ item, isSwitch, formatCourseSlot, hasLinkedOutline = false, rainbowPair = null }) {
+function HeldCardContent({ item, isSwitch, formatCourseSlot, hasLinkedOutline = false }) {
   const seatsRemaining = Math.max(0, item.capacity - item.enrolled);
 
   return (
@@ -1096,14 +1086,6 @@ function HeldCardContent({ item, isSwitch, formatCourseSlot, hasLinkedOutline = 
       className={`nb-course-card nb-course-card--lifted w-full h-full bg-[var(--color-cream)] border-2 border-[var(--color-navy)] rounded p-2 flex flex-col justify-between gap-1.5 text-left shadow-[6px_6px_0px_var(--color-navy)] bg-[var(--color-yellow)] cursor-grabbing ${
         hasLinkedOutline ? 'nb-linked-outline' : ''
       }`}
-      style={
-        hasLinkedOutline && rainbowPair
-          ? {
-              '--rainbow-c1': rainbowPair[0],
-              '--rainbow-c2': rainbowPair[1],
-            }
-          : undefined
-      }
       data-linked-outline={hasLinkedOutline ? 'true' : 'false'}
       aria-hidden="true"
     >

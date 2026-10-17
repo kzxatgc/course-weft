@@ -19,17 +19,19 @@
 }
 
 /* ════════════════════════════════════════════════════════════════
-   Neo-Brutalist Five-Token Theme (default: Coastal palette)
+   Neo-Brutalist Five-Token Theme (default: Custard Cream palette)
    Overridden at runtime by useTheme → document.documentElement.style
    ════════════════════════════════════════════════════════════════ */
 :root {
   color-scheme: light;
 
-  --color-yellow:   #F9C74F;   /* title bars, active states, badges   */
+  --color-yellow:   #FDF0D5;   /* title bars, active states, badges   */
   --color-navy:     #003049;   /* borders, hard offset shadows         */
-  --color-blue:     #669BBC;   /* accent buttons, secondary highlights  */
-  --color-cream:    #FDF0D5;   /* desktop bg, window body, cards       */
-  --color-charcoal: #2F3E46;   /* primary body text                    */
+  --color-blue:     #4361EE;   /* accent buttons, secondary highlights  */
+  --color-cream:    #F8F9FA;   /* desktop bg, window body, cards       */
+  --color-charcoal: #1E293B;   /* primary body text                    */
+  --rainbow-c1:     #EF4444;   /* linked lecture/lab outline start      */
+  --rainbow-c2:     #F97316;   /* linked lecture/lab outline end        */
   --zoom-factor: 1;            /* tracks browser zoom factor           */
 }
 
@@ -753,7 +755,7 @@ body {
   gap: 6px;
   padding: 10px;
   border: 2px solid var(--color-navy);
-  background-color: var(--color-cream);
+  background-color: #fff;
   box-shadow: 3px 3px 0 var(--color-navy);
   cursor: pointer;
   transition: transform 0.06s steps(1), box-shadow 0.06s steps(1);
@@ -763,7 +765,7 @@ body {
   box-shadow: 4px 4px 0 var(--color-navy);
 }
 .nb-theme-card--active {
-  background-color: var(--color-yellow);
+  background-color: #fff;
   transform: translate(1px, 1px);
   box-shadow: 2px 2px 0 var(--color-navy) !important;
 }

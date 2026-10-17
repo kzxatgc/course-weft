@@ -13,7 +13,6 @@ import {
 } from './domain/drop-preview.mjs';
 import { enumerateRepairs } from './domain/repairs.mjs';
 import {
-  getRandomAdjacentRainbowPair,
   getLinkedOutlineSectionIds,
 } from './domain/linked-labs.mjs';
 
@@ -39,7 +38,6 @@ export default function EarlySchedulePreview({ state, dispatch }) {
   const wasAppliedRef = useRef(false);
   const [returningCard, setReturningCard] = useState(null);
   const [returningCardId, setReturningCardId] = useState(null);
-  const rainbowPair = getRandomAdjacentRainbowPair();
   const displayDraft = scenarioTransition?.phase === 'outgoing'
     ? scenarioTransition.draft
     : repairTransition === 'loading' && state?.snapshot?.draft
@@ -519,7 +517,6 @@ export default function EarlySchedulePreview({ state, dispatch }) {
             animatingReturnId={returningCardId}
             returningCardId={returningCardId}
             linkedOutlineIds={linkedOutlineIds}
-            rainbowPair={rainbowPair}
           />
 
           {/* ── Weekly Timetable — spans entire window width ── */}
@@ -535,7 +532,6 @@ export default function EarlySchedulePreview({ state, dispatch }) {
               repairLockedIds={repairLockedIds}
               repairInteractionLocked={repairInteractionLocked}
               linkedOutlineIds={linkedOutlineIds}
-              rainbowPair={rainbowPair}
             />
             {repairTransition === 'loading' && (
               <div

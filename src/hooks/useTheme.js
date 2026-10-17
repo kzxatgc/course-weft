@@ -11,6 +11,8 @@ function applyTheme(theme) {
   root.style.setProperty('--color-blue', theme.blue);
   root.style.setProperty('--color-cream', theme.cream);
   root.style.setProperty('--color-charcoal', theme.charcoal);
+  root.style.setProperty('--rainbow-c1', theme.linkedOutline[0]);
+  root.style.setProperty('--rainbow-c2', theme.linkedOutline[1]);
 }
 
 /**

@@ -41,13 +41,7 @@ export default function SettingsWindow({ themes, themeId, onSelectTheme }) {
       {/* ── Section 1: Color Themes ─────────────────────────────── */}
       <div className="nb-win-header">
         <h2 className="nb-win-heading">Color Themes</h2>
-        <span className="nb-badge">Display only — demo preference</span>
       </div>
-
-      <p className="nb-win-desc">
-        Pick a five-color palette. Your choice is saved locally and applies across
-        all windows. These are display preferences only — no account is changed.
-      </p>
 
       {/* Theme grid */}
       <div className="nb-theme-grid" role="radiogroup" aria-label="Color theme selector">
@@ -106,10 +100,6 @@ export default function SettingsWindow({ themes, themeId, onSelectTheme }) {
         <h2 className="nb-win-heading">Sound Cues</h2>
       </div>
 
-      <p className="nb-win-desc">
-        Enable subtle sound cues for timetable actions like popup dialogs, redo, and undo.
-      </p>
-
       {/* Main Sound Toggle Card */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-white border-2 border-[var(--color-navy)] shadow-[3px_3px_0px_0px_var(--color-navy)]">
         <div className="flex items-center gap-2.5">
@@ -130,9 +120,6 @@ export default function SettingsWindow({ themes, themeId, onSelectTheme }) {
           <div>
             <span className="font-['Archivo_Black',sans-serif] text-xs uppercase text-[var(--color-navy)] block">
               Action Sound Cues
-            </span>
-            <span className="text-[10px] text-slate-600 block mt-0.5">
-              Play chime on preview discovery, apply, and undo
             </span>
           </div>
         </div>
