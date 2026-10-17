@@ -135,6 +135,7 @@ export default function AppShell({ state, dispatch, children }) {
             zIndex={isRepairFlowLocked ? 1001 : repairWin.zIndex}
             locked={isRepairFlowLocked}
             allowDragWhenLocked
+            centerOn="schedule"
             onClose={() => closeWindow('repair')}
             onMinimize={minimizeWindow}
             onFocus={bringToFront}

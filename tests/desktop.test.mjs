@@ -574,6 +574,16 @@ describe('Apply / Undo / Dismiss / Reset wiring', () => {
     assert.ok(source.includes('notice && !modalContent'));
   });
 
+  it('Schedule Repair opens centered on the Schedule window and can be repositioned', async () => {
+    const { readFileSync } = await import('node:fs');
+    const shellSource = readFileSync(new URL('../src/AppShell.jsx', import.meta.url), 'utf8');
+    const windowSource = readFileSync(new URL('../src/components/DesktopWindow.jsx', import.meta.url), 'utf8');
+    assert.ok(shellSource.includes('centerOn="schedule"'), 'Repair window centers on Schedule when opened');
+    assert.ok(windowSource.includes('targetRect.left + (targetRect.width - windowWidth) / 2'));
+    assert.ok(windowSource.includes('targetRect.top + (targetRect.height - windowHeight) / 2'));
+    assert.ok(windowSource.includes('onMove(id, { x, y })'), 'Centered position is persisted so the repair window remains draggable');
+  });
+
   it('repair alert emphasizes the course ID in its message', async () => {
     const { readFileSync } = await import('node:fs');
     const noticeSource = readFileSync(new URL('../src/Notice.jsx', import.meta.url), 'utf8');
@@ -1378,6 +1388,10 @@ describe('Available Courses drag, drop, and cancel', () => {
       assert.ok(src.includes(`if (dropResult.success) {
         // Drop successful: add or switch section and close gap
         setPressedCardId(null);`), 'Only a successful drop clears the pressed-course highlight');
+      assert.ok(src.includes('const returnedSection = previousDraftRef.current.some((id) => !draft.includes(id))'));
+      assert.ok(src.includes('if (returnedSection) {') && src.includes('setPressedCardId(null)'), 'Returning a timetable course clears stale tray selection');
+      assert.ok(src.includes('onPreviewSectionChange?.(null)'), 'Returning a timetable course clears the active preview');
+      assert.ok(src.includes('selectionResetKey = 0') && src.includes('}, [selectionResetKey])'), 'A timetable drag can clear tray selection before the course is dropped');
       // Drag must still be initiated when threshold is exceeded
       assert.ok(src.includes('hasExceededDragThreshold'), 'AvailableCourses initiates drag only above threshold');
       const css = readFileSync(new URL('../src/app.css', import.meta.url), 'utf8');
@@ -1450,6 +1464,7 @@ describe('Available Courses drag, drop, and cancel', () => {
         'utf8'
       );
       assert.ok(src.includes('handleSectionPointerDown'), 'Timetable implements handleSectionPointerDown');
+      assert.ok(src.includes('onSectionDragStart?.(cur.sec.id)'), 'Timetable notifies the tray when a drag starts');
       assert.ok(src.includes('nb-tt-block-placeholder'), 'Timetable renders placeholder when dragging block');
       assert.ok(src.includes('nb-tt-block-held'), 'Timetable renders held floating section overlay');
       assert.ok(src.includes('isOverAvailableCourses'), 'Held timetable block tracks overlap with the Available Courses tray');
@@ -1486,6 +1501,32 @@ describe('Available Courses drag, drop, and cancel', () => {
       assert.ok(src.includes('evaluateSwap'), 'EarlySchedulePreview validates swap before animating');
       assert.ok(src.includes('setAnimatingSwap'), 'EarlySchedulePreview manages animatingSwap state');
       assert.ok(src.includes('onRequestSwap={handleRequestSwap}'), 'EarlySchedulePreview passes swap callback to children');
+      assert.ok(src.includes('onSectionDragStart={handleTimetableDragStart}'));
+      assert.ok(src.includes('setPreviewSectionId(null)'), 'Starting a timetable drag clears the course preview');
+    });
+
+    it('repair Apply shows loading overlay before animating all timetable additions and removals', async () => {
+      const { readFileSync } = await import('node:fs');
+      const src = readFileSync(
+        new URL('../src/EarlySchedulePreview.jsx', import.meta.url),
+        'utf8'
+      );
+      const timetableSrc = readFileSync(
+        new URL('../src/components/Timetable.jsx', import.meta.url),
+        'utf8'
+      );
+      assert.ok(src.includes("setRepairTransition('loading')"));
+      assert.ok(src.includes('}, 1000);'), 'Loading stage lasts about one second');
+      assert.ok(src.includes('bg-white/50'), 'Loading overlay uses 50% white opacity');
+      assert.ok(src.includes('data-testid="repair-loading-overlay"'));
+      assert.ok(src.includes('incomingIds, outgoingIds'), 'Repair transitions animate added and removed sections');
+      assert.ok(src.includes('state.snapshot.draft'), 'The previous timetable remains visible during loading');
+      assert.ok(src.includes('draft={displayDraft}'), 'The previous timetable is rendered until loading finishes');
+      assert.ok(timetableSrc.includes('incomingSwapIds.includes(sec.id)'));
+      assert.ok(timetableSrc.includes('outgoingSwapIds.includes(sec.id)'));
+      assert.ok(timetableSrc.includes('incomingSwapSections.findIndex((section) => section.id === incomingSwapSection.id)'), 'Incoming course animations follow their sorted order');
+      assert.ok(timetableSrc.includes('first.id === second.requiredBy'), 'Linked lectures animate before their labs');
+      assert.ok(src.includes('incomingIds.length * 280'), 'Animation duration accounts for each staggered incoming course');
     });
 
     it('Timetable highlights outgoing alternate section with nb-tt-block--swapping-out and 40% opacity', async () => {

@@ -51,6 +51,7 @@ export default function Timetable({
   previewSectionId = null,
   animatingSwap = null,
   onRequestSwap = null,
+  onSectionDragStart,
   linkedOutlineIds = [],
   rainbowPair = null,
 }) {
@@ -103,9 +104,19 @@ export default function Timetable({
   }
 
   // Incoming swap section metadata (for animating incoming alternate into slot)
-  const incomingSwapSection = animatingSwap?.incomingId
-    ? availableCourses.find((s) => s.id === animatingSwap.incomingId)
-    : null;
+  const incomingSwapIds = animatingSwap?.incomingIds || [animatingSwap?.incomingId].filter(Boolean);
+  const incomingSwapSections = incomingSwapIds
+    .map((id) => availableCourses.find((section) => section.id === id))
+    .filter(Boolean)
+    .sort((first, second) => {
+      if (first.id === second.requiredBy) return -1;
+      if (second.id === first.requiredBy) return 1;
+      return incomingSwapIds.indexOf(first.id) - incomingSwapIds.indexOf(second.id);
+    });
+  const outgoingSwapIds = animatingSwap?.outgoingIds || [animatingSwap?.outgoingId].filter(Boolean);
+  const outgoingSwapSections = outgoingSwapIds
+    .map((id) => availableCourses.find((section) => section.id === id))
+    .filter(Boolean);
 
   // ── Pointer drag for timetable course blocks ────────────────────
   const [heldSection, setHeldSection] = useState(null);
@@ -158,6 +169,7 @@ export default function Timetable({
       if (!cur.isDragging) {
         if (hasExceededDragThreshold(dx, dy, POINTER_DRAG_THRESHOLD)) {
           cur.isDragging = true;
+          onSectionDragStart?.(cur.sec.id);
           setHeldSection({
             sec: cur.sec,
             currentX: moveEvent.clientX,
@@ -347,7 +359,10 @@ export default function Timetable({
                 fixedPreview={isFixedPreviewDay ? fixedPreview : null}
                 animatingSwap={animatingSwap}
                 heldSectionId={heldSection?.sec.id}
-                incomingSwapSection={incomingSwapSection}
+                incomingSwapSections={incomingSwapSections}
+                incomingSwapIds={incomingSwapIds}
+                outgoingSwapIds={outgoingSwapIds}
+                outgoingSwapSections={outgoingSwapSections}
                 replacedSectionIds={replacedSectionIds}
                 linkedOutlineIds={linkedOutlineIds}
                 rainbowPair={rainbowPair}
@@ -401,7 +416,10 @@ function DayRow({
   fixedPreview,
   animatingSwap,
   heldSectionId,
-  incomingSwapSection,
+  incomingSwapSections,
+  incomingSwapIds,
+  outgoingSwapIds,
+  outgoingSwapSections,
   replacedSectionIds,
   linkedOutlineIds,
   rainbowPair,
@@ -419,11 +437,8 @@ function DayRow({
     }
   }
 
-  const isIncomingDay = Boolean(
-    incomingSwapSection && (
-      incomingSwapSection.day === day.id ||
-      (Array.isArray(incomingSwapSection.days) && incomingSwapSection.days.includes(day.id))
-    )
+  const incomingSectionsForDay = incomingSwapSections.filter((section) =>
+    section.day === day.id || (Array.isArray(section.days) && section.days.includes(day.id))
   );
 
   return (
@@ -450,7 +465,10 @@ function DayRow({
         </div>
 
         {/* Section blocks on this day */}
-        {daySections.map((sec) => {
+        {[...daySections, ...outgoingSwapSections.filter((section) =>
+          !daySections.some((selected) => selected.id === section.id) &&
+          (section.day === day.id || (Array.isArray(section.days) && section.days.includes(day.id)))
+        )].map((sec) => {
           const isHeld = heldSectionId === sec.id;
           if (isHeld) {
             const leftPct = toPercent(sec.start);
@@ -468,10 +486,10 @@ function DayRow({
 
           // If this section is the incoming swap target, skip the real block —
           // the nb-tt-swap-incoming ghost overlay handles the slide-in animation
-          const isIncomingSwap = animatingSwap?.incomingId === sec.id;
+          const isIncomingSwap = incomingSwapIds.includes(sec.id);
           if (isIncomingSwap) return null;
 
-          const isOutgoing = animatingSwap?.outgoingId === sec.id;
+          const isOutgoing = outgoingSwapIds.includes(sec.id);
           const isReplaced = Boolean(replacedSectionIds?.has(sec.id));
           return (
             <SectionBlock
@@ -488,19 +506,21 @@ function DayRow({
         })}
 
         {/* Incoming swap preview on this day */}
-        {isIncomingDay && (
+        {incomingSectionsForDay.map((incomingSwapSection) => (
           <div
+            key={`incoming-${incomingSwapSection.id}-${day.id}`}
             className="nb-tt-block nb-tt-swap-incoming"
             style={{
               left: `${toPercent(incomingSwapSection.start)}%`,
               width: `${((incomingSwapSection.end - incomingSwapSection.start) / TOTAL_MINUTES) * 100}%`,
+              animationDelay: `${incomingSwapSections.findIndex((section) => section.id === incomingSwapSection.id) * 260}ms`,
             }}
             data-testid={`timetable-swap-incoming-${incomingSwapSection.id}`}
             aria-hidden="true"
           >
             <span className="nb-tt-block-id">{incomingSwapSection.id}</span>
           </div>
-        )}
+        ))}
 
         {/* Fixed preview (official slot time-conflict preview) */}
         {fixedPreview && (

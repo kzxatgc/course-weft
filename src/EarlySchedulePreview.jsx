@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { LoaderCircle } from 'lucide-react';
 import Timetable from './components/Timetable.jsx';
 import AvailableCourses from './components/AvailableCourses.jsx';
 import { formatCourseSlot } from './domain/time.mjs';
@@ -7,7 +8,6 @@ import { MAIN_CATALOG, INITIAL_DRAFT } from './domain/available-courses.mjs';
 import { ACTION } from './state/draft-controller.mjs';
 import {
   evaluateSwap,
-  getEffectiveSwapDuration,
   buildFixedPreview,
 } from './domain/drop-preview.mjs';
 import { enumerateRepairs } from './domain/repairs.mjs';
@@ -28,13 +28,59 @@ export default function EarlySchedulePreview({ state, dispatch }) {
   const availableCourses = state?.availableCourses || MAIN_CATALOG;
   const draft = state?.draft || INITIAL_DRAFT;
   const [previewSectionId, setPreviewSectionId] = useState(null);
+  const [traySelectionResetKey, setTraySelectionResetKey] = useState(0);
   const [animatingSwap, setAnimatingSwap] = useState(null);
+  const [repairTransition, setRepairTransition] = useState('idle');
+  const repairTransitionTimersRef = useRef([]);
+  const wasAppliedRef = useRef(false);
   const [returningCard, setReturningCard] = useState(null);
   const [returningCardId, setReturningCardId] = useState(null);
   const rainbowPair = getRandomAdjacentRainbowPair();
+  const displayDraft = repairTransition === 'loading' && state?.snapshot?.draft
+    ? state.snapshot.draft
+    : draft;
   const activePreviewSectionId = previewSectionId && !draft.includes(previewSectionId)
     ? previewSectionId
     : null;
+  const handleTimetableDragStart = () => {
+    setPreviewSectionId(null);
+    setTraySelectionResetKey((key) => key + 1);
+  };
+
+  useLayoutEffect(() => {
+    if (!state?.isApplied) {
+      wasAppliedRef.current = false;
+      return undefined;
+    }
+    if (wasAppliedRef.current) return undefined;
+    wasAppliedRef.current = true;
+
+    const previousDraft = state.snapshot?.draft || [];
+    const incomingIds = draft.filter((id) => !previousDraft.includes(id));
+    const outgoingIds = previousDraft.filter((id) => !draft.includes(id));
+    const timers = repairTransitionTimersRef.current;
+
+    setRepairTransition('loading');
+    const loadingTimer = window.setTimeout(() => {
+      setRepairTransition('idle');
+      const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (prefersReducedMotion || incomingIds.length === 0) return;
+
+      setAnimatingSwap({ incomingIds, outgoingIds });
+      setRepairTransition('swapping');
+      timers.push(window.setTimeout(() => {
+        setAnimatingSwap(null);
+        setRepairTransition('idle');
+      }, Math.max(280, incomingIds.length * 280)));
+    }, 1000);
+    timers.push(loadingTimer);
+
+    return undefined;
+  }, [state?.isApplied, state?.snapshot, draft]);
+
+  useEffect(() => () => {
+    repairTransitionTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+  }, []);
 
   useEffect(() => {
     if (previewSectionId && draft.includes(previewSectionId)) {
@@ -43,10 +89,10 @@ export default function EarlySchedulePreview({ state, dispatch }) {
   }, [draft, previewSectionId]);
 
   // Sections that should show the chasing rainbow outline
-  const linkedOutlineIds = getLinkedOutlineSectionIds(draft, availableCourses);
+  const linkedOutlineIds = getLinkedOutlineSectionIds(displayDraft, availableCourses);
 
   // Fully hydrated section records for sections currently in the draft
-  const selectedSections = availableCourses.filter((item) => draft.includes(item.id));
+  const selectedSections = availableCourses.filter((item) => displayDraft.includes(item.id));
   const previewSection = availableCourses.find((item) => item.id === activePreviewSectionId);
   const previewReplacedIds = previewSection
     ? selectedSections
@@ -226,13 +272,15 @@ export default function EarlySchedulePreview({ state, dispatch }) {
           {/* state is passed so AvailableCourses can show inline Undo / Reset icons */}
           <AvailableCourses
             availableCourses={availableCourses}
-            draft={draft}
+            draft={displayDraft}
             dispatch={dispatch}
             search={state?.search || ''}
             state={state}
             onPreviewSectionChange={setPreviewSectionId}
+            selectionResetKey={traySelectionResetKey}
             repairPreviewId={repairPreviewId}
             onRequestSwap={handleRequestSwap}
+            onSectionDragStart={handleTimetableDragStart}
             animatingReturnId={returningCardId}
             returningCardId={returningCardId}
             linkedOutlineIds={linkedOutlineIds}
@@ -240,11 +288,11 @@ export default function EarlySchedulePreview({ state, dispatch }) {
           />
 
           {/* ── Weekly Timetable — spans entire window width ── */}
-          <div className="w-full min-w-0">
+          <div className="relative w-full min-w-0">
             <Timetable
               selectedSections={selectedSections}
               availableCourses={availableCourses}
-              draft={draft}
+              draft={displayDraft}
               dispatch={dispatch}
               fixedPreviewSectionId={activePreviewSectionId}
               animatingSwap={animatingSwap}
@@ -252,6 +300,17 @@ export default function EarlySchedulePreview({ state, dispatch }) {
               linkedOutlineIds={linkedOutlineIds}
               rainbowPair={rainbowPair}
             />
+            {repairTransition === 'loading' && (
+              <div
+                className="absolute inset-0 z-30 flex items-center justify-center bg-white/50"
+                role="status"
+                aria-label="Applying timetable repair"
+                data-testid="repair-loading-overlay"
+              >
+                <LoaderCircle className="h-8 w-8 animate-spin text-[var(--color-navy)]" aria-hidden="true" />
+                <span className="sr-only">Applying timetable repair</span>
+              </div>
+            )}
           </div>
         </div>
       </div>

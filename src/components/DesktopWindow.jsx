@@ -1,4 +1,4 @@
-import React, { useRef, useCallback, useEffect } from 'react';
+import React, { useRef, useCallback, useEffect, useLayoutEffect } from 'react';
 import { Minus, X } from 'lucide-react';
 
 const MENUBAR_H = 34;   // px — 34px top menu bar
@@ -36,11 +36,44 @@ export default function DesktopWindow({
   maxBodyHeight = 'calc(100vh - 180px)',
   locked = false,
   allowDragWhenLocked = false,
+  centerOn = null,
   inert = false,
 }) {
   const windowRef = useRef(null);
   const dragOffset = useRef({ x: 0, y: 0 });
   const livePos = useRef(pos);
+  const visibilityRef = useRef({ isOpen: false, isMinimized: true });
+
+  useLayoutEffect(() => {
+    const wasVisible = visibilityRef.current.isOpen && !visibilityRef.current.isMinimized;
+    const isVisible = isOpen && !isMinimized;
+    visibilityRef.current = { isOpen, isMinimized };
+
+    if (!centerOn || !isVisible || wasVisible) return;
+
+    const windowElement = windowRef.current;
+    const targetElement = document.getElementById(`window-${centerOn}`);
+    if (!windowElement || !targetElement) return;
+
+    const targetRect = targetElement.getBoundingClientRect();
+    const windowWidth = windowElement.offsetWidth;
+    const windowHeight = windowElement.offsetHeight;
+    const x = clamp(
+      Math.round(targetRect.left + (targetRect.width - windowWidth) / 2),
+      8,
+      Math.max(8, window.innerWidth - windowWidth - 8)
+    );
+    const y = clamp(
+      Math.round(targetRect.top + (targetRect.height - windowHeight) / 2),
+      MENUBAR_H,
+      Math.max(MENUBAR_H, window.innerHeight - DOCK_H - windowHeight)
+    );
+
+    windowElement.style.left = `${x}px`;
+    windowElement.style.top = `${y}px`;
+    livePos.current = { x, y };
+    onMove(id, { x, y });
+  }, [centerOn, id, isOpen, isMinimized, onMove]);
 
   // Keep livePos ref in sync with prop when not dragging
   useEffect(() => {

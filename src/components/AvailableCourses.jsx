@@ -49,6 +49,7 @@ export default function AvailableCourses({
   search: controlledSearch = '',
   state = null,
   onPreviewSectionChange,
+  selectionResetKey = 0,
   repairPreviewId = null,
   onRequestSwap,
   animatingReturnId = null,
@@ -60,6 +61,7 @@ export default function AvailableCourses({
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const searchInputId = useId();
   const draggedCardIdRef = useRef(null);
+  const previousDraftRef = useRef(draft);
 
   // Shaking card id (briefly set on full-lab drag attempt)
   const [shakingId, setShakingId] = useState(null);
@@ -80,6 +82,21 @@ export default function AvailableCourses({
   useEffect(() => {
     setLocalSearch(controlledSearch);
   }, [controlledSearch]);
+
+  useEffect(() => {
+    const returnedSection = previousDraftRef.current.some((id) => !draft.includes(id));
+    if (returnedSection) {
+      setPressedCardId(null);
+      preservePreviewOnBlurRef.current = false;
+      onPreviewSectionChange?.(null);
+    }
+    previousDraftRef.current = draft;
+  }, [draft, onPreviewSectionChange]);
+
+  useEffect(() => {
+    setPressedCardId(null);
+    preservePreviewOnBlurRef.current = false;
+  }, [selectionResetKey]);
 
   // Clean up any pending restoration timer on unmount
   useEffect(() => {
@@ -514,7 +531,7 @@ export default function AvailableCourses({
           {/* Search bar on top right replacing static text */}
           <form
             onSubmit={handleSearchSubmit}
-            className="flex items-center gap-1.5 ml-auto"
+            className="flex items-center gap-2 ml-auto"
             role="search"
             aria-label="Filter available courses"
           >
@@ -744,8 +761,8 @@ export default function AvailableCourses({
 
       {/* ── Outside vertical toolbar: history and course-tray controls ── */}
       <div
-        className="relative grid grid-rows-4 content-between justify-items-center px-1 py-1 bg-[var(--color-cream)] border-[2.5px] border-[var(--color-navy)] shrink-0 shadow-none"
-        aria-label="Timetable and course tray controls"
+        className="flex flex-col items-center justify-center gap-1 px-1 py-1 bg-[var(--color-cream)] border-[2.5px] border-[var(--color-navy)] shrink-0 shadow-none"
+        aria-label="Scroll available courses and timetable history"
       >
         <button
           id="undo-repair-button"
@@ -757,7 +774,7 @@ export default function AvailableCourses({
           }}
           aria-label="Undo last repair — restore previous timetable"
           title={canUndoRepair ? 'Undo repair' : 'Nothing to undo'}
-          className={`flex items-center justify-center w-5 h-5 rounded-none border-2 transition-colors ${canUndoRepair
+          className={`flex items-center justify-center w-5 h-5 rounded border-2 transition-colors ${canUndoRepair
             ? 'border-[var(--color-navy)] bg-[var(--color-navy)] text-[var(--color-yellow)] hover:bg-[var(--color-yellow)] hover:text-[var(--color-navy)] cursor-pointer'
             : 'border-[var(--color-navy)]/30 bg-transparent text-[var(--color-navy)]/35 cursor-not-allowed'
             }`}
@@ -783,7 +800,7 @@ export default function AvailableCourses({
           <Redo2 size={12} strokeWidth={2.5} aria-hidden="true" />
         </button>
 
-        <div className="absolute left-1/2 top-1/2 h-px w-5 -translate-x-1/2 -translate-y-1/2 bg-[var(--color-navy)]/35" aria-hidden="true" />
+        <div className="my-1 h-px w-5 shrink-0 bg-[var(--color-navy)]/50" aria-hidden="true" />
 
         <button
             type="button"
@@ -805,6 +822,7 @@ export default function AvailableCourses({
         >
             <ChevronLeft size={14} strokeWidth={2.5} aria-hidden="true" />
         </button>
+
         <button
             type="button"
             disabled={!courseScrollState.right}
