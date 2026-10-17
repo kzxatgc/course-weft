@@ -186,6 +186,98 @@ export default function EarlySchedulePreview({ state, dispatch }) {
 
     const removed = fromDraft.filter((id) => !toDraft.includes(id));
     const added = toDraft.filter((id) => !fromDraft.includes(id));
+
+    if (transition.direction === 'undo') {
+      const byId = new Map(availableCourses.map((section) => [section.id, section]));
+      const isLinkedSection = (id) => Boolean(
+        byId.get(id)?.requiredBy || byId.get(id)?.requires?.length
+      );
+      const linkedRemoved = removed.filter((id) => isLinkedSection(id));
+      const regularRemoved = removed.filter((id) => !isLinkedSection(id));
+      const linkedAdded = added.filter((id) => isLinkedSection(id));
+      const regularAddedSet = new Set(added.filter((id) => !isLinkedSection(id)));
+      const replacementPairs = [];
+
+      for (const oldId of regularRemoved) {
+        const oldSection = byId.get(oldId);
+        const replacementId = added.find((newId) => {
+          if (!regularAddedSet.has(newId)) return false;
+          const newSection = byId.get(newId);
+          return Boolean(
+            newSection &&
+            (
+              oldSection?.alternates?.includes(newId) ||
+              newSection.alternates?.includes(oldId) ||
+              (oldSection?.course === newSection.course && oldSection?.component === newSection.component)
+            )
+          );
+        });
+        if (replacementId) {
+          replacementPairs.push({ old: oldId, replacement: replacementId });
+          regularAddedSet.delete(replacementId);
+        }
+      }
+
+      const pairedRemoved = new Set(replacementPairs.map(({ old }) => old));
+      const unmatchedRemoved = regularRemoved.filter((id) => !pairedRemoved.has(id));
+      const unmatchedAdded = added.filter((id) => regularAddedSet.has(id));
+      const orderLinked = (ids, direction) => {
+        const labs = ids.filter((id) => Boolean(byId.get(id)?.requiredBy));
+        const lectures = ids.filter((id) => Boolean(byId.get(id)?.requires?.length));
+        return direction === 'outgoing'
+          ? [...labs, ...lectures]
+          : [...lectures, ...labs];
+      };
+      const animateSection = (id, direction, onComplete) => {
+        setAnimatingSwap(direction === 'outgoing' ? { outgoingId: id } : { incomingId: id });
+        if (direction === 'incoming' && !stageDraft.includes(id)) {
+          stageDraft = [...stageDraft, id];
+          setRepairDisplayDraft([...stageDraft]);
+        }
+        timers.push(window.setTimeout(() => {
+          if (direction === 'outgoing') {
+            stageDraft = stageDraft.filter((sectionId) => sectionId !== id);
+            setRepairDisplayDraft([...stageDraft]);
+          }
+          setAnimatingSwap(null);
+          timers.push(window.setTimeout(onComplete, 40));
+        }, 280));
+      };
+      const runSections = (ids, direction, onComplete, index = 0) => {
+        if (index >= ids.length) {
+          onComplete();
+          return;
+        }
+        animateSection(ids[index], direction, () => {
+          runSections(ids, direction, onComplete, index + 1);
+        });
+      };
+      const runPairs = (index = 0) => {
+        if (index >= replacementPairs.length) {
+          runSections(unmatchedRemoved, 'outgoing', () => {
+            runSections(unmatchedAdded, 'incoming', () => {
+              runSections(orderLinked(linkedAdded, 'incoming'), 'incoming', finishTransition);
+            });
+          });
+          return;
+        }
+        const pair = replacementPairs[index];
+        animateSection(pair.old, 'outgoing', () => {
+          animateSection(pair.replacement, 'incoming', () => runPairs(index + 1));
+        });
+      };
+
+      setRepairDisplayDraft(fromDraft);
+      setRepairTransition('swapping');
+      runSections(orderLinked(linkedRemoved, 'outgoing'), 'outgoing', () => {
+        runPairs();
+      });
+
+      return () => {
+        timers.forEach((timer) => window.clearTimeout(timer));
+      };
+    }
+
     const unmatchedAdded = new Set(added);
     const swaps = [];
     const byId = new Map(availableCourses.map((section) => [section.id, section]));

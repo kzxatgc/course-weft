@@ -1891,7 +1891,7 @@ describe('Available Courses drag, drop, and cancel', () => {
       assert.ok(src.includes('remainingIncomingIds.length * 280'), 'Animation duration accounts for added courses');
     });
 
-    it('undo and redo animate section swaps and additions in the reverse or forward direction', async () => {
+    it('undo removes linked sections and sequences replacements without changing redo', async () => {
       const { readFileSync } = await import('node:fs');
       const previewSource = readFileSync(
         new URL('../src/EarlySchedulePreview.jsx', import.meta.url),
@@ -1904,6 +1904,14 @@ describe('Available Courses drag, drop, and cancel', () => {
       assert.ok(previewSource.includes('const transition = state?.historyTransition'));
       assert.ok(previewSource.includes('const fromDraft = [...transition.fromDraft]'));
       assert.ok(previewSource.includes('const toDraft = [...transition.toDraft]'));
+      const undoStart = previewSource.indexOf("if (transition.direction === 'undo') {");
+      const undoEnd = previewSource.indexOf('const unmatchedAdded = new Set(added);', undoStart);
+      const undoBranch = previewSource.slice(undoStart, undoEnd);
+      assert.ok(undoStart >= 0 && undoEnd > undoStart, 'Undo has a dedicated transition path');
+      assert.ok(undoBranch.includes("runSections(orderLinked(linkedRemoved, 'outgoing'), 'outgoing', () => {"));
+      assert.ok(undoBranch.includes("animateSection(pair.old, 'outgoing', () => {"));
+      assert.ok(undoBranch.includes("animateSection(pair.replacement, 'incoming', () => runPairs(index + 1))"));
+      assert.ok(!undoBranch.includes('setAnimatingSwap({ outgoingId: pair.old, incomingId: pair.replacement })'));
       assert.ok(previewSource.includes('setAnimatingSwap({ outgoingId: swap.old, incomingId: swap.replacement })'));
       assert.ok(previewSource.includes('const incomingIds = toDraft.filter((id) => !stageDraft.includes(id))'));
       assert.ok(previewSource.includes('const outgoingIds = stageDraft.filter((id) => !toDraft.includes(id))'));
