@@ -473,7 +473,7 @@ export function reduce(state, action) {
       });
     }
 
-    // Remove section from draft; cleanly cleans up any linked lab or parent
+    // Remove only the requested section so linked sections can remain during edits.
     case ACTION.REMOVE_SECTION: {
       const sectionId =
         typeof action.payload === 'string'
@@ -484,18 +484,7 @@ export function reduce(state, action) {
 
       const byId = new Map(state.availableCourses.map((c) => [c.id, c]));
       const item = byId.get(sectionId);
-      const idsToRemove = new Set([sectionId]);
-
-      // Do not cascade-remove parent lecture when removing child lab;
-      // this allows BIO-214 to remain on the timetable and re-trigger missing lab outlines.
-      for (const draftId of state.draft) {
-        const sec = byId.get(draftId);
-        if (sec?.requiredBy === sectionId) {
-          idsToRemove.add(draftId);
-        }
-      }
-
-      const nextDraft = state.draft.filter((id) => !idsToRemove.has(id));
+      const nextDraft = state.draft.filter((id) => id !== sectionId);
 
       return Object.freeze({
         ...state,

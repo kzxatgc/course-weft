@@ -87,6 +87,7 @@ export default function AvailableCourses({
   const panelRef = useRef(null);
   const coursesTrackRef = useRef(null);
   const courseScrollHoldRef = useRef(null);
+  const courseScrollClickRef = useRef(false);
   const [courseScrollState, setCourseScrollState] = useState({ left: false, right: false });
 
   // Keep local search in sync when controlled search changes
@@ -205,19 +206,30 @@ export default function AvailableCourses({
     });
   }
 
+  function scrollCourseCard(direction) {
+    const track = coursesTrackRef.current;
+    const card = track?.querySelector('.nb-course-card');
+    if (!track || !card) return;
+    const gap = Number.parseFloat(window.getComputedStyle(track).columnGap) || 0;
+    scrollCourses(direction, card.getBoundingClientRect().width + gap);
+  }
+
   function stopCourseScroll() {
     const hold = courseScrollHoldRef.current;
     if (!hold) return;
+    window.clearTimeout(hold.startTimer);
     cancelAnimationFrame(hold.frameId);
     window.removeEventListener('pointerup', hold.release);
     window.removeEventListener('pointercancel', hold.release);
+    courseScrollClickRef.current = hold.started;
     courseScrollHoldRef.current = null;
     updateCourseScrollState();
   }
 
   function startCourseScroll(direction) {
     stopCourseScroll();
-    const hold = { frameId: null, lastTime: null, release: null };
+    courseScrollClickRef.current = false;
+    const hold = { frameId: null, lastTime: null, release: null, started: false, startTimer: null };
     hold.release = stopCourseScroll;
     const scrollFrame = (time) => {
       if (courseScrollHoldRef.current !== hold) return;
@@ -231,7 +243,7 @@ export default function AvailableCourses({
         ? 0
         : Math.min((time - hold.lastTime) / 1000, 0.05);
       hold.lastTime = time;
-      track.scrollLeft += direction * elapsedSeconds * 220;
+      track.scrollLeft += direction * elapsedSeconds * 440;
 
       const reachedEdge = direction < 0
         ? track.scrollLeft <= 0
@@ -245,9 +257,21 @@ export default function AvailableCourses({
     };
 
     courseScrollHoldRef.current = hold;
-    hold.frameId = requestAnimationFrame(scrollFrame);
+    hold.startTimer = window.setTimeout(() => {
+      if (courseScrollHoldRef.current !== hold) return;
+      hold.started = true;
+      hold.frameId = requestAnimationFrame(scrollFrame);
+    }, 180);
     window.addEventListener('pointerup', hold.release);
     window.addEventListener('pointercancel', hold.release);
+  }
+
+  function handleCourseArrowClick(direction) {
+    if (courseScrollClickRef.current) {
+      courseScrollClickRef.current = false;
+      return;
+    }
+    scrollCourseCard(direction);
   }
 
   function handleSearchSubmit(e) {
@@ -561,7 +585,7 @@ export default function AvailableCourses({
                 aria-label={`Find a valid repair for ${repairPreviewId}`}
                 title={`Find a valid repair for ${repairPreviewId}`}
                 data-repair-action
-                className="nb-repair-action inline-flex h-6 w-4 items-center justify-center border-0 bg-transparent p-0 text-[var(--color-navy)] hover:opacity-70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--color-navy)] transition-opacity cursor-pointer shrink-0"
+                className="nb-repair-action inline-flex h-6 w-6 items-center justify-center rounded border-2 border-[var(--color-navy)] bg-white p-0 transition-transform active:translate-x-0.5 active:translate-y-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--color-navy)] cursor-pointer shrink-0"
               >
                 <Wrench size={12} strokeWidth={2.5} aria-hidden="true" />
               </button>
@@ -602,7 +626,7 @@ export default function AvailableCourses({
                 aria-label={`Get help finding a compatible lab for ${unavailableLinkedLabPreviewId}`}
                 title="No compatible lab placement — contact your academic advisor or registration office"
                 data-preview-alert-action
-                className="nb-preview-alert-action inline-flex h-6 w-5 items-center justify-center border-0 bg-transparent p-0 hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--color-navy)] transition-opacity cursor-pointer shrink-0"
+                className="nb-preview-alert-action inline-flex h-6 w-6 items-center justify-center rounded border-2 border-[#dc2626] bg-white p-0 transition-transform active:translate-x-0.5 active:translate-y-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--color-navy)] cursor-pointer shrink-0"
               >
                 <AlertTriangle size={12} strokeWidth={2.5} aria-hidden="true" />
               </button>
@@ -656,8 +680,8 @@ export default function AvailableCourses({
               }}
               aria-label="Reset timetable to starting selections"
               title={isDraftChanged ? 'Reset timetable' : 'Timetable is already at starting selections'}
-              className={`flex h-6 w-6 items-center justify-center border-2 transition-colors ${isDraftChanged
-                ? 'border-[var(--color-navy)] bg-white text-[var(--color-navy)] hover:bg-slate-100 cursor-pointer'
+              className={`flex h-6 w-6 items-center justify-center rounded border-2 transition-all ${isDraftChanged
+                ? 'border-[var(--color-navy)] bg-white text-[var(--color-navy)] hover:bg-slate-100 active:translate-x-0.5 active:translate-y-0.5 cursor-pointer'
                 : 'border-[var(--color-navy)]/30 bg-transparent text-[var(--color-navy)]/35 cursor-not-allowed'
                 }`}
             >
@@ -859,7 +883,7 @@ export default function AvailableCourses({
           }}
           aria-label="Undo last repair — restore previous timetable"
           title={canUndoRepair ? 'Undo repair' : 'Nothing to undo'}
-          className={`flex items-center justify-center w-5 h-5 rounded border-2 transition-colors ${canUndoRepair
+          className={`flex items-center justify-center w-5 h-5 border-2 transition-colors ${canUndoRepair
             ? 'border-[var(--color-navy)] bg-[var(--color-navy)] text-[var(--color-yellow)] hover:bg-[var(--color-yellow)] hover:text-[var(--color-navy)] cursor-pointer'
             : 'border-[var(--color-navy)]/30 bg-transparent text-[var(--color-navy)]/35 cursor-not-allowed'
             }`}
@@ -877,7 +901,7 @@ export default function AvailableCourses({
           }}
           aria-label="Redo repair — reapply timetable repair"
           title={canRedoRepair ? 'Redo repair' : 'Nothing to redo'}
-          className={`flex items-center justify-center w-5 h-5 rounded-none border-2 transition-colors ${canRedoRepair
+          className={`flex items-center justify-center w-5 h-5 border-2 transition-colors ${canRedoRepair
             ? 'border-[var(--color-navy)] bg-[var(--color-navy)] text-[var(--color-yellow)] hover:bg-[var(--color-yellow)] hover:text-[var(--color-navy)] cursor-pointer'
             : 'border-[var(--color-navy)]/30 bg-transparent text-[var(--color-navy)]/35 cursor-not-allowed'
             }`}
@@ -894,7 +918,7 @@ export default function AvailableCourses({
               if (event.button === 0) startCourseScroll(-1);
             }}
             onClick={(event) => {
-              if (event.detail === 0) scrollCourses(-1, 90);
+              handleCourseArrowClick(-1);
             }}
             onBlur={stopCourseScroll}
             aria-label="Scroll courses left"
@@ -915,7 +939,7 @@ export default function AvailableCourses({
               if (event.button === 0) startCourseScroll(1);
             }}
             onClick={(event) => {
-              if (event.detail === 0) scrollCourses(1, 90);
+              handleCourseArrowClick(1);
             }}
             onBlur={stopCourseScroll}
             aria-label="Scroll courses right"

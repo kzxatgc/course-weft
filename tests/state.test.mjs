@@ -649,14 +649,17 @@ describe('REMOVE_SECTION', () => {
     assert.strictEqual(next, s);
   });
 
-  it('removing lecture cascades removal of child lab', () => {
-    // Manually create a state with a linked lecture and lab in draft
+  it('keeps linked lab on timetable when lecture is removed and added back', () => {
     const s = {
       ...initialState(),
-      draft: Object.freeze(['MATH-A', 'BIO-214', 'BIO-214L-A']),
+      draft: Object.freeze(['STAT-B', 'BIO-214', 'BIO-214L-A']),
     };
-    const next = reduce(s, { type: ACTION.REMOVE_SECTION, payload: 'BIO-214' });
-    assert.deepEqual(next.draft, ['MATH-A']);
+    const withoutLecture = reduce(s, { type: ACTION.REMOVE_SECTION, payload: 'BIO-214' });
+    assert.deepEqual(withoutLecture.draft, ['STAT-B', 'BIO-214L-A']);
+
+    const lectureAddedBack = reduce(withoutLecture, { type: ACTION.ADD_SECTION, payload: 'BIO-214' });
+    assert.deepEqual(lectureAddedBack.draft, ['STAT-B', 'BIO-214L-A', 'BIO-214']);
+    assert.equal(lectureAddedBack.notice.kind, 'success');
   });
 
   it('removing child lab keeps parent lecture in draft to restore link outlines', () => {

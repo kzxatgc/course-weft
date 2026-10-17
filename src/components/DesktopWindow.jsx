@@ -1,5 +1,5 @@
 import React, { useRef, useCallback, useEffect, useLayoutEffect } from 'react';
-import { Minus, X } from 'lucide-react';
+import { Minus, Save, X } from 'lucide-react';
 
 const MENUBAR_H = 34;   // px — 34px top menu bar
 const DOCK_H    = 58;   // px — floating dock clearance (bottom 8px + dock 47px + margin)
@@ -31,6 +31,7 @@ export default function DesktopWindow({
   onMinimize,
   onFocus,
   onMove,
+  onSave,
   children,
   width = 520,
   maxBodyHeight = 'calc(100vh - 180px)',
@@ -149,7 +150,23 @@ export default function DesktopWindow({
         onPointerDown={handleTitlePointerDown}
         style={{ cursor: locked && !allowDragWhenLocked ? 'default' : 'grab' }}
       >
-        <span className="max-w-[calc(100%-80px)] overflow-hidden text-ellipsis whitespace-nowrap font-['Archivo_Black',sans-serif] text-xs font-black tracking-[0.03em] text-[var(--color-navy)]" aria-hidden="true">{title}</span>
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="overflow-hidden text-ellipsis whitespace-nowrap font-['Archivo_Black',sans-serif] text-xs font-black tracking-[0.03em] text-[var(--color-navy)]" aria-hidden="true">{title}</span>
+          {onSave && (
+            <button
+              type="button"
+              className="grid h-6 w-6 place-items-center rounded border-2 border-[var(--color-navy)] bg-[var(--color-yellow)] text-[var(--color-navy)] transition-all hover:bg-[var(--color-navy)] hover:text-[var(--color-cream)] active:translate-x-0.5 active:translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-blue)]"
+              aria-label="Save schedule"
+              title="Save schedule"
+              onClick={(event) => {
+                event.stopPropagation();
+                onSave();
+              }}
+            >
+              <Save size={12} aria-hidden="true" />
+            </button>
+          )}
+        </div>
 
         <div className="flex shrink-0 gap-1" role="group" aria-label="Window controls">
           <button
@@ -176,8 +193,9 @@ export default function DesktopWindow({
       </div>
 
       {/* ── Window Body ───────────────────────────────────────── */}
-      {!isMinimized && (
+      {(!isMinimized || id === 'schedule') && (
         <div
+          hidden={isMinimized}
           className={`nb-win-body min-h-0 flex-1 overflow-y-auto bg-[var(--color-cream)] ${id === 'repair' ? 'p-[24px]' : 'p-1.5'} ${id === 'courseDetails' ? 'nb-win-body--course-details' : ''} text-[var(--color-charcoal)]`}
           onPointerDown={locked ? (event) => event.stopPropagation() : undefined}
           style={{

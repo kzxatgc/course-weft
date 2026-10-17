@@ -66,6 +66,17 @@ export default function AppShell({ state, dispatch, children }) {
     }
   }
 
+  function handleSaveSchedule() {
+    dispatch({
+      type: ACTION.SET_NOTICE,
+      payload: {
+        kind: 'success',
+        title: 'Schedule saved',
+        message: 'Schedule saved successfully. (Demo confirmation only; nothing was stored or sent.)',
+      },
+    });
+  }
+
   const scheduleWin = windows.find((w) => w.id === 'schedule');
   const repairWin = windows.find((w) => w.id === 'repair');
   const isRepairFlowLocked = Boolean(
@@ -97,6 +108,7 @@ export default function AppShell({ state, dispatch, children }) {
             onMinimize={minimizeWindow}
             onFocus={bringToFront}
             onMove={moveWindow}
+            onSave={handleSaveSchedule}
             inert={isRepairFlowLocked}
           >
             <div id="schedule-workspace">
@@ -105,7 +117,7 @@ export default function AppShell({ state, dispatch, children }) {
                 notice={notice}
                 onDismiss={() => {
                   dispatch({ type: ACTION.CLEAR_NOTICE });
-                  if (notice?.action !== 'acknowledge') closeWindow('repair');
+                  if (notice?.action === 'suggest') closeWindow('repair');
                 }}
                 onAction={() => {
                   dispatch({ type: ACTION.SUGGEST_REPAIR });

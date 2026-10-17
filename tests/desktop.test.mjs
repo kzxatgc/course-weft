@@ -470,6 +470,11 @@ describe('Repair Preview impact groups and controller wiring', () => {
     assert.ok(source.includes('ArrowDown'));
     assert.ok(source.includes('formatCourseSlot(oldSection)'));
     assert.ok(source.includes('formatCourseSlot(replacementSection)'));
+    assert.ok(source.includes('grid grid-cols-1 gap-3 md:grid-cols-2'));
+    assert.ok(source.includes('key={`add-${section.id}`}'));
+    assert.ok(source.includes('swaps.map((swap, index) => {'));
+    assert.ok(source.includes('Swap {index + 1}'));
+    assert.ok(source.includes('No changes required (direct fit)'));
     assert.ok(!source.includes('Keep ('));
   });
 
@@ -598,6 +603,26 @@ describe('Apply / Undo / Dismiss / Reset wiring', () => {
     assert.ok(windowSource.includes('onMove(id, { x, y })'), 'Centered position is persisted so the repair window remains draggable');
   });
 
+  it('Schedule save button shows a demo confirmation without storing data', async () => {
+    const { readFileSync } = await import('node:fs');
+    const shellSource = readFileSync(new URL('../src/AppShell.jsx', import.meta.url), 'utf8');
+    const windowSource = readFileSync(new URL('../src/components/DesktopWindow.jsx', import.meta.url), 'utf8');
+    assert.ok(shellSource.includes('onSave={handleSaveSchedule}'));
+    assert.ok(shellSource.includes("title: 'Schedule saved'"));
+    assert.ok(shellSource.includes('Schedule saved successfully.'));
+    assert.ok(shellSource.includes('nothing was stored or sent.'));
+    assert.ok(!shellSource.includes('saved-schedule'));
+    assert.ok(windowSource.includes('aria-label="Save schedule"'));
+    assert.ok(windowSource.includes('active:translate-x-0.5 active:translate-y-0.5'));
+  });
+
+  it('minimizing Schedule hides its body without unmounting repair transition state', async () => {
+    const { readFileSync } = await import('node:fs');
+    const windowSource = readFileSync(new URL('../src/components/DesktopWindow.jsx', import.meta.url), 'utf8');
+    assert.ok(windowSource.includes("{(!isMinimized || id === 'schedule') && ("));
+    assert.ok(windowSource.includes('hidden={isMinimized}'));
+  });
+
   it('Course Details uses the active scenario catalogue', async () => {
     const { readFileSync } = await import('node:fs');
     const shellSource = readFileSync(new URL('../src/AppShell.jsx', import.meta.url), 'utf8');
@@ -677,12 +702,16 @@ describe('Apply / Undo / Dismiss / Reset wiring', () => {
     assert.ok(noticeSource.includes('                    OK'));
     const cssSource = readFileSync(new URL('../src/app.css', import.meta.url), 'utf8');
     assert.ok(cssSource.includes('.nb-repair-action'));
-    assert.ok(cssSource.includes('background-color: transparent;'));
+    assert.ok(cssSource.includes('background-color: #fff;'));
     assert.ok(cssSource.includes('@keyframes nb-repair-flash'));
     assert.ok(cssSource.includes('.nb-preview-alert-action'));
-    assert.ok(cssSource.includes('color: #000;'));
+    assert.ok(cssSource.includes('color: var(--color-navy);'));
     assert.ok(cssSource.includes('@keyframes nb-preview-alert-flash'));
-    assert.ok(coursesSource.includes('nb-preview-alert-action inline-flex h-6 w-5 items-center justify-center border-0 bg-transparent'));
+    assert.ok(coursesSource.includes('nb-preview-alert-action inline-flex h-6 w-6 items-center justify-center rounded border-2 border-[#dc2626] bg-white'));
+    assert.ok(coursesSource.includes('nb-repair-action inline-flex h-6 w-6 items-center justify-center rounded border-2'));
+    assert.equal((coursesSource.match(/transition-transform active:translate-x-0\.5 active:translate-y-0\.5/g) || []).length, 2);
+    assert.ok(cssSource.includes('border-radius: 4px;'));
+    assert.ok(cssSource.includes('background-color: #dc2626;'));
   });
 
   it('AvailableCourses includes inline Undo, Redo, and Reset icon buttons wired to correct actions', async () => {
@@ -708,7 +737,10 @@ describe('Apply / Undo / Dismiss / Reset wiring', () => {
     assert.ok(src.includes('Scroll courses right'), 'Course tray must have a right navigation button');
     assert.ok(src.includes('track.scrollBy'), 'Course tray buttons must scroll the course list');
     assert.ok(src.includes('requestAnimationFrame(scrollFrame)'), 'Holding a tray control scrolls continuously by animation frame');
-    assert.ok(src.includes('elapsedSeconds * 220'), 'Held scrolling uses elapsed time for steady speed');
+    assert.ok(src.includes('elapsedSeconds * 440'), 'Held scrolling is twice the prior speed');
+    assert.ok(src.includes('scrollCourseCard(direction)'), 'A click advances exactly one course card');
+    assert.ok(src.includes('card.getBoundingClientRect().width + gap'), 'Single-click step matches card width and gap');
+    assert.ok(src.includes('}, 180);'), 'Continuous scrolling waits so a short click only advances one card');
     assert.ok(src.includes('cancelAnimationFrame(hold.frameId)'), 'Releasing the control stops continuous scrolling');
   });
 

@@ -152,108 +152,77 @@ export default function RepairPreview({ state, dispatch, onClose }) {
           </div>
         </div>
 
-        {/* ── Repair changes: ADD / SWAP ─────────────────────────── */}
+        {/* ── Repair change cards ─────────────────────────────────── */}
         <div className="p-3 sm:p-4 space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {/* ── 1. ADD Group ─────────────────────────────────────── */}
-            <div className="flex flex-col border-2 border-[var(--color-blue)] bg-[var(--color-cream)] p-2.5">
-              <div className="mb-2 flex items-center justify-between border-b border-[var(--color-navy)]/20 pb-1.5">
-                <div className="flex items-center gap-1.5">
-                  <span className="inline-flex h-4 w-4 items-center justify-center bg-[var(--color-blue)] text-[var(--color-cream)] text-[10px] font-black">
-                    +
-                  </span>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            {addSections.map((section) => (
+              <div
+                key={`add-${section.id}`}
+                className="flex flex-col border-2 border-[var(--color-blue)] bg-[var(--color-cream)] p-2.5"
+              >
+                <div className="mb-2 flex items-center justify-between border-b border-[var(--color-navy)]/20 pb-1.5">
                   <span className="font-['Archivo_Black',sans-serif] text-xs font-bold uppercase tracking-wider text-[var(--color-navy)]">
-                    Add ({addSections.length})
+                    Add
                   </span>
+                  <span className="text-[9px] font-bold uppercase text-[var(--color-blue)]">New Section</span>
                 </div>
-                <span className="text-[9px] font-bold uppercase text-[var(--color-blue)]">New Sections</span>
+                <div className="border border-[var(--color-navy)]/20 bg-white p-2 text-xs shadow-xs">
+                  <div className="flex items-center justify-between gap-2">
+                    <strong className="font-['Archivo_Black',sans-serif] text-[var(--color-navy)]">
+                      {section.id}
+                    </strong>
+                    <span className="text-[10px] text-[var(--color-charcoal)]/75">
+                      {formatCourseSlot(section)}
+                    </span>
+                  </div>
+                </div>
               </div>
+            ))}
+            {swaps.map((swap, index) => {
+              const oldSection = byId.get(swap.old);
+              const replacementSection = byId.get(swap.replacement);
+              if (!oldSection || !replacementSection) return null;
 
-              <div className="space-y-2 flex-1">
-                {addSections.length > 0 ? (
-                  addSections.map((sec) => (
-                    <div
-                      key={sec.id}
-                      className="border border-[var(--color-navy)]/20 bg-white p-2 text-xs shadow-xs"
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <strong className="font-['Archivo_Black',sans-serif] text-[var(--color-navy)]">
-                          {sec.id}
-                        </strong>
-                        <span className="text-[10px] text-[var(--color-charcoal)]/75">
-                          {formatCourseSlot(sec)}
-                        </span>
+              return (
+                <div
+                  key={`${swap.old}-${swap.replacement}`}
+                  className="flex flex-col border-2 border-[var(--color-navy)] bg-[color-mix(in_srgb,var(--color-cream)_72%,var(--color-yellow))] p-2.5"
+                >
+                  <div className="mb-2 flex items-center justify-between border-b border-[var(--color-navy)]/20 pb-1.5">
+                    <span className="font-['Archivo_Black',sans-serif] text-xs font-bold uppercase tracking-wider text-[var(--color-navy)]">
+                      Swap {index + 1}
+                    </span>
+                    <span className="text-[9px] font-bold uppercase text-[var(--color-navy)]">
+                      Resolves clash
+                    </span>
+                  </div>
+                  <div className="flex flex-1 flex-col items-stretch gap-1 border border-[var(--color-navy)]/25 bg-white p-2 text-xs shadow-xs">
+                    <div className="min-w-0 border-l-2 border-[var(--color-navy)]/30 pl-2">
+                      <div className="truncate font-['Archivo_Black',sans-serif] text-[var(--color-charcoal)]/60 line-through">
+                        {oldSection.id}
+                      </div>
+                      <div className="mt-1 text-[10px] font-semibold text-[var(--color-charcoal)]/75">
+                        {formatCourseSlot(oldSection)}
                       </div>
                     </div>
-                  ))
-                ) : (
-                  <div className="p-2 text-center text-[11px] italic text-[var(--color-charcoal)]/70">
-                    No direct additions
+                    <ArrowDown className="mx-auto h-4 w-4 text-[var(--color-navy)]" aria-hidden="true" />
+                    <div className="min-w-0 border-l-2 border-[var(--color-blue)] pl-2">
+                      <div className="truncate font-['Archivo_Black',sans-serif] text-[var(--color-navy)]">
+                        {replacementSection.id}
+                      </div>
+                      <div className="mt-1 text-[10px] font-semibold text-[var(--color-charcoal)]/75">
+                        {formatCourseSlot(replacementSection)}
+                      </div>
+                    </div>
                   </div>
-                )}
-              </div>
-            </div>
-
-            {/* ── 2. SWAP Group ────────────────────────────────────── */}
-            <div className="flex flex-col border-2 border-[var(--color-navy)] bg-[color-mix(in_srgb,var(--color-cream)_72%,var(--color-yellow))] p-2.5">
-              <div className="mb-2 flex items-center justify-between border-b border-[var(--color-navy)]/20 pb-1.5">
-                <div className="flex items-center gap-1.5">
-                  <span className="inline-flex h-4 w-4 items-center justify-center bg-[var(--color-navy)] text-[var(--color-yellow)] text-[10px] font-black">
-                    ⇄
-                  </span>
-                  <span className="font-['Archivo_Black',sans-serif] text-xs font-bold uppercase tracking-wider text-[var(--color-navy)]">
-                    Swap ({swaps.length})
-                  </span>
                 </div>
-                <span className="text-[9px] font-bold uppercase text-[var(--color-navy)]">
-                  {swaps.length > 1 ? 'Resolves Clashes' : 'Resolves Clash'}
-                </span>
+              );
+            })}
+            {addSections.length === 0 && swaps.length === 0 && (
+              <div className="p-2 text-center text-[11px] italic text-[var(--color-charcoal)]/70">
+                No changes required (direct fit)
               </div>
-
-              <div className="flex-1 flex flex-col justify-center">
-                {swaps.length > 0 ? (
-                  <div className="space-y-2">
-                    {swaps.map((swap) => {
-                      const oldSection = byId.get(swap.old);
-                      const replacementSection = byId.get(swap.replacement);
-                      if (!oldSection || !replacementSection) return null;
-
-                      return (
-                        <div
-                          key={`${swap.old}-${swap.replacement}`}
-                          className="flex flex-col items-stretch gap-1 border border-[var(--color-navy)]/25 bg-white p-2 text-xs shadow-xs"
-                        >
-                          <div className="min-w-0 border-l-2 border-[var(--color-navy)]/30 pl-2">
-                            <div className="truncate font-['Archivo_Black',sans-serif] text-[var(--color-charcoal)]/60 line-through">
-                              {oldSection.id}
-                            </div>
-                            <div className="mt-1 text-[10px] font-semibold text-[var(--color-charcoal)]/75">
-                              {formatCourseSlot(oldSection)}
-                            </div>
-                          </div>
-
-                          <ArrowDown className="mx-auto h-4 w-4 text-[var(--color-navy)]" aria-hidden="true" />
-
-                          <div className="min-w-0 border-l-2 border-[var(--color-blue)] pl-2">
-                            <div className="truncate font-['Archivo_Black',sans-serif] text-[var(--color-navy)]">
-                              {replacementSection.id}
-                            </div>
-                            <div className="mt-1 text-[10px] font-semibold text-[var(--color-charcoal)]/75">
-                              {formatCourseSlot(replacementSection)}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="p-2 text-center text-[11px] italic text-[var(--color-charcoal)]/70">
-                    No swap required (direct fit)
-                  </div>
-                )}
-              </div>
-            </div>
-
+            )}
           </div>
 
           {/* ── Disclaimers & Action Bar ──────────────────────────── */}
