@@ -115,7 +115,7 @@ body {
 /* ── Menu Bar (cream bg, brand on left, semester + reset + clock on right) ─ */
 .nb-menubar {
   position: fixed;
-  top: 0;
+  top: -12px;
   left: 0;
   width: calc(100% * var(--zoom-factor, 1));
   height: 34px;
@@ -321,6 +321,75 @@ body {
 }
 .nb-win-body--course-details {
   scrollbar-gutter: stable;
+}
+
+#notice-region {
+  position: fixed;
+  z-index: 2147483647;
+  display: grid;
+  justify-items: center;
+  width: max-content;
+  max-width: calc(100vw - 16px);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+#notice-region > aside {
+  grid-area: 1 / 1;
+  pointer-events: auto;
+}
+
+.nb-notice-toast {
+  border-width: 2px;
+  animation: nb-notice-toast 1.3s ease both;
+}
+
+.nb-notice-toast--error {
+  background-color: #fee2e2;
+  border-color: #dc2626;
+}
+
+.nb-notice-toast--success,
+.nb-notice-toast--info {
+  background-color: #dcfce7;
+  border-color: #16a34a;
+}
+
+@keyframes nb-notice-toast {
+  0% {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  10% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  55% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-12px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nb-notice-toast {
+    animation-name: nb-notice-toast-reduced;
+  }
+
+  @keyframes nb-notice-toast-reduced {
+    0%, 10% {
+      opacity: 0;
+    }
+    20%, 55% {
+      opacity: 1;
+    }
+    100% {
+      opacity: 0;
+    }
+  }
 }
 
 /* ════════════════════════════════════════════════════════════════

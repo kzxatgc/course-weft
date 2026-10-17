@@ -192,8 +192,7 @@ describe('SELECT_SCENARIO', () => {
 
     const applied = reduce(suggested, { type: ACTION.APPLY_REPAIR });
     assert.deepEqual(applied.draft, ['BIO-214', 'MATH-A', 'STAT-B']);
-    assert.equal(applied.notice?.kind, 'success');
-    assert.equal(applied.notice?.message, 'BIO-214 has been added to your timetable.');
+    assert.equal(applied.notice, null, 'success notice waits until the timetable transition finishes');
   });
 
   it('main suggests and applies moving MATH-A to MATH-B to place Lab A', () => {
@@ -205,7 +204,7 @@ describe('SELECT_SCENARIO', () => {
 
     const applied = reduce(suggested, { type: ACTION.APPLY_REPAIR });
     assert.deepEqual(applied.draft, suggested.candidate.ids);
-    assert.equal(applied.notice?.kind, 'success');
+    assert.equal(applied.notice, null, 'success notice waits until the timetable transition finishes');
   });
 
   it('noRepair linked lab preview has a conflict alert and no repair candidates', () => {
@@ -528,13 +527,13 @@ describe('ADD_SECTION', () => {
     assert.match(next.notice.message, /meets on Thu/i);
   });
 
-  it('adds standalone lab to draft and prompts for lecture', () => {
+  it('adds standalone lab to draft with a simple class-added notice', () => {
     const s = initialState();
     // Use BIO-214L-B (Wed 840-960) which does not conflict with MATH-A (Tue) or STAT-A (Mon)
     const next = reduce(s, { type: ACTION.ADD_SECTION, payload: 'BIO-214L-B' });
     assert.deepEqual(next.draft, [...s.draft, 'BIO-214L-B']);
     assert.equal(next.notice.kind, 'info');
-    assert.match(next.notice.title, /lecture required/i);
+    assert.equal(next.notice.title, 'Class added');
   });
 
   it('rejects duplicate course and suggests switch without mutating draft', () => {
@@ -553,7 +552,8 @@ describe('ADD_SECTION', () => {
     assert.deepEqual(next.draft, s.draft);
     assert.equal(next.request, 'BIO-214');
     assert.equal(next.notice.kind, 'error');
-    assert.match(next.notice.title, /clashes with your timetable/i);
+    assert.equal(next.notice.title, 'Class clash');
+    assert.equal(next.notice.action, undefined, 'a dropped class clash is a temporary notice, not a repair dialog');
   });
 
   it('adds BIO-214 to draft when no clash and prompts for linked lab', () => {
@@ -783,7 +783,7 @@ describe('suggestion, apply, exact undo, dismiss', () => {
     assert.equal(s2.isApplied, true);
     assert.ok(s2.snapshot !== null, 'snapshot created');
     assert.deepEqual(s2.snapshot.draft, ['MATH-A', 'STAT-A']);
-    assert.equal(s2.notice.kind, 'success');
+    assert.equal(s2.notice, null, 'success notice waits until the timetable transition finishes');
 
     // 3. Exact Undo
     const s3 = reduce(s2, { type: ACTION.UNDO_REPAIR });

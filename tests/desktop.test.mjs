@@ -577,20 +577,113 @@ describe('Apply / Undo / Dismiss / Reset wiring', () => {
     assert.equal(canUndo(s2), false, 'canUndo must remain false after dismiss without prior apply');
   });
 
-  it('APPLY_REPAIR keeps a success notice for the non-modal timetable banner', async () => {
-    const { initialState, reduce, ACTION } = await import('../src/state/draft-controller.mjs');
-    const s0 = initialState();
-    const s1 = reduce(s0, { type: ACTION.SUGGEST_REPAIR });
-    const s2 = reduce(s1, { type: ACTION.APPLY_REPAIR });
-    assert.equal(s2.notice?.title, 'Timetable updated');
-    assert.equal(s2.notice?.kind, 'success');
+  it('shows timetable success only after repair loading and swap animations finish', async () => {
+    const { readFileSync } = await import('node:fs');
+    const previewSource = readFileSync(new URL('../src/EarlySchedulePreview.jsx', import.meta.url), 'utf8');
+    const controllerSource = readFileSync(new URL('../src/state/draft-controller.mjs', import.meta.url), 'utf8');
+    const applyReducer = controllerSource.slice(
+      controllerSource.indexOf('case ACTION.APPLY_REPAIR:'),
+      controllerSource.indexOf('// Undo repair:', controllerSource.indexOf('case ACTION.APPLY_REPAIR:'))
+    );
+    assert.ok(applyReducer.includes('notice: null'));
+    assert.ok(!applyReducer.includes("title: 'Timetable updated'"));
+    assert.ok(previewSource.includes("title: 'Timetable updated'"));
+    assert.ok(previewSource.includes('showAppliedNotice();'));
+    assert.ok(previewSource.includes('setRepairTransition(\'idle\');\n          showAppliedNotice();'));
   });
 
   it('Notice does not render timetable success as a modal dialog', async () => {
     const { readFileSync } = await import('node:fs');
     const source = readFileSync(new URL('../src/Notice.jsx', import.meta.url), 'utf8');
     assert.ok(!source.includes('success-dialog-title'));
-    assert.ok(source.includes('notice && !modalContent'));
+    assert.ok(source.includes('!modalContent && toastMessages.map'));
+  });
+
+  it('ordinary notices are compact, top-centered, animated, and automatically dismissed', async () => {
+    const { readFileSync } = await import('node:fs');
+    const noticeSource = readFileSync(new URL('../src/Notice.jsx', import.meta.url), 'utf8');
+    const shellSource = readFileSync(new URL('../src/AppShell.jsx', import.meta.url), 'utf8');
+    const cssSource = readFileSync(new URL('../src/app.css', import.meta.url), 'utf8');
+
+    assert.ok(noticeSource.includes('const NOTICE_DURATION_MS = 1300;'));
+    assert.ok(noticeSource.includes('window.setTimeout'));
+    assert.ok(noticeSource.includes('window.clearTimeout(timer)'));
+    assert.ok(noticeSource.includes("notice.action === 'suggest' || notice.action === 'acknowledge'"));
+    assert.ok(noticeSource.includes('{!modalContent && toastMessages.length > 0 && typeof document !== \'undefined\''));
+    assert.ok(noticeSource.includes('toastMessages.map(({ id, notice: toastNotice }) => ('));
+    assert.ok(!noticeSource.includes("notice.title !== 'Section changed'"));
+    assert.ok(shellSource.includes('<div id="schedule-workspace" className="relative">'));
+    assert.ok(cssSource.includes('#notice-region {'));
+    assert.ok(noticeSource.includes('createPortal('));
+    assert.ok(noticeSource.includes('rect.top - 26'));
+    assert.ok(noticeSource.includes('rect.left + rect.width / 2'));
+    assert.ok(noticeSource.includes('order: -id, position: \'relative\', zIndex: id + 1'));
+    assert.ok(cssSource.includes('position: fixed;'));
+    assert.ok(cssSource.includes('z-index: 2147483647;'));
+    assert.ok(cssSource.includes('.nb-notice-toast {'));
+    assert.ok(cssSource.includes('animation: nb-notice-toast 1.3s ease both;'));
+    assert.ok(cssSource.includes('transform: translateY(8px);'));
+    assert.ok(cssSource.includes('transform: translateY(-12px);'));
+    assert.ok(cssSource.includes('55% {\n    opacity: 1;'));
+    assert.ok(noticeSource.includes('function NoticeToast({ id, notice, onExpireRef })'));
+    assert.ok(noticeSource.includes('{notice.title}'));
+    assert.ok(noticeSource.includes('const [toastMessages, setToastMessages] = useState([]);'));
+    assert.ok(noticeSource.includes('setToastMessages((messages) => [{ id: toastId, notice }, ...messages]);'));
+    assert.ok(noticeSource.includes('key={id}'));
+    assert.ok(noticeSource.includes('setToastMessages((messages) => messages.filter((message) => message.id !== toastId));'));
+    assert.ok(noticeSource.includes('capitalize'));
+    assert.ok(!noticeSource.includes('aria-label="Dismiss notification"'));
+    assert.ok(!noticeSource.includes('toastTimersRef'));
+    assert.ok(noticeSource.includes('onExpireRef.current(id, notice)'));
+    assert.ok(noticeSource.includes("const HIDDEN_TOAST_TITLES = new Set(["));
+    assert.ok(noticeSource.includes('if (!HIDDEN_TOAST_TITLES.has(notice.title))'));
+    for (const title of [
+      'Already on your timetable',
+      'Drop this class on the correct day',
+      'Course already selected',
+      'No section to switch from',
+      'Not a declared alternate',
+      'No suggestion to apply',
+      'This suggestion is out of date',
+      'This timetable needs another look',
+    ]) {
+      assert.ok(noticeSource.includes(`'${title}'`), `${title} is suppressed as a toast`);
+    }
+    assert.ok(!noticeSource.includes("'Suggested timetable ready'"));
+    assert.ok(!noticeSource.includes("'No suitable timetable found'"));
+    assert.ok(cssSource.includes('display: grid;'));
+    assert.ok(cssSource.includes('grid-area: 1 / 1;'));
+    assert.ok(cssSource.includes('.nb-notice-toast--error {'));
+    assert.ok(cssSource.includes('background-color: #fee2e2;'));
+    assert.ok(cssSource.includes('.nb-notice-toast--success,'));
+    assert.ok(cssSource.includes('background-color: #dcfce7;'));
+    assert.ok(cssSource.includes('border-color: #16a34a;'));
+  });
+
+  it('repair conflict dialog shows the specific notice title in its header', async () => {
+    const { readFileSync } = await import('node:fs');
+    const noticeSource = readFileSync(new URL('../src/Notice.jsx', import.meta.url), 'utf8');
+
+    assert.ok(noticeSource.includes('id="alert-dialog-title"'));
+    assert.ok(noticeSource.includes('{notice.title}'));
+    assert.ok(!noticeSource.includes('Timetable Conflict Alert'));
+  });
+
+  it('dropping a card onto a red timetable preview shows a temporary class-clash notice', async () => {
+    const { readFileSync } = await import('node:fs');
+    const coursesSource = readFileSync(
+      new URL('../src/components/AvailableCourses.jsx', import.meta.url),
+      'utf8'
+    );
+    const dropFailure = coursesSource.slice(
+      coursesSource.indexOf('if (dropResult.success)'),
+      coursesSource.indexOf('isRestoring: true', coursesSource.indexOf('if (dropResult.success)'))
+    );
+
+    assert.ok(dropFailure.includes('if (touchesTimetable && hasConflict)'));
+    assert.ok(dropFailure.includes('type: ACTION.SET_NOTICE'));
+    assert.ok(dropFailure.includes("title: 'Class clash'"));
+    assert.ok(!dropFailure.includes("action: 'suggest'"));
   });
 
   it('Schedule Repair opens centered on the Schedule window and can be repositioned', async () => {
@@ -1514,6 +1607,10 @@ describe('Available Courses drag, drop, and cancel', () => {
       assert.ok(src.includes('const returnedSection = previousDraftRef.current.some((id) => !draft.includes(id))'));
       assert.ok(src.includes('if (returnedSection) {') && src.includes('setPressedCardId(null)'), 'Returning a timetable course clears stale tray selection');
       assert.ok(src.includes('onPreviewSectionChange?.(null)'), 'Returning a timetable course clears the active preview');
+      assert.ok(src.includes(`} else {
+        // Red drop or outside timetable: animate back to original position
+        preservePreviewOnBlurRef.current = true;
+        onPreviewSectionChange?.(cur.item.id);`), 'An unsuccessful drop keeps its course preview visible');
       assert.ok(src.includes('selectionResetKey = 0') && src.includes('}, [selectionResetKey])'), 'A timetable drag can clear tray selection before the course is dropped');
       assert.ok(src.includes("useLayoutEffect(() => {\n    setPressedCardId(null);\n    preservePreviewOnBlurRef.current = false;\n  }, [selectionResetKey])"), 'Scenario changes clear the pressed-card state before paint');
       assert.ok(src.includes("event.relatedTarget?.closest?.('#window-scenarios, #dock-scenarios')"), 'Opening Scenario preserves the current preview until a scenario is actually changed');

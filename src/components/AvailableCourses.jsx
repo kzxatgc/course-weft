@@ -497,10 +497,20 @@ export default function AvailableCourses({
         pointerStateRef.current = null;
         handleCardClick(cur.item, dropInfo);
       } else {
+        if (touchesTimetable && hasConflict) {
+          dispatch({
+            type: ACTION.SET_NOTICE,
+            payload: {
+              kind: 'error',
+              title: 'Class clash',
+              message: `${cur.item.title} (${cur.item.id}) conflicts with a class already on your timetable.`,
+            },
+          });
+        }
+
         // Red drop or outside timetable: animate back to original position
-        const keepConflictPreview = touchesTimetable && hasConflict;
-        preservePreviewOnBlurRef.current = keepConflictPreview;
-        onPreviewSectionChange?.(keepConflictPreview ? cur.item.id : null);
+        preservePreviewOnBlurRef.current = true;
+        onPreviewSectionChange?.(cur.item.id);
         setHeldCard({
           item: cur.item,
           currentX: cur.origRect.left + cur.offsetX,

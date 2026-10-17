@@ -85,12 +85,23 @@ export default function EarlySchedulePreview({ state, dispatch }) {
     const swaps = state.snapshot?.candidate?.swaps || [];
     const timers = repairTransitionTimersRef.current;
     const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const showAppliedNotice = () => {
+      dispatch?.({
+        type: ACTION.SET_NOTICE,
+        payload: {
+          kind: 'success',
+          title: 'Timetable updated',
+          message: 'The timetable changes have been applied.',
+        },
+      });
+    };
 
     setRepairTransition('loading');
     const loadingTimer = window.setTimeout(() => {
       if (prefersReducedMotion) {
         setRepairDisplayDraft(null);
         setRepairTransition('idle');
+        showAppliedNotice();
         return;
       }
 
@@ -104,6 +115,7 @@ export default function EarlySchedulePreview({ state, dispatch }) {
           setAnimatingSwap(null);
           setRepairDisplayDraft(null);
           setRepairTransition('idle');
+          showAppliedNotice();
           return;
         }
 
@@ -115,6 +127,7 @@ export default function EarlySchedulePreview({ state, dispatch }) {
           setAnimatingSwap(null);
           setRepairDisplayDraft(null);
           setRepairTransition('idle');
+          showAppliedNotice();
         }, Math.max(280, remainingIncomingIds.length * 280)));
       };
 

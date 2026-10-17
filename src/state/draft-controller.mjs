@@ -274,9 +274,8 @@ export function reduce(state, action) {
           request: item.id,
           notice: Object.freeze({
             kind: 'error',
-            title: 'This class clashes with your timetable',
+            title: 'Class clash',
             message: `${item.title} (${item.id}) conflicts with ${clash.title} (${clash.id}). The class has not been added.`,
-            action: 'suggest',
           }),
         });
       }
@@ -300,7 +299,7 @@ export function reduce(state, action) {
             draft: Object.freeze(nextDraft),
             notice: Object.freeze({
               kind: 'info',
-              title: item.requiredBy ? 'Lab added — lecture required' : 'Class added — lab required',
+              title: 'Class added',
               message: item.requiredBy
                 ? `${item.title} is now on your timetable. Please choose the linked lecture (${parentLabel}).`
                 : `${item.title} is now on your timetable. Please choose a linked lab from Available Courses.`,
@@ -440,7 +439,7 @@ export function reduce(state, action) {
         let title = 'This section cannot be selected';
         let message = 'Choosing this section would make your timetable incomplete or create another conflict. Your current selection has been kept.';
         if (validation.reason === 'time-conflict') {
-          title = 'This section has a timetable clash';
+          title = 'Class clash';
           const clash = nextDraft
             .filter((id) => id !== toId)
             .map((id) => byId.get(id))
@@ -467,7 +466,7 @@ export function reduce(state, action) {
         draft: Object.freeze(nextDraft),
         notice: Object.freeze({
           kind: 'success',
-          title: 'Section changed',
+          title: 'Section updated',
           message: `${toItem.title} is now set to ${toItem.sectionName ?? toId}.`,
         }),
       });
@@ -633,13 +632,7 @@ export function reduce(state, action) {
         snapshot,
         redoSnapshot: null,
         isApplied: true,
-        notice: Object.freeze({
-          kind: 'success',
-          title: 'Timetable updated',
-          message: isValidFirstStep
-            ? `${requestedId} has been added to your timetable.`
-            : 'The changes are saved.',
-        }),
+        notice: null,
       });
     }
 

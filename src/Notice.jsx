@@ -1,12 +1,49 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { AlertCircle, AlertTriangle, CheckCircle2, Info, X, Wrench } from 'lucide-react';
+import { AlertTriangle, X, Wrench } from 'lucide-react';
 import { playSound } from './audio/optional-sounds.js';
 
+const NOTICE_DURATION_MS = 1300;
+const HIDDEN_TOAST_TITLES = new Set([
+  'Already on your timetable',
+  'Drop this class on the correct day',
+  'Course already selected',
+  'No section to switch from',
+  'Not a declared alternate',
+  'No suggestion to apply',
+  'This suggestion is out of date',
+  'This timetable needs another look',
+]);
+
+function NoticeToast({ id, notice, onExpireRef }) {
+  useEffect(() => {
+    const timer = window.setTimeout(() => onExpireRef.current(id, notice), NOTICE_DURATION_MS);
+    return () => window.clearTimeout(timer);
+  }, [id, notice, onExpireRef]);
+
+  const style = {
+    error: 'text-rose-900',
+    success: 'text-emerald-900',
+    info: 'text-sky-900',
+  }[notice.kind] || 'text-sky-900';
+
+  return (
+    <aside
+      className={`nb-notice-toast nb-notice-toast--${notice.kind} rounded border px-3 py-1.5 text-center`}
+      aria-live="polite"
+      style={{ order: -id, position: 'relative', zIndex: id + 1 }}
+    >
+      <strong className={`text-xs font-semibold tracking-tight capitalize ${style}`}>
+        {notice.title}
+      </strong>
+    </aside>
+  );
+}
+
 /**
- * Accessible notification banner, screen-reader live announcer, and conflict modal.
+ * Accessible temporary notices, screen-reader live announcer, and conflict modal.
  *
- * Conflict alerts use a modal; successful updates remain non-modal banners.
+ * Conflict alerts and acknowledgements use modals; other notices dismiss automatically.
  *
  * Uses createPortal to document.body with z-[9999] so the dialogs always render
  * directly above all desktop windows, including the Schedule Repair window.
@@ -19,34 +56,63 @@ import { playSound } from './audio/optional-sounds.js';
  */
 export default function Notice({ notice, onDismiss, onAction }) {
   const [announcement, setAnnouncement] = useState('');
-
-  // Update polite live region text whenever notice changes and cue conflict alerts.
-  useEffect(() => {
-    if (notice) {
-      setAnnouncement(`${notice.title}. ${notice.message}`);
-      if (notice.action === 'suggest' || notice.action === 'acknowledge') playSound('popup');
-    }
-  }, [notice]);
-
-  const kindStyles = {
-    error: {
-      container: 'border-rose-300 bg-rose-50/90 text-rose-950 shadow-xs',
-      icon: <AlertCircle className="w-5 h-5 text-rose-600 shrink-0" aria-hidden="true" />,
-      titleColor: 'text-rose-900',
-    },
-    success: {
-      container: 'border-emerald-300 bg-emerald-50/90 text-emerald-950 shadow-xs',
-      icon: <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" aria-hidden="true" />,
-      titleColor: 'text-emerald-900',
-    },
-    info: {
-      container: 'border-sky-300 bg-sky-50/90 text-sky-950 shadow-xs',
-      icon: <Info className="w-5 h-5 text-sky-600 shrink-0" aria-hidden="true" />,
-      titleColor: 'text-sky-900',
-    },
+  const [toastMessages, setToastMessages] = useState([]);
+  const [toastPosition, setToastPosition] = useState({ top: 0, left: 0 });
+  const nextToastIdRef = useRef(0);
+  const lastNoticeRef = useRef(null);
+  const activeNoticeRef = useRef(notice);
+  activeNoticeRef.current = notice;
+  const dismissRef = useRef(onDismiss);
+  dismissRef.current = onDismiss;
+  const onToastExpireRef = useRef(null);
+  onToastExpireRef.current = (toastId, expiredNotice) => {
+    setToastMessages((messages) => messages.filter((message) => message.id !== toastId));
+    if (activeNoticeRef.current === expiredNotice) dismissRef.current?.();
   };
 
-  const currentStyle = notice ? kindStyles[notice.kind] || kindStyles.info : kindStyles.info;
+  useLayoutEffect(() => {
+    if (toastMessages.length === 0) return undefined;
+
+    const updateToastPosition = () => {
+      const workspace = document.getElementById('schedule-workspace');
+      if (!workspace) return;
+      const rect = workspace.getBoundingClientRect();
+      setToastPosition({ top: rect.top - 26, left: rect.left + rect.width / 2 });
+    };
+
+    updateToastPosition();
+    window.addEventListener('resize', updateToastPosition);
+    return () => window.removeEventListener('resize', updateToastPosition);
+  }, [toastMessages.length]);
+
+  // Keep each ordinary toast alive independently when newer notices arrive.
+  useEffect(() => {
+    if (!notice) {
+      lastNoticeRef.current = null;
+      return;
+    }
+    if (lastNoticeRef.current === notice) return;
+    lastNoticeRef.current = notice;
+
+    setAnnouncement(`${notice.title}. ${notice.message}`);
+    if (notice.action === 'suggest' || notice.action === 'acknowledge') {
+      playSound('popup');
+      return;
+    }
+
+    const toastId = nextToastIdRef.current++;
+    if (!HIDDEN_TOAST_TITLES.has(notice.title)) {
+      setToastMessages((messages) => [{ id: toastId, notice }, ...messages]);
+    } else {
+      const timer = window.setTimeout(() => {
+        if (activeNoticeRef.current === notice) dismissRef.current?.();
+      }, NOTICE_DURATION_MS);
+      return () => {
+        window.clearTimeout(timer);
+        if (lastNoticeRef.current === notice) lastNoticeRef.current = null;
+      };
+    }
+  }, [notice]);
 
   function renderNoticeMessage() {
     const message = notice?.message ?? '';
@@ -173,8 +239,11 @@ export default function Notice({ notice, onDismiss, onAction }) {
             <div className="flex items-center justify-between px-4 py-2.5 bg-[var(--color-yellow)] text-[var(--color-navy)] border-b-[3px] border-[var(--color-navy)] select-none">
               <div className="flex items-center gap-1.5">
                 <AlertTriangle className="w-4 h-4 text-[var(--color-navy)] fill-amber-300" aria-hidden="true" />
-                <span className="font-['Archivo_Black',sans-serif] text-[11px] uppercase tracking-wider font-black">
-                  Timetable Conflict Alert
+                <span
+                  id="alert-dialog-title"
+                  className="font-['Archivo_Black',sans-serif] text-[11px] uppercase tracking-wider font-black"
+                >
+                  {notice.title}
                 </span>
               </div>
               {onDismiss && (
@@ -198,12 +267,6 @@ export default function Notice({ notice, onDismiss, onAction }) {
                 </div>
 
                 <div className="flex-1 min-w-0">
-                  <h3
-                    id="alert-dialog-title"
-                    className="font-['Archivo_Black',sans-serif] text-xs sm:text-sm text-[var(--color-navy)] uppercase tracking-tight m-0"
-                  >
-                    {notice.title}
-                  </h3>
                   <p
                     id="alert-dialog-desc"
                     className="mt-1.5 text-xs text-slate-800 leading-relaxed font-sans"
@@ -246,7 +309,6 @@ export default function Notice({ notice, onDismiss, onAction }) {
   }
 
   const modalContent = renderModalContent();
-
   return (
     <>
       {/* Dedicated polite screen-reader announcer */}
@@ -265,38 +327,27 @@ export default function Notice({ notice, onDismiss, onAction }) {
         ? createPortal(modalContent, document.body)
         : modalContent}
 
-      {/* Standard non-modal notification banner */}
-      <div id="notice-region" role="region" aria-label="Notifications" className="empty:hidden">
-        {notice && !modalContent && notice.title !== 'Section changed' ? (
-          <aside
-            className={`rounded-xl border p-4 sm:p-5 flex items-start justify-between gap-3 transition-all ${currentStyle.container}`}
-            aria-live="polite"
+      {/* Temporary notices are portaled above desktop window stacking contexts. */}
+      {!modalContent && toastMessages.length > 0 && typeof document !== 'undefined'
+        ? createPortal(
+          <div
+            id="notice-region"
+            role="region"
+            aria-label="Notifications"
+            style={toastPosition}
           >
-            <div className="flex items-start gap-3 flex-1 min-w-0">
-              <span className="mt-0.5">{currentStyle.icon}</span>
-              <div className="flex-1 min-w-0">
-                <strong className={`block text-sm font-semibold tracking-tight ${currentStyle.titleColor}`}>
-                  {notice.title}
-                </strong>
-                <p className="mt-1 text-xs sm:text-sm text-slate-700 leading-relaxed">
-                  {renderNoticeMessage()}
-                </p>
-              </div>
-            </div>
-
-            {onDismiss && (
-              <button
-                type="button"
-                onClick={onDismiss}
-                aria-label="Dismiss notification"
-                className="p-1 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-200/50 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 shrink-0 cursor-pointer"
-              >
-                <X className="w-4 h-4" aria-hidden="true" />
-              </button>
-            )}
-          </aside>
-        ) : null}
-      </div>
+            {toastMessages.map(({ id, notice: toastNotice }) => (
+              <NoticeToast
+                key={id}
+                id={id}
+                notice={toastNotice}
+                onExpireRef={onToastExpireRef}
+              />
+            ))}
+          </div>,
+          document.body
+        )
+        : null}
     </>
   );
 }

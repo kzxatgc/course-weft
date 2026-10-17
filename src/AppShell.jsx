@@ -111,7 +111,7 @@ export default function AppShell({ state, dispatch, children }) {
             onSave={handleSaveSchedule}
             inert={isRepairFlowLocked}
           >
-            <div id="schedule-workspace">
+            <div id="schedule-workspace" className="relative">
               {/* Notice banner (conflict alerts, repair prompts, success popups) */}
               <Notice
                 notice={notice}
