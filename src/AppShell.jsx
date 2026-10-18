@@ -95,6 +95,7 @@ export default function AppShell({ state, dispatch, children }) {
       repairFocusOriginRef.current = {
         element,
         index: cards.indexOf(element),
+        restorePreview: event.detail?.restorePreview !== false,
       };
     };
 
@@ -220,14 +221,14 @@ export default function AppShell({ state, dispatch, children }) {
     const target = origin.element.isConnected && !origin.element.disabled
       ? origin.element
       : fallbackCard;
-    focusCourseCard(target);
+    focusCourseCard(target, { restorePreview: origin.restorePreview !== false });
   }
 
-  function focusCourseCard(card) {
+  function focusCourseCard(card, { restorePreview = true } = {}) {
     if (!card) return;
 
     const courseId = card.dataset.courseCardId;
-    if (courseId) {
+    if (restorePreview && courseId) {
       window.dispatchEvent(new CustomEvent('courseweft:restore-course-preview', {
         detail: { courseId },
       }));
@@ -264,13 +265,13 @@ export default function AppShell({ state, dispatch, children }) {
       ? document.querySelector(`[data-course-card-id="${CSS.escape(linkedFollowup.id)}"]:not(:disabled)`)
       : null;
     if (linkedCard) {
-      focusCourseCard(linkedCard);
+      focusCourseCard(linkedCard, { restorePreview: origin.restorePreview !== false });
       return;
     }
 
     const cards = [...document.querySelectorAll('[data-course-card-id]:not(:disabled)')];
     const nextCard = cards[Math.min(Math.max(origin.index, 0), cards.length - 1)];
-    focusCourseCard(nextCard);
+    focusCourseCard(nextCard, { restorePreview: origin.restorePreview !== false });
   }, [availableCourses, notice, state.draft, state.isApplied, state.request]);
 
   function restoreNoticeFocus() {

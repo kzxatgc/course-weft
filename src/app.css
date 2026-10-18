@@ -1450,6 +1450,7 @@ body {
 
 /* Red target when meeting times overlap selected timetable; visual only, no conflict names */
 .nb-tt-fixed-preview--conflict {
+  z-index: 35;
   border-color: #dc2626;
   background-color: rgba(220, 38, 38, 0.25);
   color: #991b1b;

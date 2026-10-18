@@ -73,6 +73,7 @@ export default function AvailableCourses({
 }) {
   const [localSearch, setLocalSearch] = useState(controlledSearch);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [keyboardFocusMode, setKeyboardFocusMode] = useState(false);
   const searchInputId = useId();
   const draggedCardIdRef = useRef(null);
   const previousDraftRef = useRef(draft);
@@ -349,7 +350,11 @@ export default function AvailableCourses({
   });
   courseStateRef.current = { availableItems, filteredCourses, availableCourses };
   const availableCount = filteredCourses.filter((item) => !isSectionFull(item)).length;
-  const activeQHintId = repairPreviewId || unavailableLinkedLabPreviewId;
+  const activeQHintCourseId = repairPreviewId || unavailableLinkedLabPreviewId;
+  const activeQHintId = keyboardFocusMode &&
+    keyboardPreviewIdRef.current === activeQHintCourseId
+    ? activeQHintCourseId
+    : null;
 
   useLayoutEffect(() => {
     if (!keyboardHintsEnabled || !activeQHintId) {
@@ -422,11 +427,20 @@ export default function AvailableCourses({
   }, [activeQHintId, keyboardHintsEnabled]);
 
   useEffect(() => {
+    const handlePointerMove = (event) => {
+      if (event.pointerType !== 'mouse') return;
+      inputModalityRef.current = 'pointer';
+      keyboardPreviewIdRef.current = null;
+      setKeyboardFocusMode(false);
+    };
+
     const handlePointerDown = (event) => {
       hasUsedPointerRef.current = true;
+      inputModalityRef.current = 'pointer';
+      keyboardPreviewIdRef.current = null;
+      setKeyboardFocusMode(false);
       if (event.target?.closest?.('[data-repair-action], [data-preview-alert-action]')) return;
 
-      inputModalityRef.current = 'pointer';
       pendingFocusAdvanceRef.current = null;
       const clickedCardId = event.target?.closest?.('[data-course-card-id]')?.dataset.courseCardId;
       const focusedCardId = document.activeElement?.closest?.('[data-course-card-id]')?.dataset.courseCardId;
@@ -441,6 +455,7 @@ export default function AvailableCourses({
 
     const handleKeyDown = (event) => {
       inputModalityRef.current = 'keyboard';
+      setKeyboardFocusMode(true);
       setPressedCardId(null);
       const target = event.target;
       const isTextEntry = target instanceof HTMLElement && (
@@ -489,7 +504,7 @@ export default function AvailableCourses({
             qHintBounceTimerRef.current = null;
           }, 500);
           window.dispatchEvent(new CustomEvent('courseweft:repair-focus-origin', {
-            detail: { element: focusedCourseCard },
+            detail: { element: focusedCourseCard, restorePreview: true },
           }));
           contextualAction.click();
           return;
@@ -542,6 +557,7 @@ export default function AvailableCourses({
       if (!courseStateRef.current?.availableCourses.some((item) => item.id === courseId)) return;
 
       inputModalityRef.current = 'keyboard';
+      setKeyboardFocusMode(true);
       keyboardPreviewIdRef.current = courseId;
       lastKeyboardCourseIdRef.current = courseId;
       rememberedPreviewIdRef.current = null;
@@ -549,10 +565,12 @@ export default function AvailableCourses({
     };
 
     document.addEventListener('pointerdown', handlePointerDown, true);
+    document.addEventListener('pointermove', handlePointerMove, true);
     document.addEventListener('keydown', handleKeyDown, true);
     window.addEventListener('courseweft:restore-course-preview', handleRestoreCoursePreview);
     return () => {
       document.removeEventListener('pointerdown', handlePointerDown, true);
+      document.removeEventListener('pointermove', handlePointerMove, true);
       document.removeEventListener('keydown', handleKeyDown, true);
       window.removeEventListener('courseweft:restore-course-preview', handleRestoreCoursePreview);
     };
@@ -815,7 +833,10 @@ export default function AvailableCourses({
     if (!(card instanceof HTMLElement)) return;
 
     window.dispatchEvent(new CustomEvent('courseweft:repair-focus-origin', {
-      detail: { element: card },
+      detail: {
+        element: card,
+        restorePreview: inputModalityRef.current === 'keyboard',
+      },
     }));
   }
 
@@ -1218,10 +1239,7 @@ export default function AvailableCourses({
                 return (
                   <div
                     key={item.id}
-                    className="nb-course-placeholder w-[195px] min-w-[195px] shrink-0 border-2 border-dashed border-[var(--color-navy)]/35 rounded bg-[var(--color-navy)]/5 transition-opacity duration-150"
-                    style={{
-                      height: heldCard?.origRect?.height ? `${heldCard.origRect.height}px` : undefined,
-                    }}
+                    className="nb-course-placeholder self-stretch w-[195px] min-w-[195px] shrink-0 border-2 border-dashed border-[var(--color-navy)]/35 rounded bg-[var(--color-navy)]/5 transition-opacity duration-150"
                     data-testid={isReturning ? `course-return-placeholder-${item.id}` : `course-placeholder-${item.id}`}
                     aria-hidden="true"
                   />
@@ -1306,7 +1324,7 @@ export default function AvailableCourses({
                   }}
                   onClick={(event) => handleKeyboardCardActivation(event, item)}
                   onPointerDown={(e) => handlePointerDown(e, item)}
-                  className={`nb-course-card w-full min-w-0 shrink-0 bg-[var(--color-cream)] border-2 border-[var(--color-navy)] rounded p-2 flex flex-col justify-between gap-1.5 text-left transition-colors duration-75 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-blue)] touch-none ${
+                  className={`nb-course-card h-full w-full min-w-0 shrink-0 bg-[var(--color-cream)] border-2 border-[var(--color-navy)] rounded p-2 flex flex-col justify-between gap-1.5 text-left transition-colors duration-75 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-blue)] touch-none ${
                     isFullSection
                       ? 'nb-full-section'
                       : isRepairLocked

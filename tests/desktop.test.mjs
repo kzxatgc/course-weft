@@ -1491,6 +1491,21 @@ describe('Fixed-slot time-conflict preview', () => {
       assert.strictEqual(preview.conflictCount, 1);
     });
 
+    it('keeps the red fixed-slot clash preview above linked outlines and the drag ghost', async () => {
+      const { readFileSync } = await import('node:fs');
+      const css = readFileSync(new URL('../src/app.css', import.meta.url), 'utf8');
+      const conflictRule = css.match(/\.nb-tt-fixed-preview--conflict\s*\{([^}]*)\}/);
+      const ghostRule = css.match(/\.nb-tt-ghost\s*\{([^}]*)\}/);
+      const linkedBlockRule = css.match(/\.nb-tt-block\.nb-linked-outline\s*\{([^}]*)\}/);
+
+      assert.ok(conflictRule, 'Conflict preview has a dedicated visual rule');
+      assert.ok(ghostRule, 'Pointer drag ghost has a dedicated visual rule');
+      assert.ok(linkedBlockRule, 'Linked timetable courses have a dedicated outline rule');
+      assert.match(conflictRule[1], /z-index:\s*35/);
+      assert.match(linkedBlockRule[1], /z-index:\s*30\s*!important/);
+      assert.match(ghostRule[1], /z-index:\s*20/);
+    });
+
     it('marks red conflict for multiple overlaps', () => {
       const longSec = { id: 'LONG-1', day: 'Mon', start: 600, end: 780 }; // Mon 10:00-13:00
       const selected = [
@@ -1621,6 +1636,41 @@ describe('Fixed-slot time-conflict preview', () => {
     });
   });
 
+});
+
+it('keeps pointer repair focus from showing previews or keyboard hints', async () => {
+  const { readFileSync } = await import('node:fs');
+  const availableCoursesSource = readFileSync(
+    new URL('../src/components/AvailableCourses.jsx', import.meta.url),
+    'utf8'
+  );
+  const appShellSource = readFileSync(
+    new URL('../src/AppShell.jsx', import.meta.url),
+    'utf8'
+  );
+
+  assert.match(
+    availableCoursesSource,
+    /restorePreview: inputModalityRef\.current === 'keyboard'/,
+    'Repair focus origin records whether the interaction used keyboard navigation'
+  );
+  assert.match(
+    availableCoursesSource,
+    /keyboardFocusMode &&\s+keyboardPreviewIdRef\.current === activeQHintCourseId/,
+    'Q hint requires keyboard focus on the matching course'
+  );
+  assert.ok(
+    availableCoursesSource.includes("document.addEventListener('pointermove', handlePointerMove, true)"),
+    'Mouse movement exits keyboard-focus mode'
+  );
+  assert.ok(
+    appShellSource.includes('focusCourseCard(linkedCard, { restorePreview: origin.restorePreview !== false });'),
+    'Post-repair linked-course focus does not force a preview in pointer flows'
+  );
+  assert.ok(
+    appShellSource.includes('if (restorePreview && courseId)'),
+    'Automatic focus restores previews only when allowed by the interaction mode'
+  );
 });
 
 // ------------------------------------------------------------------------
@@ -1854,6 +1904,17 @@ describe('Available Courses drag, drop, and cancel', () => {
       assert.ok(src.includes('evaluateDrop'), 'AvailableCourses evaluates drop validity');
     });
 
+    it('course cards and drag placeholders stretch to the tallest tray card', async () => {
+      const { readFileSync } = await import('node:fs');
+      const src = readFileSync(
+        new URL('../src/components/AvailableCourses.jsx', import.meta.url),
+        'utf8'
+      );
+      assert.match(src, /nb-course-placeholder self-stretch/);
+      assert.match(src, /nb-course-card h-full w-full/);
+      assert.ok(!src.includes('height: heldCard?.origRect?.height'), 'The placeholder follows the tray row height instead of preserving a shorter card height');
+    });
+
     it('Timetable has data-testid="timetable" for boundary hit-testing', async () => {
       const { readFileSync } = await import('node:fs');
       const src = readFileSync(
@@ -1926,6 +1987,11 @@ describe('Available Courses drag, drop, and cancel', () => {
       assert.ok(src.includes("event.key === 'Tab' && !hasStartedKeyboardNavigationRef.current"), 'Initial keyboard-only Tab enters the course tray first');
       assert.ok(src.includes("!hasUsedPointerRef.current") && src.includes("querySelector('[data-course-card-id]:not(:disabled)')"), 'The initial Tab shortcut targets the first available card only before pointer use');
       assert.ok(src.includes('document.addEventListener(\'pointerdown\', handlePointerDown, true)'), 'Pointer use remembers and hides the keyboard preview');
+      assert.ok(src.includes('document.addEventListener(\'pointermove\', handlePointerMove, true)'), 'Mouse movement exits keyboard-focus mode and hides Q hints');
+      assert.ok(src.includes('const [keyboardFocusMode, setKeyboardFocusMode] = useState(false)'), 'Q hints track explicit keyboard-focus mode');
+      assert.match(src, /keyboardFocusMode &&\s+keyboardPreviewIdRef\.current === activeQHintCourseId/, 'Q hints require the matching keyboard-focused course, not a pointer-selected preview');
+      assert.ok(src.includes('setKeyboardFocusMode(false);'), 'Pointer interaction hides the Q hint');
+      assert.ok(src.includes('setKeyboardFocusMode(true);'), 'Keyboard input enables keyboard-focus mode');
       assert.ok(src.includes("event.target?.closest?.('[data-repair-action], [data-preview-alert-action]')"), 'Clicking a contextual action does not clear its preview before click');
       assert.ok(src.includes('document.addEventListener(\'keydown\', handleKeyDown, true)'), 'Keyboard input restores or advances the remembered course');
       assert.ok(src.includes('setPressedCardId(null);'), 'Keyboard input clears the mouse-pressed card styling');
@@ -1940,6 +2006,7 @@ describe('Available Courses drag, drop, and cancel', () => {
       assert.ok(src.includes('data-course-action-for={unavailableLinkedLabPreviewId}'), 'The alert action is associated with its course card');
       assert.ok(src.includes('rememberContextualActionOrigin(repairPreviewId)'), 'Mouse repair activation records the course to restore after Cancel');
       assert.ok(src.includes('rememberContextualActionOrigin(unavailableLinkedLabPreviewId)'), 'Alert acknowledgement records the course to restore focus to');
+      assert.ok(src.includes('restorePreview: inputModalityRef.current === \'keyboard\''), 'Repair focus restoration remembers whether the flow was keyboard initiated');
       assert.ok(src.includes("event.relatedTarget?.closest?.('[role=\"alertdialog\"]')"), 'Opening a modal does not clear the selected course preview');
       assert.ok(src.includes("'courseweft:restore-course-preview'"), 'Dismissing a modal restores the selected course preview');
       assert.ok(!src.includes('onBlur={() => {\n                  preservePreviewOnBlurRef.current = false;\n                  onPreviewSectionChange?.(null);\n                }}'), 'Contextual actions do not unmount themselves on focus changes');
@@ -2061,7 +2128,9 @@ describe('Available Courses drag, drop, and cancel', () => {
       const appShellSource = readFileSync(new URL('../src/AppShell.jsx', import.meta.url), 'utf8');
       assert.ok(appShellSource.includes("window.addEventListener('courseweft:repair-focus-origin', rememberRepairFocusOrigin)"));
       assert.ok(appShellSource.includes('if (state.isApplied) closeRepairAfterApply();'));
-      assert.ok(appShellSource.includes('focusCourseCard(linkedCard);'), 'Applying a repair focuses the available linked course when present');
+      assert.ok(appShellSource.includes('restorePreview: event.detail?.restorePreview !== false'), 'Repair origin retains whether preview restoration is allowed');
+      assert.ok(appShellSource.includes('focusCourseCard(linkedCard, { restorePreview: origin.restorePreview !== false });'), 'Applying a repair keeps focus on the linked course without forcing a preview for pointer flows');
+      assert.ok(appShellSource.includes('if (restorePreview && courseId)'), 'Course preview is restored only when explicitly allowed');
       assert.ok(appShellSource.includes('const nextCard = cards[Math.min(Math.max(origin.index, 0), cards.length - 1)]'));
       assert.ok(appShellSource.includes('restoreNoticeFocus();'), 'Dismissing a repair prompt restores focus and its course preview');
       assert.ok(appShellSource.includes("'courseweft:restore-course-preview'"), 'The restored course is communicated to the schedule workspace');
