@@ -58,7 +58,7 @@ function getWindowEntryTarget(windowId, windowElement) {
 }
 
 /**
- * AppShell — neo-brutalist desktop OS container for Course Weft.
+ * AppShell - neo-brutalist desktop OS container for Course Weft.
  *
  * Provides:
  * - Fixed top MenuBar (brand + clock)
@@ -70,7 +70,7 @@ function getWindowEntryTarget(windowId, windowElement) {
  * - Accessible: keyboard Skip link, role=dialog windows, aria-labels throughout
  *
  * @param {{ state, dispatch, children }} props
- *   children — the Schedule workspace (EarlySchedulePreview)
+ *   children - the Schedule workspace (EarlySchedulePreview)
  */
 export default function AppShell({ state, dispatch, children }) {
   useZoom();
@@ -293,13 +293,13 @@ export default function AppShell({ state, dispatch, children }) {
     const isCurrentlyOnTop = win.isOpen && !win.isMinimized && win.zIndex === topZ;
 
     if (isCurrentlyOnTop) {
-      // Window is already open and on top — minimize it
+      // Window is already open and on top - minimize it
       minimizeWindow(id);
     } else if (win.isOpen && !win.isMinimized) {
-      // Window is open but behind others — bring to front
+      // Window is open but behind others - bring to front
       bringToFront(id);
     } else {
-      // Window is closed or minimized — open and bring to front
+      // Window is closed or minimized - open and bring to front
       openWindow(id);
     }
   }
@@ -473,7 +473,7 @@ export default function AppShell({ state, dispatch, children }) {
           </DesktopWindow>
         )}
 
-        {/* —— Website Info Window ———————————————————————— */}
+        {/* -- Website Info Window ------------------------ */}
         {windows.find((w) => w.id === 'websiteInfo') && (
           <DesktopWindow
             {...windows.find((w) => w.id === 'websiteInfo')}

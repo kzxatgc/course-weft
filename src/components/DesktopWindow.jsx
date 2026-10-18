@@ -1,8 +1,8 @@
 import React, { useRef, useCallback, useEffect, useLayoutEffect } from 'react';
 import { Minus, Save, X } from 'lucide-react';
 
-const MENUBAR_H = 34;   // px — 34px top menu bar
-const DOCK_H    = 58;   // px — floating dock clearance (bottom 8px + dock 47px + margin)
+const MENUBAR_H = 34;   // px - 34px top menu bar
+const DOCK_H    = 58;   // px - floating dock clearance (bottom 8px + dock 47px + margin)
 
 function clamp(val, min, max) {
   return Math.max(min, Math.min(max, val));

@@ -1,7 +1,7 @@
 /**
  * tests/linked-labs.test.mjs
  *
- * Unit tests — Handle full-lab drag attempts.
+ * Unit tests - Handle full-lab drag attempts.
  * Tests cover:
  *  - Full labs are excluded from the linked outline IDs
  *  - Non-full alternative remains outlined
@@ -60,10 +60,10 @@ describe('isBio214MissingLab', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 2. getLinkedOutlineSectionIds — main scenario (Lab B is open 22/30)
+// 2. getLinkedOutlineSectionIds - main scenario (Lab B is open 22/30)
 // ---------------------------------------------------------------------------
 
-describe('getLinkedOutlineSectionIds — main scenario', () => {
+describe('getLinkedOutlineSectionIds - main scenario', () => {
   it('returns [] when neither lecture nor lab is in draft', () => {
     const ids = getLinkedOutlineSectionIds(['MATH-A', 'STAT-A'], mainCatalog());
     assert.deepEqual(ids, []);
@@ -89,10 +89,10 @@ describe('getLinkedOutlineSectionIds — main scenario', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 3. getLinkedOutlineSectionIds — noRepair scenario (Lab B is full 30/30)
+// 3. getLinkedOutlineSectionIds - noRepair scenario (Lab B is full 30/30)
 // ---------------------------------------------------------------------------
 
-describe('getLinkedOutlineSectionIds — noRepair scenario (Lab B full)', () => {
+describe('getLinkedOutlineSectionIds - noRepair scenario (Lab B full)', () => {
   it('BIO-214L-B is seat=full in noRepair catalog', () => {
     const sec = getById(noRepairCatalog(), 'BIO-214L-B');
     assert.equal(sec.seat, 'full');
@@ -166,7 +166,7 @@ describe('Full-lab seat detection', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 5. Outline stability — non-full alternative remains outlined
+// 5. Outline stability - non-full alternative remains outlined
 // ---------------------------------------------------------------------------
 
 describe('Non-full alternative outline stability', () => {

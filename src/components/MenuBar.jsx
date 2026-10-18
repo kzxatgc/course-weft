@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 
 /**
- * Top menu bar — fixed 34px edge-to-edge:
+ * Top menu bar - fixed 34px edge-to-edge:
  *   Left:  Course Weft brand logo
  *   Right: Semester badge + Live Clock
  */
@@ -18,7 +18,7 @@ export default function MenuBar() {
   return (
     <header className="fixed left-0 top-0 z-[2000] flex h-[34px] w-[calc(100%*var(--zoom-factor,1))] origin-top-left flex-nowrap items-center justify-between border-b-2 border-[var(--color-navy)] bg-[var(--color-cream)] px-4 [transform:scale(calc(1/var(--zoom-factor,1)))] [box-sizing:border-box] [user-select:none]" role="banner">
       {/* ── Left: Brand ───────────────────────────────── */}
-      <div className="flex items-center gap-2">
+      <div className="nb-menubar-left flex items-center gap-2">
         <span className="flex shrink-0 items-center gap-[7px] font-['Archivo_Black',sans-serif] text-sm font-black tracking-[0.02em] text-[var(--color-navy)]">
           <img
             className="h-[22px] w-[22px] shrink-0"
@@ -31,13 +31,13 @@ export default function MenuBar() {
       </div>
 
       {/* ── Right: Semester + Live Clock ─────────────── */}
-      <div className="mr-3 flex shrink-0 items-center gap-2">
-        <span className="inline-block whitespace-nowrap border-[1.75px] border-[var(--color-navy)] bg-[var(--color-yellow)] px-[7px] py-0.5 font-mono text-[10px] font-bold uppercase tracking-[0.07em] text-[var(--color-navy)]" aria-label="Current semester: 202620271">
+      <div className="nb-menubar-right mr-3 flex shrink-0 items-center gap-2">
+        <span className="nb-menubar-semester inline-block whitespace-nowrap border-[1.75px] border-[var(--color-navy)] bg-[var(--color-yellow)] px-[7px] py-0.5 font-mono text-[10px] font-bold uppercase tracking-[0.07em] text-[var(--color-navy)]" aria-label="Current semester: 202620271">
           Semester&nbsp;·&nbsp;202620271
         </span>
 
         <time
-          className="font-mono text-[11px] font-bold tracking-[0.02em] text-[var(--color-navy)]"
+          className="nb-menubar-clock font-mono text-[11px] font-bold tracking-[0.02em] text-[var(--color-navy)]"
           aria-label={`Current time: ${timeStr}`}
           dateTime={now.toISOString()}
         >

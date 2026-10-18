@@ -2,11 +2,11 @@
  * Neo-brutalist five-token color themes for Course Weft.
  *
  * Each theme supplies exactly five semantic tokens:
- *   yellow   — title bars, active badges, highlights
- *   navy     — borders, hard shadows, menu bar background
- *   blue     — accent buttons, secondary highlights
- *   cream    — desktop/window body background
- *   charcoal — primary text
+ *   yellow   - title bars, active badges, highlights
+ *   navy     - borders, hard shadows, menu bar background
+ *   blue     - accent buttons, secondary highlights
+ *   cream    - desktop/window body background
+ *   charcoal - primary text
  *
  * Custard Cream (first) is the default warm palette with deep navy borders.
  */

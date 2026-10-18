@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 
 /**
- * Course Details window — provides a read-only overview of all sections
+ * Course Details window - provides a read-only overview of all sections
  * in the active scenario catalogue.
  */
 export default function CourseDetailsWindow({ availableCourses }) {
@@ -56,10 +56,10 @@ export default function CourseDetailsWindow({ availableCourses }) {
                 <div className="nb-course-meta">
                   {section.days
                     ? section.days.join(', ')
-                    : section.day ?? '—'}
+                    : section.day ?? '-'}
                   {' · '}
                   {section.start != null
-                    ? `${fmtMin(section.start)} – ${fmtMin(section.end)}`
+                    ? `${fmtMin(section.start)} - ${fmtMin(section.end)}`
                     : 'TBD'}
                 </div>
                 {isFull && <span className="nb-full-label">FULL</span>}

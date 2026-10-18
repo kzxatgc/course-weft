@@ -4,7 +4,7 @@ import { ACTION } from '../state/draft-controller.mjs';
 import { playSound } from '../audio/optional-sounds.js';
 
 /**
- * Scenario window content — allows switching between demo test scenarios.
+ * Scenario window content - allows switching between demo test scenarios.
  */
 export default function ScenarioWindow({ scenario, dispatch }) {
   const pendingSelectFocusRef = useRef(null);
@@ -20,7 +20,7 @@ export default function ScenarioWindow({ scenario, dispatch }) {
       tag: 'Refusal flow',
       icon: <AlertTriangle size={18} aria-hidden="true" />,
       desc: 'Demonstrates when the biology lab cannot fit: Lab A overlaps MATH-A, Lab B is full. The conflict cannot be resolved. After all, the biology lecture and lab are linked and must be selected together; neither can stand alone.',
-      bullet: 'MATH-A: Tue 10:00–11:00 · Lab A: Tue 10:00–12:00 · Lab B: Full',
+      bullet: 'MATH-A: Tue 10:00-11:00 · Lab A: Tue 10:00-12:00 · Lab B: Full',
     },
   ];
 

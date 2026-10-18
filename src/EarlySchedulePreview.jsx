@@ -25,7 +25,7 @@ function orderLinkedSections(ids, sectionsById, direction) {
 }
 
 /**
- * EarlySchedulePreview — main schedule workspace.
+ * EarlySchedulePreview - main schedule workspace.
  *
  * Renders the weekly Timetable and the Available Courses strip.
  * Undo / Reset icon controls live inline in the AvailableCourses header.
@@ -529,7 +529,7 @@ export default function EarlySchedulePreview({ state, dispatch }) {
             <div className="flex items-center gap-2">
               <span className="inline-block h-2.5 w-2.5 rounded-full bg-amber-500" aria-hidden="true" />
               <strong className="text-xs sm:text-sm font-bold tracking-wide uppercase">
-                SYNTHETIC SAMPLE DATA — NO REAL REGISTRATION IS SUBMITTED
+                SYNTHETIC SAMPLE DATA - NO REAL REGISTRATION IS SUBMITTED
               </strong>
             </div>
             <p className="mt-1 text-xs text-amber-900/90 leading-relaxed">
@@ -564,7 +564,7 @@ export default function EarlySchedulePreview({ state, dispatch }) {
             animatingSwap={animatingSwap}
           />
 
-          {/* ── Weekly Timetable — spans entire window width ── */}
+          {/* ── Weekly Timetable - spans entire window width ── */}
           <div className="relative w-full min-w-0">
             <Timetable
               selectedSections={selectedSections}

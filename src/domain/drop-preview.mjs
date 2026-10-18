@@ -6,8 +6,8 @@
  * Responsibilities:
  *   - Resolve which day row the pointer is over
  *   - Convert pointer X offset → snapped minute-of-day (15-min snap)
- *   - Clamp start/end within the visible day bounds (08:00 – 18:00)
- *   - No React, no DOM — safe in Node.js test environments
+ *   - Clamp start/end within the visible day bounds (08:00 - 18:00)
+ *   - No React, no DOM - safe in Node.js test environments
  *
  * The DataTransfer payload written by AvailableCourses on dragStart is just
  * the section ID string. Timetable reads it via event.dataTransfer.getData().
@@ -59,7 +59,7 @@ export function pointerXToMinute(pointerX, trackRect) {
 
 /**
  * Given a snapped start minute and a section's original duration, compute the
- * end minute — clamped so the block never overflows past 18:00.
+ * end minute - clamped so the block never overflows past 18:00.
  *
  * @param {number} startMinute  - Snapped start minute
  * @param {number} durationMin  - Duration of the section in minutes

@@ -153,7 +153,7 @@ body {
   margin-right: 12px;
 }
 
-/* Yellow rectangular badge — 'SEMESTER · 202620271' (sharp neo-brutalist box) */
+/* Yellow rectangular badge - 'SEMESTER · 202620271' (sharp neo-brutalist box) */
 .nb-menubar-semester {
   display: inline-block;
   padding: 2px 7px;
@@ -167,6 +167,26 @@ body {
   border-radius: 0;
   border: 1.75px solid var(--color-navy);
   white-space: nowrap;
+}
+
+@media (max-width: 420px) {
+  .nb-menubar-right {
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 1px;
+    margin-right: 0;
+  }
+
+  .nb-menubar-semester {
+    padding: 1px 3px;
+    font-size: 7px;
+    letter-spacing: 0.02em;
+  }
+
+  .nb-menubar-clock {
+    font-size: 8px;
+    line-height: 1.1;
+  }
 }
 
 .nb-menubar-clock {
@@ -189,7 +209,7 @@ body {
   overflow: hidden;
   background-color: var(--color-cream);
 }
-/* Crosshatch line grid — matches reference screenshot */
+/* Crosshatch line grid - matches reference screenshot */
 .nb-desktop::before {
   content: '';
   position: absolute;
@@ -394,7 +414,7 @@ body {
 /* ════════════════════════════════════════════════════════════════
    Dock
    ════════════════════════════════════════════════════════════════ */
-/* ── Dock — floating centered rounded pill (matches reference) ─ */
+/* ── Dock - floating centered rounded pill (matches reference) ─ */
 .nb-dock {
   position: fixed;
   bottom: 8px;
@@ -402,6 +422,12 @@ body {
   transform: translateX(-50%) scale(calc(1 / var(--zoom-factor, 1)));
   transform-origin: bottom center;
   z-index: 1900;
+}
+
+@media (max-width: 420px) {
+  .nb-dock {
+    transform: translateX(-50%) scale(calc(1.4 / var(--zoom-factor, 1)));
+  }
 }
 
 .nb-dock-inner {
@@ -569,7 +595,7 @@ body {
   padding: 1px 5px;
 }
 
-/* ── Website Info window — disclosure + description blocks ───────────────── */
+/* ── Website Info window - disclosure + description blocks ───────────────── */
 .nb-info-disclosure {
   border: 2.5px solid var(--color-navy);
   background-color: var(--color-yellow);
@@ -663,6 +689,22 @@ body {
 .nb-keyboard-key--space {
   flex-grow: 4;
 }
+.nb-keyboard-key-label-compact {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .nb-keyboard-key-label-wide {
+    display: none;
+  }
+
+  .nb-keyboard-key-label-compact {
+    display: inline;
+    font-size: 15px;
+    line-height: 1;
+  }
+}
+
 .nb-keyboard-shortcuts {
   display: flex;
   flex-direction: column;
@@ -806,7 +848,7 @@ body {
 }
 
 /* ════════════════════════════════════════════════════════════════
-   Settings Window — Theme Picker
+   Settings Window - Theme Picker
    ════════════════════════════════════════════════════════════════ */
 .nb-theme-grid {
   display: grid;
@@ -1155,7 +1197,7 @@ body {
   font-family: 'JetBrains Mono', monospace;
 }
 
-/* Grid wrapper — perfectly fits space without scrolling */
+/* Grid wrapper - perfectly fits space without scrolling */
 .nb-tt-grid-wrap {
   position: relative;
   width: 100%;
@@ -1592,7 +1634,7 @@ body {
   z-index: 9999;
   box-sizing: border-box;
   will-change: left, top, width, height, opacity, transform;
-  /* No transition on mount — first render is at fromRect (starting position) */
+  /* No transition on mount - first render is at fromRect (starting position) */
 }
 
 .nb-card-returning--moving {
@@ -1763,7 +1805,7 @@ body {
   white-space: nowrap;
 }
 
-/* Respect reduced motion — disable shake animation entirely */
+/* Respect reduced motion - disable shake animation entirely */
 @media (prefers-reduced-motion: reduce) {
   .nb-shake {
     animation: none !important;
@@ -2074,6 +2116,119 @@ body {
 }
 .nb-courses-scroll::-webkit-scrollbar {
   display: none;
+}
+
+@media (max-width: 420px) {
+  .nb-courses-header {
+    gap: 4px;
+    padding-inline: 4px;
+  }
+
+  .nb-courses-header > div:first-child {
+    min-width: 0;
+    gap: 3px;
+  }
+
+  .nb-courses-title {
+    font-size: 7px;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+  }
+
+  .nb-courses-count {
+    min-width: 16px;
+    height: 20px;
+    padding-inline: 2px;
+    font-size: 8px;
+  }
+
+  .nb-courses-header [role="search"] {
+    min-width: 0;
+    gap: 3px;
+  }
+
+  .nb-courses-header [role="search"] input {
+    width: 52px;
+    height: 22px;
+    padding-left: 4px;
+    padding-right: 16px;
+    font-size: 8px;
+  }
+
+  .nb-courses-header [role="search"] button[type="submit"] {
+    height: 22px;
+    padding-inline: 5px;
+  }
+
+  .nb-courses-header #reset-timetable-button {
+    width: 20px;
+    height: 20px;
+  }
+
+  .nb-courses-track {
+    display: grid;
+    grid-auto-flow: column;
+    grid-template-rows: repeat(2, minmax(0, 1fr));
+    grid-auto-columns: minmax(105px, calc((100% - 4px) / 2));
+    align-items: stretch;
+    gap: 4px;
+    box-sizing: border-box;
+    height: 90px;
+    min-height: 90px;
+    padding: 4px;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  .nb-courses-track > [role="listitem"],
+  .nb-courses-track > .nb-course-placeholder {
+    width: auto;
+    min-width: 0;
+    height: 100%;
+  }
+
+  .nb-courses-track .nb-course-card {
+    width: 100%;
+    min-width: 0;
+    height: 100%;
+    gap: 0;
+    padding: 2px 4px;
+  }
+
+  .nb-courses-track .nb-course-id {
+    font-size: 8px;
+    line-height: 1.05;
+  }
+
+  .nb-courses-track .nb-course-badge {
+    padding: 1px 3px;
+    font-size: 6px;
+  }
+
+  .nb-courses-track .nb-course-name {
+    margin-top: 1px;
+    font-size: 7px;
+    line-height: 1.05;
+  }
+
+  .nb-courses-track .nb-course-footer {
+    gap: 2px;
+    margin-top: 1px;
+    padding-top: 1px;
+  }
+
+  .nb-courses-track .nb-course-time,
+  .nb-courses-track .nb-course-seats {
+    font-size: 6px;
+  }
+
+  .nb-courses-track .nb-course-footer svg {
+    display: none;
+  }
+
+  .nb-courses-track .nb-full-badge {
+    font-size: 6px;
+  }
 }
 
 /* ════════════════════════════════════════════════════════════════

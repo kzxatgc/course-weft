@@ -20,7 +20,7 @@ const ICON_MAP = {
 };
 
 /**
- * Bottom Dock — centered floating pill dock with 6 app tiles:
+ * Bottom Dock - centered floating pill dock with 6 app tiles:
  *   1. Schedule
  *   2. Demo Scenarios
  *   3. Settings (Themes)

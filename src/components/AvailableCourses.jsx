@@ -366,14 +366,49 @@ export default function AvailableCourses({
         return;
       }
       const rect = anchor.getBoundingClientRect();
-      const position = { left: rect.left + rect.width / 2, top: rect.top - 14 };
+      const ownerWindow = anchor.closest('.nb-window');
+      const ownerZIndex = Number(ownerWindow?.style.zIndex) || 0;
+      const hintRect = {
+        left: rect.left + rect.width / 2 - 7,
+        right: rect.left + rect.width / 2 + 7,
+        top: rect.top - 14,
+        bottom: rect.top - 2,
+      };
+      const overlappingHigherWindowZ = [...document.querySelectorAll('.nb-window')]
+        .filter((candidate) => candidate !== ownerWindow && candidate.getClientRects().length > 0)
+        .filter((candidate) => {
+          const candidateZIndex = Number(candidate.style.zIndex) || 0;
+          const candidateRect = candidate.getBoundingClientRect();
+          return candidateZIndex > ownerZIndex &&
+            hintRect.left < candidateRect.right &&
+            hintRect.right > candidateRect.left &&
+            hintRect.top < candidateRect.bottom &&
+            hintRect.bottom > candidateRect.top;
+        })
+        .map((candidate) => Number(candidate.style.zIndex) || 0);
+      const position = {
+        left: rect.left + rect.width / 2,
+        top: rect.top - 14,
+        zIndex: overlappingHigherWindowZ.length > 0
+          ? Math.min(ownerZIndex + 1, Math.max(...overlappingHigherWindowZ) - 1)
+          : ownerZIndex + 1,
+      };
       setQHintPosition((current) => (
-        current?.left === position.left && current?.top === position.top
+        current?.left === position.left &&
+        current?.top === position.top &&
+        current?.zIndex === position.zIndex
           ? current
           : position
       ));
     };
 
+    const windowStackObserver = new MutationObserver(updateHintPosition);
+    windowStackObserver.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['style'],
+    });
     updateHintPosition();
     window.addEventListener('resize', updateHintPosition);
     window.addEventListener('scroll', updateHintPosition, true);
@@ -382,6 +417,7 @@ export default function AvailableCourses({
       window.removeEventListener('resize', updateHintPosition);
       window.removeEventListener('scroll', updateHintPosition, true);
       window.removeEventListener('pointermove', updateHintPosition);
+      windowStackObserver.disconnect();
     };
   }, [activeQHintId, keyboardHintsEnabled]);
 
@@ -1097,7 +1133,7 @@ export default function AvailableCourses({
                   });
                 }}
                 aria-label={`Get help finding a compatible lab for ${unavailableLinkedLabPreviewId}`}
-                title="No compatible lab placement — contact your academic advisor or registration office"
+                title="No compatible lab placement - contact your academic advisor or registration office"
                 data-preview-alert-action
                 data-course-action-for={unavailableLinkedLabPreviewId}
                 className="nb-preview-alert-action inline-flex h-6 w-6 items-center justify-center rounded border-2 border-[#dc2626] bg-white p-0 text-[#dc2626] transition-transform active:translate-x-0.5 active:translate-y-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--color-navy)] cursor-pointer shrink-0"
@@ -1288,8 +1324,8 @@ export default function AvailableCourses({
                   data-repair-locked={isRepairLocked ? 'true' : 'false'}
                   aria-label={
                     isFullSection
-                      ? `${item.title} (${item.id}), ${formatCourseSlot(item)}, FULL — no seats available`
-                      : `${item.title} (${item.id}), ${formatCourseSlot(item)}, ${seatsRemaining} seats remaining — press Enter or Space to ${isSwitch ? 'switch' : 'add'}`
+                      ? `${item.title} (${item.id}), ${formatCourseSlot(item)}, FULL - no seats available`
+                      : `${item.title} (${item.id}), ${formatCourseSlot(item)}, ${seatsRemaining} seats remaining - press Enter or Space to ${isSwitch ? 'switch' : 'add'}`
                   }
                   aria-keyshortcuts="Enter Space Q"
                   aria-disabled={isFullSection || isRepairLocked ? 'true' : undefined}
@@ -1480,12 +1516,12 @@ export default function AvailableCourses({
               top: `${qHintPosition.top}px`,
               left: `${qHintPosition.left}px`,
               bottom: 'auto',
-              zIndex: 9998,
+              zIndex: qHintPosition.zIndex,
             }}
           >
             <span className="nb-keyboard-hint-letter">Q</span>
           </span>,
-          document.body
+          document.querySelector('.nb-desktop') || document.body
         )}
 
       {/* ── Reset Confirmation Dialog ── */}

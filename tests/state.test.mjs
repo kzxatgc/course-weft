@@ -62,7 +62,7 @@ describe('initialState', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 2. Immutability — previous state must not be mutated
+// 2. Immutability - previous state must not be mutated
 // ---------------------------------------------------------------------------
 
 describe('immutable transitions', () => {

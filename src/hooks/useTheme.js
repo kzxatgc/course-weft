@@ -36,7 +36,7 @@ export function useTheme() {
     try {
       localStorage.setItem(STORAGE_KEY, themeId);
     } catch {
-      /* storage unavailable — continue without persistence */
+      /* storage unavailable - continue without persistence */
     }
   }, [themeId, currentTheme]);
 

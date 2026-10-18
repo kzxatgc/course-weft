@@ -1,7 +1,7 @@
 import React from 'react';
 
 /**
- * WebsiteInfo window content — Academic Planning Demonstration.
+ * WebsiteInfo window content - Academic Planning Demonstration.
  *
  * Clearly discloses that this application uses synthetic sample data only
  * and does NOT connect to or submit to a real university registration system.
@@ -23,7 +23,7 @@ export default function WebsiteInfo() {
         id="website-info-disclosure"
       >
         <p className="nb-info-disclosure-heading">
-          SYNTHETIC SAMPLE DATA — NO REAL REGISTRATION IS SUBMITTED
+          SYNTHETIC SAMPLE DATA - NO REAL REGISTRATION IS SUBMITTED
         </p>
         <p className="nb-info-disclosure-body">
           Student and lecturer names, course details, meeting times, and seat
@@ -56,14 +56,17 @@ export default function WebsiteInfo() {
         <div
           className="nb-keyboard"
           role="img"
-          aria-label="Keyboard diagram highlighting Tab, both Shift keys, Enter, Space, Q, W, and S for keyboard navigation, course actions, and scrolling."
+          aria-label="Keyboard diagram highlighting Backspace, Tab, both Shift keys, Enter, Space, Q, W, and S for keyboard navigation, course actions, and scrolling."
         >
           <div className="nb-keyboard-row">
             <span className="nb-keyboard-key nb-keyboard-key--wide">Esc</span>
             {'1234567890'.split('').map((key) => (
               <span className="nb-keyboard-key" key={key}>{key}</span>
             ))}
-            <span className="nb-keyboard-key nb-keyboard-key--wide">Backspace</span>
+            <span className="nb-keyboard-key nb-keyboard-key--wide">
+              <span className="nb-keyboard-key-label-wide">Backspace</span>
+              <span className="nb-keyboard-key-label-compact" aria-hidden="true">←</span>
+            </span>
           </div>
           <div className="nb-keyboard-row">
             <span className="nb-keyboard-key nb-keyboard-key--wide nb-keyboard-key--highlight">Tab</span>

@@ -186,6 +186,18 @@ describe('WINDOW_CONFIGS', () => {
     }
   });
 
+  it('centers windows only on compact screens and retains their wide-screen positions', async () => {
+    const { readFileSync } = await import('node:fs');
+    const source = readFileSync(
+      new URL('../src/hooks/useWindowManager.js', import.meta.url),
+      'utf8'
+    );
+    assert.ok(source.includes('const COMPACT_VIEWPORT_MAX_WIDTH = 640;'));
+    assert.ok(source.includes('wideViewportPositions.current = new Map('));
+    assert.ok(source.includes('window.innerWidth <= COMPACT_VIEWPORT_MAX_WIDTH'));
+    assert.ok(source.includes('widePositions?.get(win.id)'));
+  });
+
   it('dock contains Schedule, Scenarios, Settings, Profile, Course Details, and Website Info', () => {
     const ids = WINDOW_CONFIGS.map((w) => w.id);
     assert.ok(ids.includes('schedule'));
@@ -261,7 +273,7 @@ describe('WebsiteInfo window config', () => {
   });
 });
 
-describe('WebsiteInfo — no network or submission side-effects', () => {
+describe('WebsiteInfo - no network or submission side-effects', () => {
   it('WINDOW_CONFIGS has no window with a submitUrl or apiEndpoint field', () => {
     for (const cfg of WINDOW_CONFIGS) {
       assert.ok(!('submitUrl'    in cfg), `${cfg.id}: must not expose submitUrl`);
@@ -269,15 +281,15 @@ describe('WebsiteInfo — no network or submission side-effects', () => {
     }
   });
 
-  it('exactly one window opens by default (schedule) — websiteInfo stays closed', () => {
+  it('exactly one window opens by default (schedule) - websiteInfo stays closed', () => {
     const defaultOpen = WINDOW_CONFIGS.filter((w) => w.defaultOpen);
     assert.equal(defaultOpen.length, 1);
     assert.equal(defaultOpen[0].id, 'schedule');
   });
 });
 
-// ── Profile — no real-profile side effects ────────────────────────────────────
-describe('Profile window — no real student account', () => {
+// ── Profile - no real-profile side effects ────────────────────────────────────
+describe('Profile window - no real student account', () => {
   it('WINDOW_CONFIGS profile entry does not contain authentication-related metadata', () => {
     const profileCfg = WINDOW_CONFIGS.find((w) => w.id === 'profile');
     // Config should have no auth/token/session fields
@@ -337,7 +349,7 @@ function toPercent(minute) {
   return ((minute - START_MINUTE) / TOTAL_MINUTES) * 100;
 }
 
-describe('Timetable — section positioning math', () => {
+describe('Timetable - section positioning math', () => {
   it('8 AM (480) maps to 0% (start of timeline)', () => {
     assert.equal(toPercent(480), 0);
   });
@@ -350,14 +362,14 @@ describe('Timetable — section positioning math', () => {
     assert.equal(toPercent(720), 40);
   });
 
-  it('MATH-A (Tue 10:00–11:00 AM) left = 20%, width = 10%', () => {
+  it('MATH-A (Tue 10:00-11:00 AM) left = 20%, width = 10%', () => {
     const sec = MAIN_CATALOG.find((s) => s.id === 'MATH-A');
     assert.equal(toPercent(sec.start), 20);
     const widthPct = ((sec.end - sec.start) / TOTAL_MINUTES) * 100;
     assert.equal(widthPct, 10);
   });
 
-  it('STAT-A (Mon 1:00–2:00 PM) left = 50%, width = 10%', () => {
+  it('STAT-A (Mon 1:00-2:00 PM) left = 50%, width = 10%', () => {
     const sec = MAIN_CATALOG.find((s) => s.id === 'STAT-A');
     assert.equal(toPercent(sec.start), 50);
     const widthPct = ((sec.end - sec.start) / TOTAL_MINUTES) * 100;
@@ -368,14 +380,14 @@ describe('Timetable — section positioning math', () => {
     for (const sec of MAIN_CATALOG) {
       const left  = toPercent(sec.start);
       const width = ((sec.end - sec.start) / TOTAL_MINUTES) * 100;
-      assert.ok(left >= 0 && left <= 100, `${sec.id}: left=${left}% must be 0–100`);
+      assert.ok(left >= 0 && left <= 100, `${sec.id}: left=${left}% must be 0-100`);
       assert.ok(width > 0,                `${sec.id}: width=${width}% must be > 0`);
       assert.ok(left + width <= 100,      `${sec.id}: left+width=${left+width}% must be ≤ 100`);
     }
   });
 });
 
-describe('Timetable — empty state', () => {
+describe('Timetable - empty state', () => {
   it('INITIAL_DRAFT is non-empty (no empty state at startup)', () => {
     assert.ok(INITIAL_DRAFT.length > 0, 'INITIAL_DRAFT must have at least one section');
   });
@@ -391,7 +403,7 @@ describe('Timetable — empty state', () => {
   });
 });
 
-describe('Timetable — section display data', () => {
+describe('Timetable - section display data', () => {
   it('every catalog section has fields required by SectionBlock (id, title, day, start, end, component)', () => {
     for (const sec of MAIN_CATALOG) {
       assert.ok(typeof sec.id        === 'string' && sec.id.length > 0,   `${sec.id}: id required`);
@@ -427,7 +439,7 @@ describe('Timetable — section display data', () => {
   });
 });
 
-describe('Timetable — remove control (domain side)', () => {
+describe('Timetable - remove control (domain side)', () => {
   it('REMOVE_SECTION action type is exported from draft-controller', async () => {
     const { ACTION } = await import('../src/state/draft-controller.mjs');
     assert.equal(ACTION.REMOVE_SECTION, 'REMOVE_SECTION');
@@ -1400,7 +1412,7 @@ import {
 
 describe('Fixed-slot time-conflict preview', () => {
 
-  describe('isHalfOpenOverlap — same-day half-open boundaries', () => {
+  describe('isHalfOpenOverlap - same-day half-open boundaries', () => {
     it('returns true when intervals strictly overlap', () => {
       // 10:00-11:00 (600-660) and 10:30-11:30 (630-690)
       assert.strictEqual(isHalfOpenOverlap(600, 660, 630, 690), true);
@@ -1718,7 +1730,7 @@ describe('Available Courses drag, drop, and cancel', () => {
     });
   });
 
-  describe('isCardOutsidePanel — preview activation', () => {
+  describe('isCardOutsidePanel - preview activation', () => {
     const panelRect = { left: 20, top: 20, right: 980, bottom: 140 };
 
     it('returns false when card is inside Available Courses panel bounds', () => {
@@ -2004,6 +2016,24 @@ describe('Available Courses drag, drop, and cancel', () => {
         'Focused linked course cards render the blue focus outline outside the rainbow outline'
       );
       assert.ok(css.includes('.nb-keyboard-hint'), 'Optional Q key hints have a compact keycap style');
+      assert.ok(src.includes("anchor.closest('.nb-window')"), 'The Q hint uses its owning window for stacking');
+      assert.ok(src.includes('candidateZIndex > ownerZIndex'), 'The Q hint accounts for overlapping windows above its owner');
+      assert.ok(src.includes('ownerZIndex + 1'), 'The Q hint remains visible above its owning window');
+      assert.ok(src.includes('Math.max(...overlappingHigherWindowZ) - 1'), 'The Q hint is placed below an overlapping higher window');
+      assert.ok(src.includes('new MutationObserver(updateHintPosition)'), 'The Q hint tracks changes to window layers');
+      assert.ok(src.includes("attributeFilter: ['style']"), 'The Q hint observer only tracks window style changes');
+      assert.ok(src.includes('zIndex: qHintPosition.zIndex'), 'The portal Q hint uses its calculated window layer');
+      assert.ok(src.includes("document.querySelector('.nb-desktop') || document.body"), 'The Q hint shares a stacking context with desktop windows');
+      assert.match(
+        css,
+        /@media \(max-width: 420px\)[\s\S]*?grid-template-rows: repeat\(2, minmax\(0, 1fr\)\);[\s\S]*?height: 90px;[\s\S]*?font-size: 8px;/,
+        'Narrow course cards use two compact rows without increasing the available-courses height'
+      );
+      assert.match(
+        css,
+        /@media \(max-width: 640px\)[\s\S]*?\.nb-keyboard-key-label-wide\s*\{\s*display: none;[\s\S]*?\.nb-keyboard-key-label-compact\s*\{\s*display: inline;/,
+        'Narrow keyboard diagrams use the compact Backspace arrow label'
+      );
       assert.match(css, /\.nb-keyboard-hint\s*\{[^}]*font-weight: 900;/, 'The Q key hint uses bold lettering');
       assert.match(css, /\.nb-preview-alert-action svg\s*\{[^}]*color: inherit;[^}]*stroke: currentColor;/, 'The alert icon stroke follows its color during the flash');
       assert.ok(src.includes('className={`nb-keyboard-hint${qHintBounceId ==='), 'Contextual actions display the optional Q key hint and apply its bounce state');
@@ -2300,7 +2330,7 @@ describe('Available Courses drag, drop, and cancel', () => {
     it('no BIO-214 means no link outline', async () => {
       const { getLinkedOutlineSectionIds } = await import('../src/domain/linked-labs.mjs');
       const { MAIN_CATALOG, INITIAL_DRAFT } = await import('../src/domain/available-courses.mjs');
-      // INITIAL_DRAFT is ['MATH-A', 'STAT-A'] — no BIO-214
+      // INITIAL_DRAFT is ['MATH-A', 'STAT-A'] - no BIO-214
       const result = getLinkedOutlineSectionIds(INITIAL_DRAFT, MAIN_CATALOG);
       assert.deepStrictEqual(result, []);
     });

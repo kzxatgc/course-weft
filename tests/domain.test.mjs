@@ -620,12 +620,12 @@ test('formatTime returns "Unknown time" for invalid inputs', () => {
   assert.equal(formatTime(NaN), 'Unknown time');
 });
 
-test('formatTimeRange formats BIO-214L-B section as "Wed 2:00 PM–4:00 PM"', () => {
+test('formatTimeRange formats BIO-214L-B section as "Wed 2:00 PM-4:00 PM"', () => {
   const cat = getCatalogForScenario('main');
   const labB = cat.find((s) => s.id === 'BIO-214L-B');
   assert.ok(labB, 'BIO-214L-B must exist in main catalogue');
   // BIO-214L-B: Wed, start=840, end=960
-  assert.equal(formatTimeRange(labB), 'Wed 2:00 PM–4:00 PM');
+  assert.equal(formatTimeRange(labB), 'Wed 2:00 PM-4:00 PM');
 });
 
 // --- Enumerate bounded repairs ---
@@ -658,7 +658,7 @@ test('enumerateRepairs returns empty array if requested section is unknown in th
 });
 
 test('enumerateRepairs returns empty array if the base draft itself is invalid', () => {
-  // STAT-A and BIO-214 conflict on Monday — draft is invalid before any repair
+  // STAT-A and BIO-214 conflict on Monday - draft is invalid before any repair
   const cat = getCatalogForScenario('main');
   assert.deepEqual(enumerateRepairs(['STAT-A', 'BIO-214'], cat), []);
 });
@@ -767,7 +767,7 @@ test('enumerateRepairs: direct add (no swap) is supported when no swap needed', 
   // Draft already has STAT-B (which does not conflict with BIO-214); direct add should work
   // MATH-A Tue 08-09, STAT-B Thu 13-14, BIO-214 Mon 13-14, BIO-214L-B Wed 14-16 -> no conflicts
   const cat = getCatalogForScenario('main');
-  // Request BIO-214 from draft ['MATH-A', 'STAT-B'] — should find direct add candidate (no swap)
+  // Request BIO-214 from draft ['MATH-A', 'STAT-B'] - should find direct add candidate (no swap)
   const candidates = enumerateRepairs(['MATH-A', 'STAT-B'], cat);
   assert.ok(candidates.length >= 1, 'direct add without swap should yield at least one candidate');
   const directAdd = candidates.find((c) => c.swap === null);
@@ -897,7 +897,7 @@ test('independent validation rejects candidate with corrupted seat on swap targe
   assert.equal(candidates.length, 0, 'malformed seat on swap target must reject candidate');
 });
 
-test('stable ordering — no-swap candidates always precede swap candidates', () => {
+test('stable ordering - no-swap candidates always precede swap candidates', () => {
   const cat = getCatalogForScenario('main');
   const candidates = enumerateRepairs(['MATH-A', 'STAT-B'], cat);
   let seenSwap = false;
@@ -909,7 +909,7 @@ test('stable ordering — no-swap candidates always precede swap candidates', ()
   }
 });
 
-test('deduplication — identical final ID sets appear exactly once', () => {
+test('deduplication - identical final ID sets appear exactly once', () => {
   const cat = getCatalogForScenario('main');
   const candidates = enumerateRepairs([...CATALOG_INITIAL_DRAFT], cat);
   const keys = candidates.map((c) => c.ids.join('|'));

@@ -65,7 +65,7 @@ export default function TimetableControls({ state, dispatch }) {
 
       {/* ── Action buttons ───────────────────────────────────────── */}
       <div className="flex items-center gap-2 shrink-0">
-        {/* Undo — only when there is a repair snapshot */}
+        {/* Undo - only when there is a repair snapshot */}
         {canUndoRepair && (
           <button
             id="undo-repair-button"
@@ -79,7 +79,7 @@ export default function TimetableControls({ state, dispatch }) {
           </button>
         )}
 
-        {/* Reset — only when draft differs from the initial starting state */}
+        {/* Reset - only when draft differs from the initial starting state */}
         {isDraftChanged && (
           <button
             id="reset-timetable-button"

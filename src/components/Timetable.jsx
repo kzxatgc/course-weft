@@ -15,7 +15,7 @@ import {
 } from '../domain/drop-preview.mjs';
 
 /**
- * Timetable — Clean Neo-Brutalist Layout
+ * Timetable - Clean Neo-Brutalist Layout
  *
  * X-axis: Column-based time slots (10 equal 1-hour columns: 8 AM to 6 PM)
  * Y-axis: Days of the week (Monday through Friday, 52px tall rows)
@@ -533,7 +533,7 @@ function DayRow({
             );
           }
 
-          // If this section is the incoming swap target, skip the real block —
+          // If this section is the incoming swap target, skip the real block -
           // the nb-tt-swap-incoming ghost overlay handles the slide-in animation
           const isIncomingSwap = incomingSwapIds.includes(sec.id);
           if (isIncomingSwap) return null;
@@ -665,7 +665,7 @@ function SectionBlock({
       }}
       role="button"
       tabIndex={0}
-      aria-label={`${sec.title} (${sec.id}), ${sec.day} ${timeLabel} — press Enter or Space to remove`}
+      aria-label={`${sec.title} (${sec.id}), ${sec.day} ${timeLabel} - press Enter or Space to remove`}
       title={`${sec.title} (${sec.id})\n${sec.day} ${timeLabel}`}
       onPointerDown={isRepairLocked ? undefined : onPointerDown}
       onKeyDown={(event) => {

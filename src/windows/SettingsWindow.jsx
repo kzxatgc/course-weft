@@ -9,7 +9,7 @@ import {
 import { useKeyboardHints } from '../hooks/useKeyboardHints.js';
 
 /**
- * Settings window content — lets the user preview and select a color theme,
+ * Settings window content - lets the user preview and select a color theme,
  * and toggle optional interaction sound cues.
  * The chosen preferences persist locally in localStorage.
  */

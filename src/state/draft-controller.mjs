@@ -4,19 +4,19 @@
  * Pure, framework-independent state/reducer for the Course Weft planning workspace.
  * All state transitions return a new state object; the previous state is never mutated.
  *
- * Gate A decision: Plan A — dynamic candidate generation passed the fixed adversarial
+ * Gate A decision: Plan A - dynamic candidate generation passed the fixed adversarial
  * suite. Dynamic repair is used when the domain engine is available; labelled
  * precomputed fallback is available via Plan B state when needed.
  *
  * Managed slices:
- *   scenario         — 'main' | 'noRepair'
- *   availableCourses — section records for the current scenario (copy, not shared)
- *   draft            — ordered array of selected section IDs
- *   notice           — { kind: 'info'|'error'|'success', message: string } | null
- *   request          — requested section ID awaiting repair (string | null)
- *   candidate        — validated repair candidate object | null
- *   snapshot         — pre-Apply draft/state for exact Undo | null
- *   search           — current Available Courses search string
+ *   scenario         - 'main' | 'noRepair'
+ *   availableCourses - section records for the current scenario (copy, not shared)
+ *   draft            - ordered array of selected section IDs
+ *   notice           - { kind: 'info'|'error'|'success', message: string } | null
+ *   request          - requested section ID awaiting repair (string | null)
+ *   candidate        - validated repair candidate object | null
+ *   snapshot         - pre-Apply draft/state for exact Undo | null
+ *   search           - current Available Courses search string
  */
 
 import { INITIAL_DRAFT, REQUESTED_SECTION_ID, catalogForScenario } from '../domain/available-courses.mjs';
@@ -797,7 +797,7 @@ export function reduce(state, action) {
       });
     }
 
-    // Unknown action — return state unchanged (safe default)
+    // Unknown action - return state unchanged (safe default)
     default:
       return state;
   }

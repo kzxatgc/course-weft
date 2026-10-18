@@ -96,7 +96,7 @@ export function subscribeSound(fn) {
   return () => listeners.delete(fn);
 }
 
-// Lazy Howl instances map — created only in browser on first use
+// Lazy Howl instances map - created only in browser on first use
 let howls = null;
 
 function getHowls() {

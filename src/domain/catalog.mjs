@@ -1,5 +1,5 @@
 /**
- * catalog.mjs — backward-compatibility re-export shim.
+ * catalog.mjs - backward-compatibility re-export shim.
  *
  * The canonical source has moved to available-courses.mjs.
  * This shim re-exports everything so existing domain tests and any

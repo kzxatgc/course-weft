@@ -1,16 +1,16 @@
 /**
  * Time formatting utilities for Course Weft course meeting times.
  *
- * Times are represented as integer minutes from midnight (0–1440).
+ * Times are represented as integer minutes from midnight (0-1440).
  * Formatting is explicit and locale/time-zone independent.
  * 1440 (24:00) is the valid midnight endpoint for end times.
- * Any value outside 0–1440 or non-integer returns "Unknown time".
+ * Any value outside 0-1440 or non-integer returns "Unknown time".
  */
 
 /**
  * Format an integer minute value as a 12-hour AM/PM time string.
  *
- * @param {number} minutes - Minutes from midnight (0–1440 inclusive)
+ * @param {number} minutes - Minutes from midnight (0-1440 inclusive)
  * @returns {string} Formatted time string, e.g. "10:00 AM", or "Unknown time"
  */
 export function formatTime(minutes) {
@@ -25,20 +25,20 @@ export function formatTime(minutes) {
 }
 
 /**
- * Format a section's meeting time as "Day H:MM AM–H:MM PM" range string.
+ * Format a section's meeting time as "Day H:MM AM-H:MM PM" range string.
  * Uses the section's day, start, and end fields.
  *
  * @param {{ day: string, start: number, end: number }} item - Section record
- * @returns {string} Formatted range, e.g. "Wed 2:00 PM–4:00 PM"
+ * @returns {string} Formatted range, e.g. "Wed 2:00 PM-4:00 PM"
  */
 export function formatTimeRange(item) {
-  return `${item.day} ${formatTime(item.start)}–${formatTime(item.end)}`;
+  return `${item.day} ${formatTime(item.start)}-${formatTime(item.end)}`;
 }
 
 /**
  * Convert minute-of-day integer to 4-digit 24h time string (e.g. 600 -> "1000").
  *
- * @param {number} minutes - Minutes from midnight (0–1440)
+ * @param {number} minutes - Minutes from midnight (0-1440)
  * @returns {string} 4-digit 24h time string
  */
 export function format24hTime(minutes) {

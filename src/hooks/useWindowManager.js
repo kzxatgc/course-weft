@@ -1,6 +1,8 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 
-/** Window configurations — order matches the dock left-to-right. */
+const COMPACT_VIEWPORT_MAX_WIDTH = 640;
+
+/** Window configurations - order matches the dock left-to-right. */
 export const WINDOW_CONFIGS = [
   {
     id: 'schedule',
@@ -78,9 +80,10 @@ export const DYNAMIC_WINDOW_CONFIGS = [
  */
 export function useWindowManager() {
   const hasMovedSchedule = useRef(false);
+  const wideViewportPositions = useRef(null);
 
-  const [windows, setWindows] = useState(() =>
-    [...WINDOW_CONFIGS, ...DYNAMIC_WINDOW_CONFIGS].map((cfg, i) => {
+  const [windows, setWindows] = useState(() => {
+    const initialWindows = [...WINDOW_CONFIGS, ...DYNAMIC_WINDOW_CONFIGS].map((cfg, i) => {
       let initialPos = cfg.defaultPos;
       if (typeof window !== 'undefined') {
         if (cfg.id === 'schedule') {
@@ -105,19 +108,52 @@ export function useWindowManager() {
         pos: initialPos,
         zIndex: 10 + i,
       };
-    })
-  );
+    });
 
-  // Keep schedule window centered on screen resize if user hasn't dragged it
+    wideViewportPositions.current = new Map(
+      initialWindows.map(({ id, pos }) => [id, pos])
+    );
+    if (typeof window === 'undefined' || window.innerWidth > COMPACT_VIEWPORT_MAX_WIDTH) {
+      return initialWindows;
+    }
+
+    return initialWindows.map((win) => {
+      const windowWidth = win.width === 'fluid'
+        ? Math.min(1280, window.innerWidth - 40)
+        : Math.min(win.width, window.innerWidth - 16);
+      return {
+        ...win,
+        pos: {
+          ...win.pos,
+          x: Math.max(0, Math.round((window.innerWidth - windowWidth) / 2)),
+        },
+      };
+    });
+  });
+
+  // Keep windows centered on compact viewports without replacing their wide-screen layout.
   useEffect(() => {
     function handleResize() {
-      if (hasMovedSchedule.current) return;
-      const scheduleWidth = Math.min(1280, window.innerWidth - 40);
-      const centerX = Math.max(0, Math.round((window.innerWidth - scheduleWidth) / 2));
+      const isCompactViewport = window.innerWidth <= COMPACT_VIEWPORT_MAX_WIDTH;
+      const widePositions = wideViewportPositions.current;
       setWindows((ws) =>
-        ws.map((w) =>
-          w.id === 'schedule' ? { ...w, pos: { ...w.pos, x: centerX } } : w
-        )
+        ws.map((win) => {
+          if (!isCompactViewport) {
+            const widePos = widePositions?.get(win.id);
+            return widePos ? { ...win, pos: widePos } : win;
+          }
+
+          const windowWidth = win.width === 'fluid'
+            ? Math.min(1280, window.innerWidth - 40)
+            : Math.min(win.width, window.innerWidth - 16);
+          return {
+            ...win,
+            pos: {
+              ...win.pos,
+              x: Math.max(0, Math.round((window.innerWidth - windowWidth) / 2)),
+            },
+          };
+        })
       );
     }
     window.addEventListener('resize', handleResize);
@@ -159,6 +195,9 @@ export function useWindowManager() {
   const moveWindow = useCallback((id, newPos) => {
     if (id === 'schedule') {
       hasMovedSchedule.current = true;
+    }
+    if (typeof window !== 'undefined' && window.innerWidth > COMPACT_VIEWPORT_MAX_WIDTH) {
+      wideViewportPositions.current?.set(id, newPos);
     }
     setWindows((ws) => ws.map((w) => (w.id === id ? { ...w, pos: newPos } : w)));
   }, []);
