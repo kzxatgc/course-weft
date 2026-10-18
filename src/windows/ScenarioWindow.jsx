@@ -1,11 +1,13 @@
-import React from 'react';
+import React, { useLayoutEffect, useRef } from 'react';
 import { CheckCircle2, AlertTriangle, Sparkles } from 'lucide-react';
 import { ACTION } from '../state/draft-controller.mjs';
+import { playSound } from '../audio/optional-sounds.js';
 
 /**
  * Scenario window content — allows switching between demo test scenarios.
  */
 export default function ScenarioWindow({ scenario, dispatch }) {
+  const pendingSelectFocusRef = useRef(null);
   const scenarios = [
     {
       id: 'main',
@@ -22,6 +24,30 @@ export default function ScenarioWindow({ scenario, dispatch }) {
     },
   ];
 
+  useLayoutEffect(() => {
+    const pending = pendingSelectFocusRef.current;
+    if (!pending || pending.scenarioId !== scenario) return;
+    pendingSelectFocusRef.current = null;
+
+    const cards = [...document.querySelectorAll('.nb-scenario-list [data-scenario-id]')];
+    const preferredCards = [
+      ...cards.slice(0, pending.index).reverse(),
+      ...cards.slice(pending.index + 1),
+    ];
+    const nextSelect = preferredCards
+      .map((card) => card.querySelector('.nb-scenario-select-btn'))
+      .find(Boolean);
+    nextSelect?.focus();
+  }, [scenario]);
+
+  function handleSelect(scenarioId, index) {
+    if (scenarioId !== scenario) {
+      pendingSelectFocusRef.current = { scenarioId, index };
+      playSound('popup');
+    }
+    dispatch?.({ type: ACTION.SELECT_SCENARIO, payload: scenarioId });
+  }
+
   return (
     <div className="nb-win-section">
       <div className="nb-scenario-intro">
@@ -30,23 +56,15 @@ export default function ScenarioWindow({ scenario, dispatch }) {
       </div>
 
       {/* Scenario cards */}
-      <div className="nb-scenario-list" role="radiogroup" aria-label="Demo scenarios">
-        {scenarios.map((sc) => {
+      <div className="nb-scenario-list" role="group" aria-label="Demo scenarios">
+        {scenarios.map((sc, index) => {
           const isSelected = scenario === sc.id;
           return (
             <div
               key={sc.id}
+              data-scenario-id={sc.id}
               className={`nb-scenario-card${isSelected ? ' nb-scenario-card--active' : ''}`}
-              onClick={() => dispatch && dispatch({ type: ACTION.SELECT_SCENARIO, payload: sc.id })}
-              role="radio"
-              aria-checked={isSelected}
-              tabIndex={0}
-              onKeyDown={(e) => {
-                if (e.key === ' ' || e.key === 'Enter') {
-                  e.preventDefault();
-                  dispatch && dispatch({ type: ACTION.SELECT_SCENARIO, payload: sc.id });
-                }
-              }}
+              onClick={() => handleSelect(sc.id, index)}
             >
               <div className="nb-scenario-card-header">
                 <span className="nb-scenario-card-title">
@@ -64,7 +82,7 @@ export default function ScenarioWindow({ scenario, dispatch }) {
                     className="nb-scenario-select-btn"
                     onClick={(e) => {
                       e.stopPropagation();
-                      dispatch && dispatch({ type: ACTION.SELECT_SCENARIO, payload: sc.id });
+                      handleSelect(sc.id, index);
                     }}
                   >
                     Select

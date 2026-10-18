@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { formatTime } from '../domain/time.mjs';
 import { ACTION } from '../state/draft-controller.mjs';
@@ -56,7 +56,14 @@ export default function Timetable({
   onSectionDragStart,
   linkedOutlineIds = [],
 }) {
-  function handleRemove(id) {
+  const pendingRemoveFocusRef = useRef(null);
+
+  function handleRemove(id, target) {
+    const blockIds = [
+      ...document.querySelectorAll('[data-testid^="timetable-block-"]'),
+    ].map((block) => block.dataset.testid?.slice('timetable-block-'.length))
+      .filter(Boolean);
+    pendingRemoveFocusRef.current = { id, blockIds, target };
     dispatch({ type: ACTION.REMOVE_SECTION, payload: id });
   }
 
@@ -65,6 +72,45 @@ export default function Timetable({
   const [ghost, setGhost] = useState(null);
   // draggedSectionId: the section being dragged over (from DataTransfer)
   const draggedIdRef = useRef(null);
+
+  useLayoutEffect(() => {
+    const pending = pendingRemoveFocusRef.current;
+    if (!pending) return;
+    pendingRemoveFocusRef.current = null;
+
+    if (selectedSections.some((section) => section.id === pending.id)) return;
+
+    const currentIds = new Set(selectedSections.map((section) => section.id));
+    const removedIndex = pending.blockIds.indexOf(pending.id);
+    const nextId = pending.blockIds
+      .slice(removedIndex + 1)
+      .find((id) => currentIds.has(id));
+    const previousId = pending.blockIds
+      .slice(0, removedIndex)
+      .reverse()
+      .find((id) => currentIds.has(id));
+    const focusId = nextId || previousId;
+    const timetableBlock = focusId
+      ? document.querySelector(`[data-testid="timetable-block-${CSS.escape(focusId)}"]`)
+      : null;
+
+    if (timetableBlock instanceof HTMLElement) {
+      timetableBlock.focus();
+      return;
+    }
+
+    const returnedCourse = document.querySelector(
+      `[data-course-card-id="${CSS.escape(pending.id)}"]:not(:disabled)`
+    );
+    if (returnedCourse instanceof HTMLElement) {
+      returnedCourse.focus();
+      return;
+    }
+
+    if (pending.target instanceof HTMLElement && pending.target.isConnected) {
+      pending.target.focus();
+    }
+  });
 
   // ── Fixed-slot preview──────────────────────────────────────────
   // Show at official scheduled day & time for keyboard focus or active drag
@@ -612,14 +658,21 @@ function SectionBlock({
         hasLinkedOutline ? 'nb-linked-outline' : ''
       } ${
         isRepairLocked ? 'nb-tt-block--repair-locked cursor-not-allowed' : ''
-      }`}
+      } focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-yellow)]`}
       style={{
         left: `${leftPct}%`,
         width: `${widthPct}%`,
       }}
-      aria-label={`${sec.title} (${sec.id}), ${sec.day} ${timeLabel}`}
+      role="button"
+      tabIndex={0}
+      aria-label={`${sec.title} (${sec.id}), ${sec.day} ${timeLabel} — press Enter or Space to remove`}
       title={`${sec.title} (${sec.id})\n${sec.day} ${timeLabel}`}
       onPointerDown={isRepairLocked ? undefined : onPointerDown}
+      onKeyDown={(event) => {
+        if (isRepairLocked || (event.key !== 'Enter' && event.key !== ' ')) return;
+        event.preventDefault();
+        onRemove(sec.id, event.currentTarget);
+      }}
       data-testid={`timetable-block-${sec.id}`}
       data-is-replaced={isReplaced ? 'true' : 'false'}
       data-repair-locked={isRepairLocked ? 'true' : 'false'}

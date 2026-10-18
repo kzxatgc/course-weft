@@ -327,6 +327,7 @@ export function reduce(state, action) {
             kind: 'error',
             title: 'Class clash',
             message: `${item.title} (${item.id}) conflicts with ${clash.title} (${clash.id}). The class has not been added.`,
+            action: 'suggest',
           }),
         });
       }
@@ -600,11 +601,7 @@ export function reduce(state, action) {
         request: requestedId,
         candidate: Object.freeze({ ...candidates[0] }),
         isApplied: false,
-        notice: Object.freeze({
-          kind: 'info',
-          title: 'Suggested timetable ready',
-          message: 'Review the changes before applying them.',
-        }),
+        notice: null,
       });
     }
 

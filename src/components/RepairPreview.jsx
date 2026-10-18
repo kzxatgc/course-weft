@@ -242,6 +242,7 @@ export default function RepairPreview({ state, dispatch, onClose }) {
               <button
                 type="button"
                 disabled={isApplied}
+                autoFocus
                 onClick={() => {
                   dispatch({ type: ACTION.APPLY_REPAIR });
                 }}

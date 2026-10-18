@@ -291,6 +291,7 @@ export default function Notice({ notice, onDismiss, onAction }) {
                 {onAction && (
                   <button
                     type="button"
+                    autoFocus
                     onClick={onAction}
                     className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-black font-mono uppercase rounded-none border-2 border-[var(--color-navy)] bg-[var(--color-navy)] text-[var(--color-cream)] hover:opacity-90 active:translate-x-0.5 active:translate-y-0.5 transition-all cursor-pointer shadow-xs"
                   >

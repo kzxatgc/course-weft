@@ -554,7 +554,7 @@ describe('ADD_SECTION', () => {
     assert.equal(next.request, 'BIO-214');
     assert.equal(next.notice.kind, 'error');
     assert.equal(next.notice.title, 'Class clash');
-    assert.equal(next.notice.action, undefined, 'a dropped class clash is a temporary notice, not a repair dialog');
+    assert.equal(next.notice.action, 'suggest', 'a resolvable clash opens the repair dialog');
   });
 
   it('adds BIO-214 to draft when no clash and prompts for linked lab', () => {
@@ -775,7 +775,7 @@ describe('suggestion, apply, exact undo, dismiss', () => {
     assert.ok(s1.candidate !== null, 'candidate was generated');
     assert.deepEqual(s1.candidate.ids, ['BIO-214', 'MATH-A', 'STAT-B']);
     assert.deepEqual(s1.candidate.swap, { old: 'STAT-A', replacement: 'STAT-B' });
-    assert.equal(s1.notice.kind, 'info');
+    assert.equal(s1.notice, null, 'a valid repair candidate does not add a redundant notice');
     assert.equal(s1.isApplied, false);
     // Suggestion does NOT mutate draft
     assert.deepEqual(s1.draft, ['MATH-A', 'STAT-A']);
@@ -990,8 +990,7 @@ describe('suggestion, apply, exact undo, dismiss', () => {
     });
     assert.deepEqual(sSuggested.candidate?.swap, { old: 'STAT-A', replacement: 'STAT-B' });
     assert.equal(sSuggested.candidate?.validation.stagedLinkedRequirement, true);
-    assert.equal(sSuggested.notice.kind, 'info');
-    assert.match(sSuggested.notice.title, /suggested timetable ready/i);
+    assert.equal(sSuggested.notice, null, 'a ready repair opens without a redundant notice');
     assert.deepEqual(sSuggested.draft, ['MATH-A', 'STAT-A']);
   });
 });

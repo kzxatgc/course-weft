@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 
 import Notice from './Notice.jsx';
 import RepairPreview from './components/RepairPreview.jsx';
@@ -18,6 +18,45 @@ import CourseDetailsWindow from './windows/CourseDetailsWindow.jsx';
 import ScenarioWindow from './windows/ScenarioWindow.jsx';
 import WebsiteInfo from './windows/WebsiteInfo.jsx';
 
+function getVisibleWindowTabStops(windowElement) {
+  return [...windowElement.querySelectorAll(
+    'a[href], button, input, select, textarea, [tabindex]'
+  )].filter((element) =>
+    element.tabIndex >= 0 &&
+    !element.matches(':disabled') &&
+    !element.closest('[hidden], [inert]') &&
+    element.getClientRects().length > 0
+  );
+}
+
+function getWindowEntryTarget(windowId, windowElement) {
+  const entrySelectors = {
+    schedule: '[data-course-card-id]:not(:disabled)',
+    scenarios: '.nb-scenario-select-btn',
+    settings: '.nb-theme-card',
+    profile: '[aria-label^="Minimize "]',
+    courseDetails: '#course-details-search',
+  };
+  const entrySelector = entrySelectors[windowId];
+  const entryTarget = entrySelector
+    ? windowElement.querySelector(entrySelector)
+    : null;
+  if (entryTarget instanceof HTMLElement && entryTarget.tabIndex >= 0) {
+    return entryTarget;
+  }
+
+  if (windowId === 'schedule') {
+    const searchTarget = windowElement.querySelector(
+      'input[aria-label="Search courses by code or title"]'
+    );
+    if (searchTarget instanceof HTMLElement && searchTarget.tabIndex >= 0) {
+      return searchTarget;
+    }
+  }
+
+  return getVisibleWindowTabStops(windowElement)[0] || null;
+}
+
 /**
  * AppShell — neo-brutalist desktop OS container for Course Weft.
  *
@@ -35,6 +74,7 @@ import WebsiteInfo from './windows/WebsiteInfo.jsx';
  */
 export default function AppShell({ state, dispatch, children }) {
   useZoom();
+  const repairFocusOriginRef = useRef(null);
   const { notice, scenario, availableCourses } = state;
   const { themeId, selectTheme, themes } = useTheme();
   const {
@@ -45,6 +85,204 @@ export default function AppShell({ state, dispatch, children }) {
     minimizeWindow,
     moveWindow,
   } = useWindowManager();
+
+  useEffect(() => {
+    const rememberRepairFocusOrigin = (event) => {
+      const element = event.detail?.element;
+      if (!(element instanceof HTMLElement)) return;
+
+      const cards = [...document.querySelectorAll('[data-course-card-id]')];
+      repairFocusOriginRef.current = {
+        element,
+        index: cards.indexOf(element),
+      };
+    };
+
+    window.addEventListener('courseweft:repair-focus-origin', rememberRepairFocusOrigin);
+    return () => {
+      window.removeEventListener('courseweft:repair-focus-origin', rememberRepairFocusOrigin);
+    };
+  }, []);
+
+  useEffect(() => {
+    const focusDockWindowEntry = (event) => {
+      if (event.key !== 'Tab') return;
+
+      const target = event.target instanceof HTMLElement ? event.target : null;
+      if (!target) return;
+
+      const activeWindow = target.closest('.nb-window[id^="window-"]');
+      if (activeWindow) {
+        const tabStops = getVisibleWindowTabStops(activeWindow);
+        const windowId = activeWindow.id.slice('window-'.length);
+        const dockButtons = [...document.querySelectorAll('.nb-dock .nb-dock-item:not(:disabled)')];
+        const currentDockIndex = dockButtons.findIndex((button) => button.id === `dock-${windowId}`);
+
+        if (windowId === 'profile') {
+          if (event.shiftKey) {
+            const minimizeButton = activeWindow.querySelector('[aria-label="Minimize Profile"]');
+            const closeButton = activeWindow.querySelector('[aria-label="Close Profile"]');
+            if (target === minimizeButton && closeButton instanceof HTMLElement) {
+              event.preventDefault();
+              closeButton.focus();
+              return;
+            }
+
+            if (target === closeButton) {
+              const previousDockButton = currentDockIndex > 0
+                ? dockButtons[currentDockIndex - 1]
+                : null;
+              if (previousDockButton) {
+                event.preventDefault();
+                previousDockButton.focus();
+                return;
+              }
+            } else if (minimizeButton instanceof HTMLElement) {
+              event.preventDefault();
+              minimizeButton.focus();
+              return;
+            }
+          } else {
+            const nextDockButton = currentDockIndex >= 0
+              ? dockButtons[currentDockIndex + 1]
+              : null;
+            if (nextDockButton) {
+              event.preventDefault();
+              nextDockButton.focus();
+              return;
+            }
+          }
+        }
+
+        if (event.shiftKey) {
+          if (tabStops[0] !== target) return;
+
+          const previousDockButton = currentDockIndex > 0
+            ? dockButtons[currentDockIndex - 1]
+            : null;
+          if (previousDockButton) {
+            event.preventDefault();
+            previousDockButton.focus();
+          }
+          return;
+        }
+
+        if (tabStops[tabStops.length - 1] !== target) return;
+
+        const nextDockButton = currentDockIndex >= 0 ? dockButtons[currentDockIndex + 1] : null;
+        if (nextDockButton) {
+          event.preventDefault();
+          nextDockButton.focus();
+        }
+        return;
+      }
+
+      const dockButton = target.closest('.nb-dock-item');
+      const windowId = dockButton?.id.replace(/^dock-/, '');
+      const windowState = windows.find((win) => win.id === windowId);
+      if (!windowState?.isOpen) return;
+
+      const windowElement = document.getElementById(`window-${windowId}`);
+      if (!windowElement) return;
+      const targetInWindow = getWindowEntryTarget(windowId, windowElement);
+      if (!(targetInWindow instanceof HTMLElement)) return;
+
+      if (windowState.isMinimized) {
+        event.preventDefault();
+        openWindow(windowId);
+        requestAnimationFrame(() => {
+          const restoredWindow = document.getElementById(`window-${windowId}`);
+          getWindowEntryTarget(windowId, restoredWindow)?.focus();
+        });
+        return;
+      }
+
+      const topZIndex = Math.max(
+        0,
+        ...windows.filter((win) => win.isOpen && !win.isMinimized).map((win) => win.zIndex)
+      );
+      if (windowState.zIndex < topZIndex) bringToFront(windowId);
+      event.preventDefault();
+      targetInWindow.focus();
+    };
+
+    document.addEventListener('keydown', focusDockWindowEntry, true);
+    return () => document.removeEventListener('keydown', focusDockWindowEntry, true);
+  }, [bringToFront, openWindow, windows]);
+
+  function restoreRepairFocusOrigin() {
+    const origin = repairFocusOriginRef.current;
+    repairFocusOriginRef.current = null;
+    if (!origin) return;
+
+    const cards = [...document.querySelectorAll('[data-course-card-id]:not(:disabled)')];
+    const fallbackCard = cards[Math.min(Math.max(origin.index, 0), cards.length - 1)];
+    const target = origin.element.isConnected && !origin.element.disabled
+      ? origin.element
+      : fallbackCard;
+    focusCourseCard(target);
+  }
+
+  function focusCourseCard(card) {
+    if (!card) return;
+
+    const courseId = card.dataset.courseCardId;
+    if (courseId) {
+      window.dispatchEvent(new CustomEvent('courseweft:restore-course-preview', {
+        detail: { courseId },
+      }));
+    }
+
+    requestAnimationFrame(() => {
+      if (card.isConnected && !card.disabled) card.focus();
+    });
+  }
+
+  function closeRepairAfterApply() {
+    closeWindow('repair');
+  }
+
+  useEffect(() => {
+    if (!state.isApplied || notice?.title !== 'Timetable updated') return;
+
+    const origin = repairFocusOriginRef.current;
+    if (!origin) return;
+    repairFocusOriginRef.current = null;
+
+    const requestedCourse = availableCourses.find(
+      (course) => course.id === (state.request || origin.element.dataset.courseCardId)
+    );
+    const requiredGroups = requestedCourse?.requires?.map((requirement) => requirement.linkedGroup) || [];
+    const linkedFollowup = availableCourses.find((course) =>
+      !state.draft.includes(course.id) &&
+      (
+        course.requiredBy === requestedCourse?.id ||
+        Boolean(course.linkedGroup && requiredGroups.includes(course.linkedGroup))
+      )
+    );
+    const linkedCard = linkedFollowup
+      ? document.querySelector(`[data-course-card-id="${CSS.escape(linkedFollowup.id)}"]:not(:disabled)`)
+      : null;
+    if (linkedCard) {
+      focusCourseCard(linkedCard);
+      return;
+    }
+
+    const cards = [...document.querySelectorAll('[data-course-card-id]:not(:disabled)')];
+    const nextCard = cards[Math.min(Math.max(origin.index, 0), cards.length - 1)];
+    focusCourseCard(nextCard);
+  }, [availableCourses, notice, state.draft, state.isApplied, state.request]);
+
+  function restoreNoticeFocus() {
+    restoreRepairFocusOrigin();
+  }
+
+  function closeWindowAndFocusDock(id) {
+    closeWindow(id);
+    requestAnimationFrame(() => {
+      document.getElementById(`dock-${id}`)?.focus();
+    });
+  }
 
   function handleDockClick(id) {
     const win = windows.find((w) => w.id === id);
@@ -85,11 +323,6 @@ export default function AppShell({ state, dispatch, children }) {
 
   return (
     <>
-      {/* Skip to main content (keyboard) */}
-      <a href="#schedule-workspace" className="nb-skip-link">
-        Skip to schedule
-      </a>
-
       {/* ── Top Menu Bar (brand logo left, semester + clock right) ─── */}
       <MenuBar />
 
@@ -104,7 +337,7 @@ export default function AppShell({ state, dispatch, children }) {
             {...scheduleWin}
             width={Math.min(1280, typeof window !== 'undefined' ? window.innerWidth - 40 : 1280)}
             maxBodyHeight="calc(100vh - 141px)"
-            onClose={closeWindow}
+            onClose={closeWindowAndFocusDock}
             onMinimize={minimizeWindow}
             onFocus={bringToFront}
             onMove={moveWindow}
@@ -117,7 +350,14 @@ export default function AppShell({ state, dispatch, children }) {
                 notice={notice}
                 onDismiss={() => {
                   dispatch({ type: ACTION.CLEAR_NOTICE });
-                  if (notice?.action === 'suggest') closeWindow('repair');
+                  if (notice?.action === 'suggest') {
+                    closeWindow('repair');
+                  }
+                  if (notice?.action === 'suggest' || notice?.action === 'acknowledge') {
+                    restoreNoticeFocus();
+                  } else {
+                    repairFocusOriginRef.current = null;
+                  }
                 }}
                 onAction={() => {
                   dispatch({ type: ACTION.SUGGEST_REPAIR });
@@ -148,7 +388,10 @@ export default function AppShell({ state, dispatch, children }) {
             locked={isRepairFlowLocked}
             allowDragWhenLocked
             centerOn="schedule"
-            onClose={() => closeWindow('repair')}
+            onClose={() => {
+              repairFocusOriginRef.current = null;
+              closeWindow('repair');
+            }}
             onMinimize={minimizeWindow}
             onFocus={bringToFront}
             onMove={moveWindow}
@@ -156,7 +399,13 @@ export default function AppShell({ state, dispatch, children }) {
             <RepairPreview
               state={state}
               dispatch={dispatch}
-              onClose={() => closeWindow('repair')}
+              onClose={() => {
+                if (state.isApplied) closeRepairAfterApply();
+                else {
+                  closeWindow('repair');
+                  restoreRepairFocusOrigin();
+                }
+              }}
             />
           </DesktopWindow>
         )}
@@ -165,7 +414,7 @@ export default function AppShell({ state, dispatch, children }) {
         {windows.find((w) => w.id === 'scenarios') && (
           <DesktopWindow
             {...windows.find((w) => w.id === 'scenarios')}
-            onClose={closeWindow}
+            onClose={closeWindowAndFocusDock}
             onMinimize={minimizeWindow}
             onFocus={bringToFront}
             onMove={moveWindow}
@@ -182,7 +431,7 @@ export default function AppShell({ state, dispatch, children }) {
         {windows.find((w) => w.id === 'settings') && (
           <DesktopWindow
             {...windows.find((w) => w.id === 'settings')}
-            onClose={closeWindow}
+            onClose={closeWindowAndFocusDock}
             onMinimize={minimizeWindow}
             onFocus={bringToFront}
             onMove={moveWindow}
@@ -200,7 +449,7 @@ export default function AppShell({ state, dispatch, children }) {
         {windows.find((w) => w.id === 'profile') && (
           <DesktopWindow
             {...windows.find((w) => w.id === 'profile')}
-            onClose={closeWindow}
+            onClose={closeWindowAndFocusDock}
             onMinimize={minimizeWindow}
             onFocus={bringToFront}
             onMove={moveWindow}
@@ -214,7 +463,7 @@ export default function AppShell({ state, dispatch, children }) {
         {windows.find((w) => w.id === 'courseDetails') && (
           <DesktopWindow
             {...windows.find((w) => w.id === 'courseDetails')}
-            onClose={closeWindow}
+            onClose={closeWindowAndFocusDock}
             onMinimize={minimizeWindow}
             onFocus={bringToFront}
             onMove={moveWindow}
@@ -228,7 +477,7 @@ export default function AppShell({ state, dispatch, children }) {
         {windows.find((w) => w.id === 'websiteInfo') && (
           <DesktopWindow
             {...windows.find((w) => w.id === 'websiteInfo')}
-            onClose={closeWindow}
+            onClose={closeWindowAndFocusDock}
             onMinimize={minimizeWindow}
             onFocus={bringToFront}
             onMove={moveWindow}

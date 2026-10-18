@@ -41,6 +41,7 @@ export default function DesktopWindow({
   inert = false,
 }) {
   const windowRef = useRef(null);
+  const windowBodyRef = useRef(null);
   const dragOffset = useRef({ x: 0, y: 0 });
   const livePos = useRef(pos);
   const visibilityRef = useRef({ isOpen: false, isMinimized: true });
@@ -122,6 +123,38 @@ export default function DesktopWindow({
     [id, locked, allowDragWhenLocked, onFocus, onMove]
   );
 
+  function handleWindowScrollKeyDown(event) {
+    if (event.altKey || event.ctrlKey || event.metaKey) return;
+
+    const target = event.target;
+    if (target instanceof HTMLElement && (
+      target.isContentEditable ||
+      target.matches('input, textarea, select')
+    )) return;
+
+    const key = event.key.toLowerCase();
+    const direction = key === 'arrowdown' || key === 's'
+      ? 1
+      : key === 'arrowup' || key === 'w'
+        ? -1
+        : 0;
+    if (direction === 0) return;
+
+    const body = windowBodyRef.current;
+    if (!body) return;
+    const maxScrollTop = body.scrollHeight - body.clientHeight;
+    if (maxScrollTop <= 0) return;
+
+    const nextScrollTop = Math.max(
+      0,
+      Math.min(maxScrollTop, body.scrollTop + direction * 80)
+    );
+    if (nextScrollTop === body.scrollTop) return;
+
+    event.preventDefault();
+    body.scrollTop = nextScrollTop;
+  }
+
   if (!isOpen) return null;
 
   const posStyle = {
@@ -143,6 +176,7 @@ export default function DesktopWindow({
       className="nb-window flex min-w-[280px] max-w-[calc(100vw-16px)] flex-col border-[3px] border-[var(--color-navy)] bg-[var(--color-cream)] shadow-[6px_6px_0_var(--color-navy)]"
       style={posStyle}
       onPointerDown={() => onFocus(id)}
+      onKeyDownCapture={handleWindowScrollKeyDown}
     >
       {/* ── Title Bar ─────────────────────────────────────────── */}
       <div
@@ -195,6 +229,7 @@ export default function DesktopWindow({
       {/* ── Window Body ───────────────────────────────────────── */}
       {(!isMinimized || id === 'schedule') && (
         <div
+          ref={windowBodyRef}
           hidden={isMinimized}
           className={`nb-win-body min-h-0 flex-1 overflow-y-auto bg-[var(--color-cream)] ${id === 'repair' ? 'p-[24px]' : 'p-1.5'} ${id === 'courseDetails' ? 'nb-win-body--course-details' : ''} text-[var(--color-charcoal)]`}
           onPointerDown={locked ? (event) => event.stopPropagation() : undefined}

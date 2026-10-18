@@ -45,6 +45,79 @@ export default function WebsiteInfo() {
         </p>
       </div>
 
+      {/* ── Keyboard navigation guide ─────────────────────────────── */}
+      <section className="nb-info-section nb-keyboard-guide" aria-labelledby="keyboard-guide-heading">
+        <h3 className="nb-info-section-heading" id="keyboard-guide-heading">
+          KEYBOARD NAVIGATION
+        </h3>
+        <p className="nb-win-desc">
+          Navigate the workspace without a mouse. The highlighted keys show what to press:
+        </p>
+        <div
+          className="nb-keyboard"
+          role="img"
+          aria-label="Keyboard diagram highlighting Tab, both Shift keys, Enter, Space, Q, W, and S for keyboard navigation, course actions, and scrolling."
+        >
+          <div className="nb-keyboard-row">
+            <span className="nb-keyboard-key nb-keyboard-key--wide">Esc</span>
+            {'1234567890'.split('').map((key) => (
+              <span className="nb-keyboard-key" key={key}>{key}</span>
+            ))}
+            <span className="nb-keyboard-key nb-keyboard-key--wide">Backspace</span>
+          </div>
+          <div className="nb-keyboard-row">
+            <span className="nb-keyboard-key nb-keyboard-key--wide nb-keyboard-key--highlight">Tab</span>
+            {'QWERTYUIOP'.split('').map((key) => (
+              <span
+                className={`nb-keyboard-key${key === 'Q' || key === 'W' ? ' nb-keyboard-key--highlight' : ''}`}
+                key={key}
+              >{key}</span>
+            ))}
+          </div>
+          <div className="nb-keyboard-row">
+            <span className="nb-keyboard-key nb-keyboard-key--wide">Caps</span>
+            {'ASDFGHJKL'.split('').map((key) => (
+              <span
+                className={`nb-keyboard-key${key === 'S' ? ' nb-keyboard-key--highlight' : ''}`}
+                key={key}
+              >{key}</span>
+            ))}
+            <span className="nb-keyboard-key nb-keyboard-key--wide nb-keyboard-key--highlight">Enter</span>
+          </div>
+          <div className="nb-keyboard-row">
+            <span className="nb-keyboard-key nb-keyboard-key--extra-wide nb-keyboard-key--highlight">Shift</span>
+            {'ZXCVBNM'.split('').map((key) => (
+              <span
+                className="nb-keyboard-key"
+                key={key}
+              >{key}</span>
+            ))}
+            <span className="nb-keyboard-key nb-keyboard-key--extra-wide nb-keyboard-key--highlight">Shift</span>
+          </div>
+          <div className="nb-keyboard-row">
+            <span className="nb-keyboard-key nb-keyboard-key--wide">Ctrl</span>
+            <span className="nb-keyboard-key">Alt</span>
+            <span className="nb-keyboard-key nb-keyboard-key--space nb-keyboard-key--highlight">Space</span>
+            <span className="nb-keyboard-key">Alt</span>
+            <span className="nb-keyboard-key nb-keyboard-key--wide">Ctrl</span>
+          </div>
+        </div>
+        <ul className="nb-keyboard-shortcuts">
+          <li><kbd>Tab</kbd><span>Move focus to the next link, button, or control.</span></li>
+          <li><kbd>Shift</kbd> + <kbd>Tab</kbd><span>Move focus to the previous link, button, or control.</span></li>
+          <li><kbd>Enter</kbd> or <kbd>Space</kbd><span>Activate the focused course card to add or switch that course.</span></li>
+          <li><kbd>W</kbd><span>Scroll up within the active window.</span></li>
+          <li><kbd>S</kbd><span>Scroll down within the active window.</span></li>
+          <li>
+            <kbd>Q</kbd>
+            <span>
+              With a course card focused, activate its <strong>repair</strong> or{' '}
+              <strong className="text-red-600">alert</strong> action when available.
+            </span>
+          </li>
+        </ul>
+      </section>
+
       {/* ── Footer note ──────────────────────────────────────────── */}
       <div className="nb-win-footer-note">
         <span>

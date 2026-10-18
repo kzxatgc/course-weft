@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Search, X, Users, Undo2, Redo2, RotateCcw, Wrench, AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { ACTION, canUndo, canRedo } from '../state/draft-controller.mjs';
 import { INITIAL_DRAFT } from '../domain/available-courses.mjs';
+import { useKeyboardHints } from '../hooks/useKeyboardHints.js';
 
 import { format24hTime, formatCourseSlot } from '../domain/time.mjs';
 import { playSound } from '../audio/optional-sounds.js';
@@ -14,6 +15,7 @@ import {
   isCardOutsidePanel,
   evaluateDrop,
   detectTimeConflict,
+  getConflictingSections,
 } from '../domain/drop-preview.mjs';
 
 export { formatCourseSlot };
@@ -33,10 +35,11 @@ function isSectionFull(item) {
  *  - Whole card acts as the accessible Add or Switch control
  *  - Displays enrolled/capacity counts and derived seats remaining
  *  - Clear disclosure that all figures are synthetic sample data
+ *  - Supports keyboard preview and Enter/Space add or switch actions
  *  - Handles controller dispatch for ADD_SECTION and SWITCH_SECTION
  *  - Empty state when no courses match query
  *  - Neo-brutalist styling built with Tailwind utility classes
- *  - Emits onPreviewSectionChange on keyboard focus/blur and when dragging leaves tray
+ *  - Emits onPreviewSectionChange for keyboard focus and active pointer drags
  *
  * @param {{
  *   availableCourses: object[],
@@ -66,16 +69,28 @@ export default function AvailableCourses({
   animatingReturnId = null,
   returningCardId = null,
   linkedOutlineIds = [],
+  animatingSwap = null,
 }) {
   const [localSearch, setLocalSearch] = useState(controlledSearch);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const searchInputId = useId();
   const draggedCardIdRef = useRef(null);
   const previousDraftRef = useRef(draft);
+  const inputModalityRef = useRef('keyboard');
+  const hasUsedPointerRef = useRef(false);
+  const hasStartedKeyboardNavigationRef = useRef(false);
+  const keyboardPreviewIdRef = useRef(null);
+  const pointerPreviewIdRef = useRef(null);
+  const rememberedPreviewIdRef = useRef(null);
+  const lastKeyboardCourseIdRef = useRef(null);
+  const pendingFocusAdvanceRef = useRef(null);
+  const courseStateRef = useRef(null);
 
-  // Shaking card id (briefly set when a full section is dragged).
+  // Shaking card id (briefly set when an unavailable or conflicting section is activated).
   const [shakingId, setShakingId] = useState(null);
   const shakeTimerRef = useRef(null);
+  const [qHintBounceId, setQHintBounceId] = useState(null);
+  const qHintBounceTimerRef = useRef(null);
 
   // Pointer drag-and-drop state
   const [heldCard, setHeldCard] = useState(null);
@@ -83,11 +98,36 @@ export default function AvailableCourses({
   const pointerStateRef = useRef(null);
   const isRestoringTimeoutRef = useRef(null);
   const preservePreviewOnBlurRef = useRef(false);
+  const pendingHistoryFocusRef = useRef(null);
+  const undoButtonRef = useRef(null);
+  const redoButtonRef = useRef(null);
   const panelRef = useRef(null);
   const coursesTrackRef = useRef(null);
   const courseScrollHoldRef = useRef(null);
   const courseScrollClickRef = useRef(false);
+  const leftCourseScrollButtonRef = useRef(null);
+  const rightCourseScrollButtonRef = useRef(null);
+  const courseScrollFocusDirectionRef = useRef(null);
   const [courseScrollState, setCourseScrollState] = useState({ left: false, right: false });
+
+  const updatePreview = useCallback((sectionId) => {
+    if (inputModalityRef.current === 'keyboard') {
+      pointerPreviewIdRef.current = null;
+    }
+    onPreviewSectionChange?.(sectionId ?? pointerPreviewIdRef.current);
+  }, [onPreviewSectionChange]);
+  const isRepairPreviewActive = Boolean(state?.candidate && !state?.isApplied);
+  const [keyboardHintsEnabled] = useKeyboardHints();
+  const [qHintPosition, setQHintPosition] = useState(null);
+
+  function focusTimetableSection(sectionId) {
+    const section = document.querySelector(
+      `[data-testid="timetable-block-${CSS.escape(sectionId)}"]`
+    );
+    if (!(section instanceof HTMLElement)) return false;
+    section.focus();
+    return true;
+  }
 
   // Keep local search in sync when controlled search changes
   useEffect(() => {
@@ -95,19 +135,103 @@ export default function AvailableCourses({
   }, [controlledSearch]);
 
   useEffect(() => {
-    const returnedSection = previousDraftRef.current.some((id) => !draft.includes(id));
+    const focusedDirection = courseScrollFocusDirectionRef.current;
+    if (!focusedDirection || courseScrollState[focusedDirection]) return;
+
+    const nextDirection = focusedDirection === 'left' ? 'right' : 'left';
+    const nextButton = nextDirection === 'left'
+      ? leftCourseScrollButtonRef.current
+      : rightCourseScrollButtonRef.current;
+    if (nextButton && !nextButton.disabled) {
+      courseScrollFocusDirectionRef.current = nextDirection;
+      nextButton.focus();
+    } else {
+      courseScrollFocusDirectionRef.current = null;
+    }
+  }, [courseScrollState]);
+
+  useEffect(() => {
+    const previousDraft = previousDraftRef.current;
+    const draftChanged = !arraysEqual(previousDraft, draft);
+    const returnedSection = previousDraft.some((id) => !draft.includes(id));
+    if (pointerPreviewIdRef.current && draft.includes(pointerPreviewIdRef.current)) {
+      pointerPreviewIdRef.current = null;
+    }
     if (returnedSection) {
       setPressedCardId(null);
       preservePreviewOnBlurRef.current = false;
-      onPreviewSectionChange?.(null);
+      updatePreview(null);
+    }
+
+    const pendingFocusAdvance = pendingFocusAdvanceRef.current;
+    if (pendingFocusAdvance) {
+      if (pendingFocusAdvance.fromId || pendingFocusAdvance.focusTimetable) {
+        const swapApplied =
+          draft.includes(pendingFocusAdvance.activatedId) &&
+          (!pendingFocusAdvance.fromId || !draft.includes(pendingFocusAdvance.fromId));
+        if (swapApplied) {
+          const track = coursesTrackRef.current;
+          const returnedCourseCard = pendingFocusAdvance.fromId
+            ? track?.querySelector(`[data-course-card-id="${CSS.escape(pendingFocusAdvance.fromId)}"]`)
+            : null;
+          let focusRestoredCourse = false;
+          if (returnedCourseCard instanceof HTMLButtonElement && !returnedCourseCard.disabled) {
+            returnedCourseCard.focus();
+            focusRestoredCourse = true;
+          }
+          const focusIncomingSection = !pendingFocusAdvance.fromId &&
+            animatingSwap?.incomingId !== pendingFocusAdvance.activatedId &&
+            focusTimetableSection(pendingFocusAdvance.activatedId);
+          if (focusRestoredCourse || focusIncomingSection) {
+            pendingFocusAdvanceRef.current = null;
+          }
+        } else if (draftChanged) {
+          pendingFocusAdvanceRef.current = null;
+        }
+      } else if (draft.includes(pendingFocusAdvance.activatedId)) {
+        const track = coursesTrackRef.current;
+        if (pendingFocusAdvance.focusCourseId) {
+          const nextCourseCard = track?.querySelector(
+            `[data-course-card-id="${CSS.escape(pendingFocusAdvance.focusCourseId)}"]`
+          );
+          if (nextCourseCard instanceof HTMLButtonElement && !nextCourseCard.disabled) {
+            pendingFocusAdvanceRef.current = null;
+            nextCourseCard.focus();
+          } else if (draftChanged) {
+            pendingFocusAdvanceRef.current = null;
+          }
+        } else {
+          pendingFocusAdvanceRef.current = null;
+          const nextCard = pendingFocusAdvance.candidateIds
+            .map((id) => track?.querySelector(`[data-course-card-id="${CSS.escape(id)}"]`))
+            .find(Boolean);
+          const firstAvailableCard = track?.querySelector('[data-course-card-id]:not(:disabled)');
+          (nextCard || firstAvailableCard)?.focus();
+        }
+      } else if (draftChanged) {
+        pendingFocusAdvanceRef.current = null;
+      }
     }
     previousDraftRef.current = draft;
-  }, [draft, onPreviewSectionChange]);
+  }, [draft, animatingSwap, updatePreview, returningCardId]);
 
   useLayoutEffect(() => {
     setPressedCardId(null);
     preservePreviewOnBlurRef.current = false;
+    pointerPreviewIdRef.current = null;
   }, [selectionResetKey]);
+
+  useLayoutEffect(() => {
+    if (!isRepairPreviewActive) return;
+
+    setHeldCard(null);
+    setPressedCardId(null);
+    pointerStateRef.current = null;
+    if (isRestoringTimeoutRef.current) {
+      clearTimeout(isRestoringTimeoutRef.current);
+      isRestoringTimeoutRef.current = null;
+    }
+  }, [isRepairPreviewActive]);
 
   // Clean up any pending restoration timer on unmount
   useEffect(() => {
@@ -118,12 +242,15 @@ export default function AvailableCourses({
       if (shakeTimerRef.current) {
         clearTimeout(shakeTimerRef.current);
       }
+      if (qHintBounceTimerRef.current) {
+        clearTimeout(qHintBounceTimerRef.current);
+      }
       stopCourseScroll();
     };
   }, []);
 
   /**
-   * Trigger shake on a full-section card (e.g. when drag is attempted).
+   * Trigger shake on a full or conflicting section.
    * Removes the class after the animation completes (420 ms).
    * No-op when prefers-reduced-motion is active (CSS handles it already,
    * but we still want the class added so screen readers get the aria-live ping).
@@ -142,9 +269,66 @@ export default function AvailableCourses({
   const canUndoRepair = state ? canUndo(state) : false;
   const canRedoRepair = state ? canRedo(state) : false;
   const historyTransitionInProgress = Boolean(state?.historyTransition);
+  const canActivateUndo = canUndoRepair && !historyTransitionInProgress;
+  const canActivateRedo = canRedoRepair && !historyTransitionInProgress;
   const isDraftChanged = state
     ? !arraysEqual(draft, INITIAL_DRAFT)
     : false;
+
+  useLayoutEffect(() => {
+    const pendingAction = pendingHistoryFocusRef.current;
+    if (!pendingAction || historyTransitionInProgress) return;
+
+    pendingHistoryFocusRef.current = null;
+    if (
+      pendingAction.action === 'redo' &&
+      !canRedoRepair &&
+      canUndoRepair &&
+      undoButtonRef.current &&
+      !undoButtonRef.current.disabled
+    ) {
+      undoButtonRef.current.focus();
+      return;
+    }
+
+    const sectionsAddedByRedo = pendingAction.action === 'redo'
+      ? draft.filter((id) => !pendingAction.fromDraft.includes(id))
+      : [];
+    if (sectionsAddedByRedo.some(focusTimetableSection)) return;
+
+    const focusNextAfterRedo = () => {
+      const toolbar = redoButtonRef.current?.parentElement;
+      const buttons = [...(toolbar?.querySelectorAll('button') || [])];
+      const redoIndex = buttons.indexOf(redoButtonRef.current);
+      const nextButton = buttons.slice(redoIndex + 1).find((button) => !button.disabled);
+      if (nextButton) {
+        nextButton.focus();
+        return;
+      }
+      coursesTrackRef.current
+        ?.querySelector('[data-course-card-id]:not(:disabled)')
+        ?.focus();
+    };
+
+    if (pendingAction.action === 'undo') {
+      if (canUndoRepair && undoButtonRef.current && !undoButtonRef.current.disabled) {
+        undoButtonRef.current.focus();
+      } else if (canRedoRepair && redoButtonRef.current && !redoButtonRef.current.disabled) {
+        redoButtonRef.current.focus();
+      } else {
+        focusNextAfterRedo();
+      }
+      return;
+    }
+
+    if (canRedoRepair && redoButtonRef.current && !redoButtonRef.current.disabled) {
+      redoButtonRef.current.focus();
+    } else if (canUndoRepair && undoButtonRef.current && !undoButtonRef.current.disabled) {
+      undoButtonRef.current.focus();
+    } else {
+      focusNextAfterRedo();
+    }
+  }, [canRedoRepair, canUndoRepair, draft, historyTransitionInProgress]);
 
   const query = localSearch.trim().toLowerCase();
 
@@ -163,7 +347,180 @@ export default function AvailableCourses({
     const nameMatch = item.title?.toLowerCase().includes(query);
     return Boolean(codeMatch || nameMatch);
   });
+  courseStateRef.current = { availableItems, filteredCourses, availableCourses };
   const availableCount = filteredCourses.filter((item) => !isSectionFull(item)).length;
+  const activeQHintId = repairPreviewId || unavailableLinkedLabPreviewId;
+
+  useLayoutEffect(() => {
+    if (!keyboardHintsEnabled || !activeQHintId) {
+      setQHintPosition(null);
+      return undefined;
+    }
+
+    const updateHintPosition = () => {
+      const anchor = document.querySelector(
+        `[data-course-action-for="${CSS.escape(activeQHintId)}"]`
+      );
+      if (!(anchor instanceof HTMLElement)) {
+        setQHintPosition(null);
+        return;
+      }
+      const rect = anchor.getBoundingClientRect();
+      const position = { left: rect.left + rect.width / 2, top: rect.top - 14 };
+      setQHintPosition((current) => (
+        current?.left === position.left && current?.top === position.top
+          ? current
+          : position
+      ));
+    };
+
+    updateHintPosition();
+    window.addEventListener('resize', updateHintPosition);
+    window.addEventListener('scroll', updateHintPosition, true);
+    window.addEventListener('pointermove', updateHintPosition);
+    return () => {
+      window.removeEventListener('resize', updateHintPosition);
+      window.removeEventListener('scroll', updateHintPosition, true);
+      window.removeEventListener('pointermove', updateHintPosition);
+    };
+  }, [activeQHintId, keyboardHintsEnabled]);
+
+  useEffect(() => {
+    const handlePointerDown = (event) => {
+      hasUsedPointerRef.current = true;
+      if (event.target?.closest?.('[data-repair-action], [data-preview-alert-action]')) return;
+
+      inputModalityRef.current = 'pointer';
+      pendingFocusAdvanceRef.current = null;
+      const clickedCardId = event.target?.closest?.('[data-course-card-id]')?.dataset.courseCardId;
+      const focusedCardId = document.activeElement?.closest?.('[data-course-card-id]')?.dataset.courseCardId;
+      rememberedPreviewIdRef.current =
+        clickedCardId ||
+        keyboardPreviewIdRef.current ||
+        lastKeyboardCourseIdRef.current ||
+        focusedCardId ||
+        null;
+      keyboardPreviewIdRef.current = null;
+    };
+
+    const handleKeyDown = (event) => {
+      inputModalityRef.current = 'keyboard';
+      setPressedCardId(null);
+      const target = event.target;
+      const isTextEntry = target instanceof HTMLElement && (
+        target.isContentEditable ||
+        target.matches('input, textarea, select')
+      );
+      if (isTextEntry) return;
+
+      const isWindowScrollKey = ['arrowup', 'arrowdown', 'w', 's'].includes(event.key.toLowerCase());
+      if (isWindowScrollKey && target instanceof HTMLElement && target.closest('.nb-win-body')) return;
+
+      if (event.key === 'Tab' && !hasStartedKeyboardNavigationRef.current) {
+        hasStartedKeyboardNavigationRef.current = true;
+        const activeElement = document.activeElement;
+        if (
+          !hasUsedPointerRef.current &&
+          !event.shiftKey &&
+          !activeElement?.closest?.('.nb-courses-track, [role="alertdialog"], #window-repair')
+        ) {
+          const firstCard = coursesTrackRef.current
+            ?.querySelector('[data-course-card-id]:not(:disabled)');
+          if (firstCard) {
+            event.preventDefault();
+            firstCard.focus();
+          }
+        }
+      }
+
+      const key = event.key.toLowerCase();
+      const isContextualActionShortcut =
+        (!event.altKey && !event.ctrlKey && !event.metaKey && key === 'q');
+      if (isContextualActionShortcut) {
+        const focusedCourseCard = document.activeElement?.closest?.('[data-course-card-id]');
+        const focusedCourseId = focusedCourseCard?.dataset.courseCardId;
+        const contextualAction = focusedCourseId
+          ? document.querySelector(`[data-course-action-for="${CSS.escape(focusedCourseId)}"]`)
+          : null;
+        if (focusedCourseCard && contextualAction) {
+          event.preventDefault();
+          setQHintBounceId(focusedCourseId);
+          if (qHintBounceTimerRef.current) {
+            clearTimeout(qHintBounceTimerRef.current);
+          }
+          qHintBounceTimerRef.current = window.setTimeout(() => {
+            setQHintBounceId(null);
+            qHintBounceTimerRef.current = null;
+          }, 500);
+          window.dispatchEvent(new CustomEvent('courseweft:repair-focus-origin', {
+            detail: { element: focusedCourseCard },
+          }));
+          contextualAction.click();
+          return;
+        }
+      }
+
+      const focusedCourseId = target instanceof HTMLElement
+        ? target.closest('[data-course-card-id]')?.dataset.courseCardId
+        : null;
+      const rememberedId = rememberedPreviewIdRef.current;
+      if (focusedCourseId && rememberedId && rememberedId !== focusedCourseId) {
+        rememberedPreviewIdRef.current = null;
+        return;
+      }
+      if (!rememberedId) return;
+
+      rememberedPreviewIdRef.current = null;
+      const { availableItems: currentItems, filteredCourses: visibleItems, availableCourses: catalog } =
+        courseStateRef.current || {};
+      if (!currentItems || !visibleItems || !catalog) return;
+
+      if (currentItems.some((item) => item.id === rememberedId)) {
+        keyboardPreviewIdRef.current = rememberedId;
+        lastKeyboardCourseIdRef.current = rememberedId;
+        updatePreview(rememberedId);
+        if (event.key === 'Tab') {
+          event.preventDefault();
+          coursesTrackRef.current
+            ?.querySelector(`[data-course-card-id="${CSS.escape(rememberedId)}"]`)
+            ?.focus();
+        }
+        return;
+      }
+
+      const rememberedIndex = catalog.findIndex((item) => item.id === rememberedId);
+      const nextItem = visibleItems.find((item) => (
+        catalog.findIndex((section) => section.id === item.id) > rememberedIndex
+      )) || visibleItems[0];
+      if (!nextItem) {
+        updatePreview(null);
+        return;
+      }
+      coursesTrackRef.current
+        ?.querySelector(`[data-course-card-id="${CSS.escape(nextItem.id)}"]`)
+        ?.focus();
+    };
+
+    const handleRestoreCoursePreview = (event) => {
+      const courseId = event.detail?.courseId;
+      if (!courseStateRef.current?.availableCourses.some((item) => item.id === courseId)) return;
+
+      inputModalityRef.current = 'keyboard';
+      keyboardPreviewIdRef.current = courseId;
+      lastKeyboardCourseIdRef.current = courseId;
+      rememberedPreviewIdRef.current = null;
+      updatePreview(courseId);
+    };
+
+    document.addEventListener('pointerdown', handlePointerDown, true);
+    document.addEventListener('keydown', handleKeyDown, true);
+    window.addEventListener('courseweft:restore-course-preview', handleRestoreCoursePreview);
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown, true);
+      document.removeEventListener('keydown', handleKeyDown, true);
+      window.removeEventListener('courseweft:restore-course-preview', handleRestoreCoursePreview);
+    };
+  }, [onPreviewSectionChange]);
 
   const updateCourseScrollState = useCallback(() => {
     const track = coursesTrackRef.current;
@@ -310,6 +667,15 @@ export default function AvailableCourses({
       );
     });
 
+    if (dropInfo) {
+      pendingFocusAdvanceRef.current = {
+        activatedId: item.id,
+        candidateIds: [],
+        fromId: draftedAlternate || null,
+        focusTimetable: true,
+      };
+    }
+
     if (draftedAlternate) {
       if (onRequestSwap) {
         onRequestSwap({ toId: item.id, fromId: draftedAlternate, dropInfo });
@@ -329,6 +695,93 @@ export default function AvailableCourses({
     }
   }
 
+  function handleKeyboardCardActivation(event, item) {
+    if (event.detail !== 0 || !dispatch || repairLockedIds.includes(item.id)) return;
+    pendingFocusAdvanceRef.current = null;
+    event.preventDefault();
+    event.currentTarget.focus();
+
+    if (isSectionFull(item)) {
+      triggerShake(item.id);
+      dispatch({
+        type: ACTION.SET_NOTICE,
+        payload: {
+          kind: 'error',
+          title: 'Section is full',
+          message: `${item.title} (${item.id}) has no open seats.`,
+        },
+      });
+      return;
+    }
+
+    const draftedAlternate = draft.find((draftId) => {
+      const drafted = availableCourses.find((course) => course.id === draftId);
+      return Boolean(
+        drafted &&
+        (
+          (drafted.course === item.course && drafted.component === item.component) ||
+          item.alternates?.includes(draftId) ||
+          drafted.alternates?.includes(item.id)
+        )
+      );
+    });
+    const conflictingSections = getConflictingSections(
+      item,
+      selectedSections.filter((section) => section.id !== draftedAlternate)
+    );
+
+    if (conflictingSections.length > 0) {
+      triggerShake(item.id);
+      const conflicts = conflictingSections
+        .map((section) => `${section.id} (${formatCourseSlot(section)})`)
+        .join('; ');
+      dispatch({
+        type: ACTION.SET_NOTICE,
+        payload: {
+          kind: 'error',
+          title: 'Class clash',
+          message: `${item.title} (${item.id}) conflicts with ${conflicts}. The timetable has not been changed.`,
+          emphasizedCourseIds: [item.id, ...conflictingSections.map((section) => section.id)],
+        },
+      });
+      return;
+    }
+
+    const currentIndex = filteredCourses.findIndex((course) => course.id === item.id);
+    const candidateIds = [
+      ...filteredCourses.slice(currentIndex + 1),
+      ...filteredCourses.slice(0, Math.max(0, currentIndex)),
+    ].map((course) => course.id);
+    const requiredCourse = item.requires
+      ?.flatMap((requirement) => availableCourses.filter((course) => (
+        course.component === requirement.component &&
+        course.linkedGroup === requirement.linkedGroup &&
+        !draft.includes(course.id) &&
+        !isSectionFull(course) &&
+        !repairLockedIds.includes(course.id)
+      )))
+      .find(Boolean);
+    pendingFocusAdvanceRef.current = {
+      activatedId: item.id,
+      candidateIds,
+      fromId: draftedAlternate || null,
+      focusCourseId: requiredCourse?.id ?? null,
+      focusTimetable: !requiredCourse,
+    };
+    pointerPreviewIdRef.current = null;
+    keyboardPreviewIdRef.current = null;
+    onPreviewSectionChange?.(null);
+    handleCardClick(item);
+  }
+
+  function rememberContextualActionOrigin(courseId) {
+    const card = document.querySelector(`[data-course-card-id="${CSS.escape(courseId)}"]`);
+    if (!(card instanceof HTMLElement)) return;
+
+    window.dispatchEvent(new CustomEvent('courseweft:repair-focus-origin', {
+      detail: { element: card },
+    }));
+  }
 
   function handlePointerDown(e, item) {
     if (e.button !== 0) return; // Only primary button
@@ -341,6 +794,14 @@ export default function AvailableCourses({
     if (isSectionFull(item)) {
       e.preventDefault();
       triggerShake(item.id);
+      dispatch?.({
+        type: ACTION.SET_NOTICE,
+        payload: {
+          kind: 'error',
+          title: 'Section is full',
+          message: `${item.title} (${item.id}) has no open seats.`,
+        },
+      });
       return;
     }
 
@@ -408,7 +869,7 @@ export default function AvailableCourses({
         });
 
         // Show fixed-slot preview as soon as dragging starts
-        onPreviewSectionChange?.(cur.item.id);
+        updatePreview(cur.item.id);
       }
     }
 
@@ -423,7 +884,7 @@ export default function AvailableCourses({
       cleanupListeners();
       if (!pointerStateRef.current) return;
       const cur = pointerStateRef.current;
-      onPreviewSectionChange?.(null);
+      updatePreview(null);
 
       if (cur.isDragging) {
         setHeldCard({
@@ -463,7 +924,11 @@ export default function AvailableCourses({
       const cur = pointerStateRef.current;
 
       if (!cur.isDragging) {
-        // Simple click (no drag): do nothing, just clean up pointer state
+        // A click selects the card for preview without committing it to the timetable.
+        rememberedPreviewIdRef.current = cur.item.id;
+        lastKeyboardCourseIdRef.current = cur.item.id;
+        pointerPreviewIdRef.current = cur.item.id;
+        onPreviewSectionChange?.(cur.item.id);
         pointerStateRef.current = null;
         return;
       }
@@ -492,7 +957,7 @@ export default function AvailableCourses({
           dropPoint: { x: upEvent.clientX, y: upEvent.clientY },
           origRect: { ...cur.origRect },  // Section B's original card position in the tray
         };
-        onPreviewSectionChange?.(null);
+        updatePreview(null);
         setHeldCard(null);
         pointerStateRef.current = null;
         handleCardClick(cur.item, dropInfo);
@@ -544,20 +1009,20 @@ export default function AvailableCourses({
       <section
         ref={panelRef}
         aria-labelledby="catalogue-heading"
-        className="nb-courses-panel flex-1 min-w-0 border-[2.5px] border-[var(--color-navy)] bg-[var(--color-cream)] overflow-hidden shadow-none"
+        className="nb-courses-panel relative !overflow-visible flex-1 min-w-0 border-[2.5px] border-[var(--color-navy)] bg-[var(--color-cream)] shadow-none"
         onDragLeave={(e) => {
           if (draggedCardIdRef.current && !e.currentTarget.contains(e.relatedTarget)) {
-            onPreviewSectionChange?.(draggedCardIdRef.current);
+            updatePreview(draggedCardIdRef.current);
           }
         }}
         onDragEnter={(e) => {
           if (draggedCardIdRef.current && e.currentTarget.contains(e.target)) {
-            onPreviewSectionChange?.(null);
+            updatePreview(null);
           }
         }}
       >
         {/* ── Header Bar: Heading on Left, Search on Right ─────────── */}
-        <div className="nb-courses-header flex items-center justify-between min-h-[32px] px-2.5 py-1 bg-[var(--color-yellow)] border-b-2 border-[var(--color-navy)] gap-2">
+        <div className="nb-courses-header relative !overflow-visible flex items-center justify-between min-h-[32px] px-2.5 py-1 bg-[var(--color-yellow)] border-b-2 border-[var(--color-navy)] gap-2">
           <div className="flex items-center gap-2 shrink-0">
             <h2
               id="catalogue-heading"
@@ -572,14 +1037,17 @@ export default function AvailableCourses({
               {availableCount}
             </span>
             {repairPreviewId && dispatch && (
+              <div className="nb-context-action relative">
               <button
                 type="button"
-                onPointerDown={(event) => event.preventDefault()}
-                onBlur={() => {
-                  preservePreviewOnBlurRef.current = false;
-                  onPreviewSectionChange?.(null);
-                }}
+                aria-label={`Find a valid repair for ${repairPreviewId}`}
+                title={`Find a valid repair for ${repairPreviewId}`}
+                data-repair-action
+                data-course-action-for={repairPreviewId}
+                className="nb-repair-action inline-flex h-6 w-6 items-center justify-center rounded border-2 border-[var(--color-navy)] bg-white p-0 transition-transform active:translate-x-0.5 active:translate-y-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--color-navy)] cursor-pointer shrink-0"
                 onClick={() => {
+                  rememberContextualActionOrigin(repairPreviewId);
+                  updatePreview(repairPreviewId);
                   dispatch({ type: ACTION.SET_REQUEST, payload: repairPreviewId });
                   dispatch({
                     type: ACTION.SET_NOTICE,
@@ -592,23 +1060,18 @@ export default function AvailableCourses({
                     },
                   });
                 }}
-                aria-label={`Find a valid repair for ${repairPreviewId}`}
-                title={`Find a valid repair for ${repairPreviewId}`}
-                data-repair-action
-                className="nb-repair-action inline-flex h-6 w-6 items-center justify-center rounded border-2 border-[var(--color-navy)] bg-white p-0 transition-transform active:translate-x-0.5 active:translate-y-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--color-navy)] cursor-pointer shrink-0"
               >
-                <Wrench size={12} strokeWidth={2.5} aria-hidden="true" />
+                <Wrench size={12} strokeWidth={3} aria-hidden="true" />
               </button>
+              </div>
             )}
             {unavailableLinkedLabPreviewId && dispatch && (
+              <div className="nb-context-action relative">
               <button
                 type="button"
-                onPointerDown={(event) => event.preventDefault()}
-                onBlur={() => {
-                  preservePreviewOnBlurRef.current = false;
-                  onPreviewSectionChange?.(null);
-                }}
                 onClick={() => {
+                  rememberContextualActionOrigin(unavailableLinkedLabPreviewId);
+                  updatePreview(unavailableLinkedLabPreviewId);
                   const lab = availableCourses.find((item) => item.id === unavailableLinkedLabPreviewId);
                   const parent = availableCourses.find((item) => item.id === lab?.requiredBy);
                   const otherLabs = availableCourses.filter((item) =>
@@ -636,10 +1099,12 @@ export default function AvailableCourses({
                 aria-label={`Get help finding a compatible lab for ${unavailableLinkedLabPreviewId}`}
                 title="No compatible lab placement — contact your academic advisor or registration office"
                 data-preview-alert-action
-                className="nb-preview-alert-action inline-flex h-6 w-6 items-center justify-center rounded border-2 border-[#dc2626] bg-white p-0 transition-transform active:translate-x-0.5 active:translate-y-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--color-navy)] cursor-pointer shrink-0"
+                data-course-action-for={unavailableLinkedLabPreviewId}
+                className="nb-preview-alert-action inline-flex h-6 w-6 items-center justify-center rounded border-2 border-[#dc2626] bg-white p-0 text-[#dc2626] transition-transform active:translate-x-0.5 active:translate-y-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--color-navy)] cursor-pointer shrink-0"
               >
-                <AlertTriangle size={12} strokeWidth={2.5} aria-hidden="true" />
+                <AlertTriangle size={12} strokeWidth={3} aria-hidden="true" />
               </button>
+              </div>
             )}
           </div>
 
@@ -744,11 +1209,16 @@ export default function AvailableCourses({
               const isShaking = shakingId === item.id;
 
               return (
-                <button
+                <div
                   key={item.id}
+                  className="relative flex w-[195px] min-w-[195px] shrink-0 flex-col items-stretch"
+                  role="listitem"
+                >
+                <button
                   type="button"
                   draggable={!isFullSection && !isRepairLocked}
                   disabled={isRepairLocked}
+                  data-course-card-id={item.id}
                   onDragStart={(e) => {
                     if (isFullSection || isRepairLocked) {
                       e.preventDefault();
@@ -763,25 +1233,44 @@ export default function AvailableCourses({
                   }}
                   onDragEnd={() => {
                     draggedCardIdRef.current = null;
-                    onPreviewSectionChange?.(null);
+                    updatePreview(null);
                   }}
                   onFocus={() => {
+                    if (inputModalityRef.current !== 'keyboard') return;
+                    const isReturningSwappedSection =
+                      pendingFocusAdvanceRef.current?.fromId === item.id;
+                    if (
+                      lastKeyboardCourseIdRef.current !== item.id &&
+                      !isReturningSwappedSection
+                    ) {
+                      pendingFocusAdvanceRef.current = null;
+                    }
+                    rememberedPreviewIdRef.current = null;
+                    keyboardPreviewIdRef.current = item.id;
+                    lastKeyboardCourseIdRef.current = item.id;
                     preservePreviewOnBlurRef.current = false;
-                    if (!isFullSection) onPreviewSectionChange?.(item.id);
+                    if (!isFullSection) updatePreview(item.id);
                   }}
                   onBlur={(event) => {
                     const focusMovedToScenarios =
                       event.relatedTarget?.closest?.('#window-scenarios, #dock-scenarios');
+                    const focusMovedToNotice = event.relatedTarget?.closest?.('[role="alertdialog"]');
                     if (
+                      inputModalityRef.current === 'keyboard' &&
                       !preservePreviewOnBlurRef.current &&
                       !focusMovedToScenarios &&
+                      !focusMovedToNotice &&
                       !event.relatedTarget?.closest?.('[data-repair-action], [data-preview-alert-action]')
                     ) {
-                      onPreviewSectionChange?.(null);
+                      if (keyboardPreviewIdRef.current === item.id) {
+                        keyboardPreviewIdRef.current = null;
+                      }
+                      updatePreview(null);
                     }
                   }}
+                  onClick={(event) => handleKeyboardCardActivation(event, item)}
                   onPointerDown={(e) => handlePointerDown(e, item)}
-                  className={`nb-course-card w-[195px] min-w-[195px] shrink-0 bg-[var(--color-cream)] border-2 border-[var(--color-navy)] rounded p-2 flex flex-col justify-between gap-1.5 text-left transition-colors duration-75 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-blue)] touch-none ${
+                  className={`nb-course-card w-full min-w-0 shrink-0 bg-[var(--color-cream)] border-2 border-[var(--color-navy)] rounded p-2 flex flex-col justify-between gap-1.5 text-left transition-colors duration-75 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-blue)] touch-none ${
                     isFullSection
                       ? 'nb-full-section'
                       : isRepairLocked
@@ -797,12 +1286,12 @@ export default function AvailableCourses({
                   data-linked-outline={hasLinkedOutline ? 'true' : 'false'}
                   data-full-section={isFullSection ? 'true' : 'false'}
                   data-repair-locked={isRepairLocked ? 'true' : 'false'}
-                  role="listitem"
                   aria-label={
                     isFullSection
                       ? `${item.title} (${item.id}), ${formatCourseSlot(item)}, FULL — no seats available`
-                      : `${item.title} (${item.id}), ${formatCourseSlot(item)}, ${seatsRemaining} seats remaining — drag onto timetable to add`
+                      : `${item.title} (${item.id}), ${formatCourseSlot(item)}, ${seatsRemaining} seats remaining — press Enter or Space to ${isSwitch ? 'switch' : 'add'}`
                   }
+                  aria-keyshortcuts="Enter Space Q"
                   aria-disabled={isFullSection || isRepairLocked ? 'true' : undefined}
                 >
                   <div>
@@ -852,6 +1341,7 @@ export default function AvailableCourses({
                     </span>
                   )}
                 </button>
+                </div>
               );
 
             })
@@ -876,12 +1366,16 @@ export default function AvailableCourses({
         aria-label="Scroll available courses and timetable history"
       >
         <button
+          ref={undoButtonRef}
           id="undo-repair-button"
           type="button"
-          disabled={!canUndoRepair || historyTransitionInProgress}
+          disabled={!canUndoRepair && !historyTransitionInProgress}
+          aria-disabled={!canUndoRepair || historyTransitionInProgress || undefined}
           onClick={() => {
+            if (historyTransitionInProgress || !canUndoRepair || !dispatch) return;
+            pendingHistoryFocusRef.current = { action: 'undo', fromDraft: [...draft] };
             playSound('undo');
-            if (dispatch) dispatch({ type: ACTION.UNDO_REPAIR });
+            dispatch({ type: ACTION.UNDO_REPAIR });
           }}
           aria-label="Undo last timetable change"
           title={
@@ -891,7 +1385,7 @@ export default function AvailableCourses({
                 ? 'Undo last change'
                 : 'Nothing to undo'
           }
-          className={`flex items-center justify-center w-5 h-5 border-2 transition-colors ${canUndoRepair
+          className={`flex items-center justify-center w-5 h-5 border-2 transition-colors ${canActivateUndo
             ? 'border-[var(--color-navy)] bg-[var(--color-navy)] text-[var(--color-yellow)] hover:bg-[var(--color-yellow)] hover:text-[var(--color-navy)] cursor-pointer'
             : 'border-[var(--color-navy)]/30 bg-transparent text-[var(--color-navy)]/35 cursor-not-allowed'
             }`}
@@ -900,12 +1394,16 @@ export default function AvailableCourses({
         </button>
 
         <button
+          ref={redoButtonRef}
           id="redo-repair-button"
           type="button"
-          disabled={!canRedoRepair || historyTransitionInProgress}
+          disabled={!canRedoRepair && !historyTransitionInProgress}
+          aria-disabled={!canRedoRepair || historyTransitionInProgress || undefined}
           onClick={() => {
+            if (historyTransitionInProgress || !canRedoRepair || !dispatch) return;
+            pendingHistoryFocusRef.current = { action: 'redo', fromDraft: [...draft] };
             playSound('redo');
-            if (dispatch) dispatch({ type: ACTION.REDO_REPAIR });
+            dispatch({ type: ACTION.REDO_REPAIR });
           }}
           aria-label="Redo last timetable change"
           title={
@@ -915,7 +1413,7 @@ export default function AvailableCourses({
                 ? 'Redo last change'
                 : 'Nothing to redo'
           }
-          className={`flex items-center justify-center w-5 h-5 border-2 transition-colors ${canRedoRepair
+          className={`flex items-center justify-center w-5 h-5 border-2 transition-colors ${canActivateRedo
             ? 'border-[var(--color-navy)] bg-[var(--color-navy)] text-[var(--color-yellow)] hover:bg-[var(--color-yellow)] hover:text-[var(--color-navy)] cursor-pointer'
             : 'border-[var(--color-navy)]/30 bg-transparent text-[var(--color-navy)]/35 cursor-not-allowed'
             }`}
@@ -926,8 +1424,10 @@ export default function AvailableCourses({
         <div className="my-1 h-px w-5 shrink-0 bg-[var(--color-navy)]/50" aria-hidden="true" />
 
         <button
+            ref={leftCourseScrollButtonRef}
             type="button"
             disabled={!courseScrollState.left}
+            onFocus={() => { courseScrollFocusDirectionRef.current = 'left'; }}
             onPointerDown={(event) => {
               if (event.button === 0) startCourseScroll(-1);
             }}
@@ -947,8 +1447,10 @@ export default function AvailableCourses({
         </button>
 
         <button
+            ref={rightCourseScrollButtonRef}
             type="button"
             disabled={!courseScrollState.right}
+            onFocus={() => { courseScrollFocusDirectionRef.current = 'right'; }}
             onPointerDown={(event) => {
               if (event.button === 0) startCourseScroll(1);
             }}
@@ -967,6 +1469,24 @@ export default function AvailableCourses({
             <ChevronRight size={14} strokeWidth={2.5} aria-hidden="true" />
         </button>
       </div>
+
+      {keyboardHintsEnabled && activeQHintId && qHintPosition &&
+        typeof document !== 'undefined' && createPortal(
+          <span
+            className={`nb-keyboard-hint${qHintBounceId === activeQHintId ? ' nb-keyboard-hint--bounce' : ''}`}
+            aria-hidden="true"
+            style={{
+              position: 'fixed',
+              top: `${qHintPosition.top}px`,
+              left: `${qHintPosition.left}px`,
+              bottom: 'auto',
+              zIndex: 9998,
+            }}
+          >
+            <span className="nb-keyboard-hint-letter">Q</span>
+          </span>,
+          document.body
+        )}
 
       {/* ── Reset Confirmation Dialog ── */}
       {showResetConfirm && typeof document !== 'undefined' && createPortal(

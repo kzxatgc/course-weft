@@ -94,26 +94,6 @@ body {
   border: 0;
 }
 
-.nb-skip-link {
-  position: fixed;
-  top: -999px;
-  left: 8px;
-  z-index: 9999;
-  padding: 6px 14px;
-  background: var(--color-yellow);
-  border: 3px solid var(--color-navy);
-  box-shadow: 4px 4px 0 var(--color-navy);
-  color: var(--color-navy);
-  font-family: 'Archivo Black', sans-serif;
-  font-size: 13px;
-  font-weight: 900;
-  text-decoration: none;
-}
-.nb-skip-link:focus {
-  top: 8px;
-  outline: 3px solid var(--color-blue);
-}
-
 /* ── Menu Bar (cream bg, brand on left, semester + reset + clock on right) ─ */
 .nb-menubar {
   position: fixed;
@@ -157,8 +137,8 @@ body {
   place-items: center;
   width: 22px;
   height: 22px;
-  background-color: var(--color-navy);
-  color: var(--color-yellow);
+  background-color: #fffdf8;
+  color: var(--color-navy);
   font-family: 'Archivo Black', sans-serif;
   font-size: 12px;
   font-weight: 900;
@@ -636,6 +616,83 @@ body {
   text-transform: uppercase;
 }
 
+.nb-keyboard-guide {
+  gap: 8px;
+}
+.nb-keyboard {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  max-width: 390px;
+  padding: 8px;
+  border: 2px solid var(--color-navy);
+  background: color-mix(in srgb, var(--color-yellow) 30%, var(--color-cream));
+}
+.nb-keyboard-row {
+  display: flex;
+  gap: 3px;
+}
+.nb-keyboard-key {
+  display: flex;
+  flex: 1 1 0;
+  min-width: 0;
+  height: 23px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--color-navy);
+  background: var(--color-cream);
+  color: var(--color-navy);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 1;
+}
+.nb-keyboard-key--wide {
+  flex-grow: 1.7;
+  font-size: 7px;
+}
+.nb-keyboard-key--extra-wide {
+  flex-grow: 2.2;
+}
+.nb-keyboard-key--highlight {
+  background: var(--color-blue);
+  color: #fff;
+  border-color: var(--color-navy);
+}
+.nb-keyboard-key--space {
+  flex-grow: 4;
+}
+.nb-keyboard-shortcuts {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.nb-keyboard-shortcuts li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px;
+  color: var(--color-charcoal);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  line-height: 1.5;
+}
+.nb-keyboard-shortcuts kbd {
+  padding: 1px 5px;
+  border: 1px solid var(--color-navy);
+  background: var(--color-yellow);
+  color: var(--color-navy);
+  font: inherit;
+  font-weight: 700;
+}
+.nb-keyboard-shortcuts li span {
+  flex-basis: 100%;
+}
+
 /* ════════════════════════════════════════════════════════════════
    Demo Scenarios Window
    ════════════════════════════════════════════════════════════════ */
@@ -764,10 +821,14 @@ body {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  width: 100%;
   padding: 10px;
   border: 2px solid var(--color-navy);
   background-color: #fff;
   box-shadow: 3px 3px 0 var(--color-navy);
+  color: inherit;
+  font: inherit;
+  text-align: left;
   cursor: pointer;
   transition: transform 0.06s steps(1), box-shadow 0.06s steps(1);
 }
@@ -1193,7 +1254,7 @@ body {
   flex: 1;
   position: relative;
   height: 100%;
-  overflow: hidden;
+  overflow: visible;
 }
 
 /* Background grid columns matching header */
@@ -1563,8 +1624,8 @@ body {
   top: 3px !important;
   bottom: 3px !important;
   height: calc(100% - 6px) !important;
-  overflow: visible !important;
-  z-index: 12 !important;
+  overflow: visible;
+  z-index: 30 !important;
   border-color: var(--rainbow-c1, #ec4899) !important;
   box-shadow: 0 0 0 2.5px var(--rainbow-c1, #ec4899), 0 0 8px var(--rainbow-c2, #8b5cf6) !important;
 }
@@ -1718,11 +1779,13 @@ body {
   border: 2.5px solid var(--color-navy);
   box-shadow: none;
   background-color: var(--color-cream);
-  overflow: hidden;
+  overflow: visible !important;
   font-family: 'JetBrains Mono', monospace;
 }
 
 .nb-courses-header {
+  position: relative;
+  z-index: 1000;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1774,6 +1837,11 @@ body {
   border-color: #dc2626;
   border-radius: 4px;
   animation: nb-preview-alert-flash 0.8s steps(1, end) infinite;
+}
+
+.nb-preview-alert-action svg {
+  color: inherit;
+  stroke: currentColor;
 }
 
 @keyframes nb-repair-flash {
@@ -1856,6 +1924,93 @@ body {
   background-color: var(--color-yellow);
 }
 
+.nb-course-card:focus-visible:not(.nb-linked-outline):not(.nb-full-section):not(.nb-repair-locked) {
+  transform: none !important;
+  box-shadow: 0 0 0 2px var(--color-blue) !important;
+  background-color: #fff !important;
+}
+
+.nb-course-card:focus-visible {
+  position: relative !important;
+  z-index: 40 !important;
+  outline: 2px solid var(--color-blue) !important;
+  outline-offset: 2px !important;
+}
+
+.nb-course-card.nb-linked-outline:focus-visible {
+  outline-width: 3px !important;
+  outline-offset: 5px !important;
+}
+
+.nb-tt-block.nb-linked-outline:focus-visible {
+  z-index: 40 !important;
+  outline: 3px solid var(--color-blue) !important;
+  outline-offset: 5px !important;
+}
+
+.nb-context-action {
+  position: relative;
+  z-index: 1001;
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+}
+
+.nb-keyboard-hint {
+  display: inline-flex;
+  min-width: 14px;
+  height: 12px;
+  position: absolute;
+  bottom: calc(100% + 2px);
+  left: 50%;
+  transform: translateX(-50%);
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--color-navy);
+  border-radius: 3px;
+  background: linear-gradient(180deg, #fffdf8 0%, #f0eadf 100%);
+  color: var(--color-navy);
+  font-family: monospace;
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  z-index: 99999;
+  box-shadow:
+    2px 2px 0 var(--color-navy),
+    3px 3px 3px rgb(0 0 0 / 22%),
+    inset 0 1px 0 #fff;
+  pointer-events: none;
+}
+
+.nb-keyboard-hint--bounce {
+  animation: nb-key-hint-bounce 0.5s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+@keyframes nb-key-hint-bounce {
+  0% {
+    transform: translate(-50%, 0);
+    box-shadow: 2px 2px 0 var(--color-navy), 3px 3px 3px rgb(0 0 0 / 22%), inset 0 1px 0 #fff;
+  }
+  35% {
+    transform: translate(-50%, -4px);
+    box-shadow: 3px 4px 0 var(--color-navy), 4px 5px 4px rgb(0 0 0 / 18%), inset 0 1px 0 #fff;
+  }
+  70% {
+    transform: translate(-50%, 1px);
+    box-shadow: 1px 1px 0 var(--color-navy), 2px 2px 2px rgb(0 0 0 / 24%), inset 0 1px 0 #fff;
+  }
+  100% {
+    transform: translate(-50%, 0);
+    box-shadow: 2px 2px 0 var(--color-navy), 3px 3px 3px rgb(0 0 0 / 22%), inset 0 1px 0 #fff;
+  }
+}
+
+.nb-keyboard-hint-letter {
+  position: relative;
+  top: -1px;
+}
+
 .nb-course-id {
   font-family: 'Archivo Black', sans-serif;
   font-size: 10.5px;
@@ -1928,6 +2083,10 @@ body {
    Reduced-motion overrides
    ════════════════════════════════════════════════════════════════ */
 @media (prefers-reduced-motion: reduce) {
+  .nb-keyboard-hint--bounce {
+    animation: none;
+  }
+
   *, *::before, *::after {
     scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;

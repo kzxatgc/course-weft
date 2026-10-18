@@ -169,6 +169,6 @@ export function playSound(cue) {
  * This does not play audio and respects the user's sound preference.
  */
 export function preloadSounds() {
-  if (!soundEnabled || typeof window === 'undefined') return;
+  if (typeof window === 'undefined') return;
   getHowls();
 }

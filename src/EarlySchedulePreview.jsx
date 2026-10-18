@@ -481,47 +481,33 @@ export default function EarlySchedulePreview({ state, dispatch }) {
       fromRect = { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
     }
 
-    // Determine animation destination: Section B's original card slot in the Available Courses tray
-    // Prefer origRect (Section B's exact card position before it was picked up)
-    let toRect;
-    if (dropInfo?.origRect) {
-      toRect = {
-        left: dropInfo.origRect.left,
-        top: dropInfo.origRect.top,
-        width: dropInfo.origRect.width,
-        height: dropInfo.origRect.height,
-      };
-    } else {
-      // Fallback: land at the start of the Available Courses track
-      const trackEl = typeof document !== 'undefined'
-        ? document.querySelector('.nb-courses-track')
-        : null;
-      const trackRect = trackEl ? trackEl.getBoundingClientRect() : null;
-      if (!trackRect) {
+    requestAnimationFrame(() => {
+      const returnPlaceholder = document.querySelector(
+        `[data-testid="course-return-placeholder-${CSS.escape(fromId)}"]`
+      );
+      const placeholderRect = returnPlaceholder?.getBoundingClientRect();
+      if (!placeholderRect) {
         setReturningCardId(null);
         return;
       }
-      toRect = {
-        left: trackRect.left + 8,
-        top: trackRect.top + 8,
-        width: 195,
-        height: Math.max(fromRect.height, 56),
+      const toRect = {
+        left: placeholderRect.left,
+        top: placeholderRect.top,
+        width: placeholderRect.width,
+        height: placeholderRect.height,
       };
-    }
 
-    // Launch the animated card flying from the drop point to the Available Courses tray slot
-    setReturningCard({
-      item: fromItem,
-      fromRect,
-      toRect,
-      isMoving: false,
-    });
+      setReturningCard({
+        item: fromItem,
+        fromRect,
+        toRect,
+        isMoving: false,
+      });
 
-    // Double RAF: first frame paints at fromRect (no transition), second frame
-    // applies --moving class + toRect coords so the CSS transition fires.
-    requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        setReturningCard((prev) => (prev ? { ...prev, isMoving: true } : null));
+        requestAnimationFrame(() => {
+          setReturningCard((prev) => (prev ? { ...prev, isMoving: true } : null));
+        });
       });
     });
 
@@ -575,6 +561,7 @@ export default function EarlySchedulePreview({ state, dispatch }) {
             animatingReturnId={returningCardId}
             returningCardId={returningCardId}
             linkedOutlineIds={linkedOutlineIds}
+            animatingSwap={animatingSwap}
           />
 
           {/* ── Weekly Timetable — spans entire window width ── */}

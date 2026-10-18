@@ -29,6 +29,7 @@ export default function CourseDetailsWindow({ availableCourses }) {
           id="course-details-search"
           className="nb-course-search"
           type="search"
+          aria-label="Search courses by code or title"
           value={search}
           onChange={(event) => setSearch(event.target.value)}
           placeholder="Search by course code or title..."

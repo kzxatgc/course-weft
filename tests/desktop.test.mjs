@@ -454,6 +454,16 @@ describe('Timetable — remove control (domain side)', () => {
     const s1 = reduce(s0, { type: ACTION.REMOVE_SECTION, payload: 'MATH-A' });
     assert.equal(s1.notice?.kind, 'success');
   });
+
+  it('moves focus to the next timetable course after a focused section is removed', async () => {
+    const { readFileSync } = await import('node:fs');
+    const source = readFileSync(new URL('../src/components/Timetable.jsx', import.meta.url), 'utf8');
+    assert.ok(source.includes('pendingRemoveFocusRef.current = { id, blockIds, target }'));
+    assert.ok(source.includes('const nextId = pending.blockIds'));
+    assert.ok(source.includes('timetableBlock.focus()'));
+    assert.ok(source.includes('returnedCourse.focus()'));
+    assert.ok(source.includes('onRemove(sec.id, event.currentTarget)'));
+  });
 });
 
 // ── Available Courses search, 24h slots, and cards ────────────────
@@ -548,6 +558,7 @@ describe('Repair Preview impact groups and controller wiring', () => {
     const s1 = reduce(s0, { type: ACTION.SUGGEST_REPAIR, payload: 'BIO-214' });
     assert.ok(s1.candidate !== null, 'candidate must be populated');
     assert.ok(s1.candidate.validation?.ok, 'candidate must be independently validated');
+    assert.equal(s1.notice, null, 'opening a valid repair does not show a suggested-timetable notice');
 
     // Derivation of groups:
     const swap = s1.candidate.swap;
@@ -720,21 +731,24 @@ describe('Apply / Undo / Dismiss / Reset wiring', () => {
     assert.ok(!applyReducer.includes("title: 'Timetable updated'"));
     assert.ok(previewSource.includes("title: 'Timetable updated'"));
     assert.ok(previewSource.includes('showAppliedNotice();'));
-    assert.ok(previewSource.includes('setRepairTransition(\'idle\');\n          showAppliedNotice();'));
+    assert.match(
+      previewSource.replace(/\s+/g, ' '),
+      /setRepairTransition\('idle'\); showAppliedNotice\(\);/
+    );
   });
 
   it('Notice does not render timetable success as a modal dialog', async () => {
     const { readFileSync } = await import('node:fs');
     const source = readFileSync(new URL('../src/Notice.jsx', import.meta.url), 'utf8');
     assert.ok(!source.includes('success-dialog-title'));
-    assert.ok(source.includes('!modalContent && toastMessages.map'));
+    assert.ok(source.includes('!modalContent && toastMessages.length > 0'));
   });
 
   it('ordinary notices are compact, top-centered, animated, and automatically dismissed', async () => {
     const { readFileSync } = await import('node:fs');
     const noticeSource = readFileSync(new URL('../src/Notice.jsx', import.meta.url), 'utf8');
     const shellSource = readFileSync(new URL('../src/AppShell.jsx', import.meta.url), 'utf8');
-    const cssSource = readFileSync(new URL('../src/app.css', import.meta.url), 'utf8');
+    const cssSource = readFileSync(new URL('../src/app.css', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
 
     assert.ok(noticeSource.includes('const NOTICE_DURATION_MS = 1300;'));
     assert.ok(noticeSource.includes('window.setTimeout'));
@@ -744,6 +758,7 @@ describe('Apply / Undo / Dismiss / Reset wiring', () => {
     assert.ok(noticeSource.includes('toastMessages.map(({ id, notice: toastNotice }) => ('));
     assert.ok(!noticeSource.includes("notice.title !== 'Section changed'"));
     assert.ok(shellSource.includes('<div id="schedule-workspace" className="relative">'));
+    assert.ok(!shellSource.includes('Skip to schedule') && !cssSource.includes('.nb-skip-link'), 'The skip-to-schedule link and its styles are removed');
     assert.ok(cssSource.includes('#notice-region {'));
     assert.ok(noticeSource.includes('createPortal('));
     assert.ok(noticeSource.includes('rect.top - 26'));
@@ -847,6 +862,112 @@ describe('Apply / Undo / Dismiss / Reset wiring', () => {
     assert.ok(windowSource.includes('hidden={isMinimized}'));
   });
 
+  it('routes dock Tab to the Profile minimize control and Course Details search', async () => {
+    const { readFileSync } = await import('node:fs');
+    const shellSource = readFileSync(new URL('../src/AppShell.jsx', import.meta.url), 'utf8');
+    const detailsSource = readFileSync(
+      new URL('../src/windows/CourseDetailsWindow.jsx', import.meta.url),
+      'utf8'
+    );
+    assert.ok(shellSource.includes('const windowState = windows.find((win) => win.id === windowId)'));
+    assert.ok(shellSource.includes("courseDetails: '#course-details-search'"));
+    assert.ok(shellSource.includes('function closeWindowAndFocusDock(id)'));
+    assert.ok(shellSource.includes('document.getElementById(`dock-${id}`)?.focus()'));
+    assert.ok(shellSource.includes('onClose={closeWindowAndFocusDock}'));
+    assert.ok(shellSource.includes("target.closest('.nb-window[id^=\"window-\"]')"));
+    assert.ok(shellSource.includes('if (event.shiftKey)'));
+    assert.ok(shellSource.includes("if (windowId === 'profile')"));
+    assert.ok(shellSource.includes('activeWindow.querySelector(\'[aria-label="Minimize Profile"]\')'));
+    assert.ok(shellSource.includes('activeWindow.querySelector(\'[aria-label="Close Profile"]\')'));
+    assert.ok(shellSource.includes('target === minimizeButton && closeButton instanceof HTMLElement'));
+    assert.ok(shellSource.includes('target === closeButton'));
+    assert.ok(shellSource.includes('target === minimizeButton && closeButton instanceof HTMLElement'));
+    assert.ok(shellSource.includes('dockButtons[currentDockIndex + 1]'));
+    assert.ok(shellSource.includes('if (tabStops[0] !== target) return'));
+    assert.ok(shellSource.includes('const previousDockButton = currentDockIndex > 0'));
+    assert.ok(shellSource.includes('previousDockButton.focus()'));
+    assert.ok(shellSource.includes('if (tabStops[tabStops.length - 1] !== target) return'));
+    assert.ok(shellSource.includes('nextDockButton.focus()'));
+    assert.ok(shellSource.includes("schedule: '[data-course-card-id]:not(:disabled)'"));
+    assert.ok(shellSource.includes("input[aria-label=\"Search courses by code or title\"]"));
+    assert.ok(shellSource.includes("scenarios: '.nb-scenario-select-btn'"));
+    assert.ok(shellSource.includes("settings: '.nb-theme-card'"));
+    assert.ok(shellSource.includes('if (windowState.isMinimized)'));
+    assert.ok(shellSource.includes('openWindow(windowId);'));
+    assert.ok(shellSource.includes('getWindowEntryTarget(windowId, restoredWindow)?.focus()'));
+    assert.ok(detailsSource.includes('id="course-details-search"'));
+  });
+
+  it('makes each color theme a Tab-reachable button and scenarios focus only Select controls', async () => {
+    const { readFileSync } = await import('node:fs');
+    const settingsSource = readFileSync(
+      new URL('../src/windows/SettingsWindow.jsx', import.meta.url),
+      'utf8'
+    );
+    const scenariosSource = readFileSync(
+      new URL('../src/windows/ScenarioWindow.jsx', import.meta.url),
+      'utf8'
+    );
+    assert.ok(settingsSource.includes('<button'));
+    assert.ok(settingsSource.includes('aria-pressed={isActive}'));
+    assert.ok(!settingsSource.includes('type="radio"'));
+    assert.ok(scenariosSource.includes('role="group" aria-label="Demo scenarios"'));
+    assert.ok(!scenariosSource.includes('role="radio"'));
+    assert.ok(!scenariosSource.includes('tabIndex={0}'));
+    assert.ok(scenariosSource.includes('className="nb-scenario-select-btn"'));
+    assert.ok(scenariosSource.includes('pendingSelectFocusRef.current = { scenarioId, index }'));
+    assert.ok(scenariosSource.includes('nextSelect?.focus()'));
+    assert.ok(settingsSource.includes('settings-keyboard-hints-toggle'));
+    assert.ok(settingsSource.includes('Show the Q key hint above repair and alert actions.'));
+    assert.ok(settingsSource.includes('useKeyboardHints()'));
+    assert.ok(settingsSource.includes("playSound('popup');\n            setKeyboardHintsEnabled(!keyboardHintsEnabled);"), 'Toggling contextual hints plays the popup cue when sound is enabled');
+    assert.ok(settingsSource.includes("if (!isActive) {\n                  playSound('popup');"), 'Selecting a different theme plays the popup cue');
+    assert.ok(scenariosSource.includes("if (scenarioId !== scenario) {\n      pendingSelectFocusRef.current = { scenarioId, index };\n      playSound('popup');"), 'Selecting a different scenario plays the popup cue');
+    const hintsSource = readFileSync(new URL('../src/hooks/useKeyboardHints.js', import.meta.url), 'utf8');
+    assert.ok(hintsSource.includes("'course-weft-keyboard-hints'"));
+    assert.ok(hintsSource.includes("return saved === null || saved === 'true'"));
+    const cssSource = readFileSync(new URL('../src/app.css', import.meta.url), 'utf8');
+    assert.match(cssSource, /\.nb-keyboard-hint\s*\{[^}]*z-index: 99999;/);
+    assert.match(cssSource, /\.nb-keyboard-hint\s*\{[^}]*background: linear-gradient\(180deg, #fffdf8 0%, #f0eadf 100%\);/);
+    assert.match(cssSource, /\.nb-keyboard-hint\s*\{[^}]*border-radius: 3px;/);
+    assert.match(cssSource, /\.nb-keyboard-hint\s*\{[^}]*2px 2px 0 var\(--color-navy\)/);
+    assert.match(cssSource, /\.nb-keyboard-hint\s*\{[^}]*font-family: monospace;/);
+    assert.ok(cssSource.includes('@keyframes nb-key-hint-bounce'));
+    assert.match(cssSource, /\.nb-keyboard-hint--bounce\s*\{\s*animation: none;/);
+    assert.match(cssSource, /\.nb-courses-header\s*\{[^}]*z-index: 1000;/);
+  });
+
+  it('supports W/S and arrow-key scrolling within overflowing window bodies', async () => {
+    const { readFileSync } = await import('node:fs');
+    const windowSource = readFileSync(
+      new URL('../src/components/DesktopWindow.jsx', import.meta.url),
+      'utf8'
+    );
+    assert.ok(windowSource.includes('onKeyDownCapture={handleWindowScrollKeyDown}'));
+    assert.ok(windowSource.includes("key === 'arrowdown' || key === 's'"));
+    assert.ok(windowSource.includes("key === 'arrowup' || key === 'w'"));
+    assert.ok(windowSource.includes("target.matches('input, textarea, select')"));
+    assert.ok(windowSource.includes('direction * 80'), 'Each window-scroll key press advances by a small, fixed distance');
+    const coursesSource = readFileSync(
+      new URL('../src/components/AvailableCourses.jsx', import.meta.url),
+      'utf8'
+    );
+    assert.ok(coursesSource.includes("target.closest('.nb-win-body')"), 'Window scroll keys do not trigger course preview focus changes');
+  });
+
+  it('moves focus to the opposite course-scroll button when an arrow reaches its limit', async () => {
+    const { readFileSync } = await import('node:fs');
+    const coursesSource = readFileSync(
+      new URL('../src/components/AvailableCourses.jsx', import.meta.url),
+      'utf8'
+    );
+    assert.ok(coursesSource.includes('if (!focusedDirection || courseScrollState[focusedDirection]) return'));
+    assert.ok(coursesSource.includes('const nextDirection = focusedDirection === \'left\' ? \'right\' : \'left\''));
+    assert.ok(coursesSource.includes('nextButton.focus();'));
+    assert.ok(coursesSource.includes('onFocus={() => { courseScrollFocusDirectionRef.current = \'left\'; }}'));
+    assert.ok(coursesSource.includes('onFocus={() => { courseScrollFocusDirectionRef.current = \'right\'; }}'));
+  });
+
   it('Course Details uses the active scenario catalogue', async () => {
     const { readFileSync } = await import('node:fs');
     const shellSource = readFileSync(new URL('../src/AppShell.jsx', import.meta.url), 'utf8');
@@ -931,6 +1052,7 @@ describe('Apply / Undo / Dismiss / Reset wiring', () => {
     assert.ok(cssSource.includes('.nb-preview-alert-action'));
     assert.ok(cssSource.includes('color: var(--color-navy);'));
     assert.ok(cssSource.includes('@keyframes nb-preview-alert-flash'));
+    assert.match(cssSource, /\.nb-preview-alert-action svg\s*\{\s*color: inherit;\s*stroke: currentColor;/);
     assert.ok(coursesSource.includes('nb-preview-alert-action inline-flex h-6 w-6 items-center justify-center rounded border-2 border-[#dc2626] bg-white'));
     assert.ok(coursesSource.includes('nb-repair-action inline-flex h-6 w-6 items-center justify-center rounded border-2'));
     assert.equal((coursesSource.match(/transition-transform active:translate-x-0\.5 active:translate-y-0\.5/g) || []).length, 2);
@@ -1031,12 +1153,18 @@ describe('Apply / Undo / Dismiss / Reset wiring', () => {
       new URL('../src/audio/optional-sounds.js', import.meta.url),
       'utf8'
     );
+    const settingsSource = readFileSync(
+      new URL('../src/windows/SettingsWindow.jsx', import.meta.url),
+      'utf8'
+    );
     const mainSource = readFileSync(
       new URL('../src/main.jsx', import.meta.url),
       'utf8'
     );
     assert.ok(soundSource.includes('export function preloadSounds()'));
-    assert.ok(soundSource.includes("if (!soundEnabled || typeof window === 'undefined') return;"));
+    assert.ok(soundSource.includes("if (typeof window === 'undefined') return;"));
+    assert.ok(settingsSource.includes("playSound('popup');"));
+    assert.ok(!settingsSource.includes("setTimeout(() => playSound('popup')"));
     assert.ok(mainSource.includes("import { preloadSounds } from './audio/optional-sounds.js'"));
     assert.ok(mainSource.includes('preloadSounds();'));
   });
@@ -1745,26 +1873,170 @@ describe('Available Courses drag, drop, and cancel', () => {
         'utf8'
       );
       // Click without drag threshold: pointer state must be cleared without entering heldCard
-      assert.ok(src.includes('Simple click (no drag): do nothing'), 'AvailableCourses treats plain click as no-op');
+      assert.ok(src.includes('A click selects the card for preview without committing it to the timetable.'), 'A click without dragging selects the card for preview');
+      assert.ok(src.includes('onPreviewSectionChange?.(cur.item.id);'), 'Pointer selection keeps the fixed-slot preview visible');
+      assert.ok(src.includes('pointerPreviewIdRef.current = cur.item.id;'), 'Pointer-selected previews are remembered until another course is selected');
+      assert.ok(src.includes('onPreviewSectionChange?.(sectionId ?? pointerPreviewIdRef.current)'), 'Unrelated pointer-driven clears restore the selected preview');
+      assert.ok(src.includes("if (inputModalityRef.current === 'keyboard') {\n      pointerPreviewIdRef.current = null;"), 'Keyboard preview changes are not pinned by a prior pointer selection');
       assert.ok(src.includes('setPressedCardId(item.id)'), 'A pressed course stays visually selected after release');
       assert.ok(src.includes("pressedCardId === item.id ? 'nb-course-card--pressed'"), 'The pressed course retains its active card styling');
       assert.ok(src.includes(`if (dropResult.success) {
         // Drop successful: add or switch section and close gap
         setPressedCardId(null);`), 'Only a successful drop clears the pressed-course highlight');
-      assert.ok(src.includes('const returnedSection = previousDraftRef.current.some((id) => !draft.includes(id))'));
+      assert.ok(src.includes('const returnedSection = previousDraft.some((id) => !draft.includes(id))'));
       assert.ok(src.includes('if (returnedSection) {') && src.includes('setPressedCardId(null)'), 'Returning a timetable course clears stale tray selection');
       assert.ok(src.includes('onPreviewSectionChange?.(null)'), 'Returning a timetable course clears the active preview');
-      assert.ok(src.includes(`} else {
-        // Red drop or outside timetable: animate back to original position
-        preservePreviewOnBlurRef.current = true;
-        onPreviewSectionChange?.(cur.item.id);`), 'An unsuccessful drop keeps its course preview visible');
+      assert.ok(
+        src.includes('preservePreviewOnBlurRef.current = true;') &&
+        src.includes('onPreviewSectionChange?.(cur.item.id);'),
+        'An unsuccessful drop keeps its course preview visible'
+      );
       assert.ok(src.includes('selectionResetKey = 0') && src.includes('}, [selectionResetKey])'), 'A timetable drag can clear tray selection before the course is dropped');
-      assert.ok(src.includes("useLayoutEffect(() => {\n    setPressedCardId(null);\n    preservePreviewOnBlurRef.current = false;\n  }, [selectionResetKey])"), 'Scenario changes clear the pressed-card state before paint');
+      assert.ok(src.includes("useLayoutEffect(() => {\n    setPressedCardId(null);\n    preservePreviewOnBlurRef.current = false;\n    pointerPreviewIdRef.current = null;\n  }, [selectionResetKey])"), 'Scenario changes clear the pressed-card state and preview selection before paint');
       assert.ok(src.includes("event.relatedTarget?.closest?.('#window-scenarios, #dock-scenarios')"), 'Opening Scenario preserves the current preview until a scenario is actually changed');
       // Drag must still be initiated when threshold is exceeded
       assert.ok(src.includes('hasExceededDragThreshold'), 'AvailableCourses initiates drag only above threshold');
       const css = readFileSync(new URL('../src/app.css', import.meta.url), 'utf8');
       assert.ok(css.includes('.nb-course-card.nb-course-card--pressed'), 'The pressed course uses the yellow raised-card style');
+    });
+
+    it('course cards support keyboard preview, activation, conflict feedback, and focus advance', async () => {
+      const { readFileSync } = await import('node:fs');
+      const src = readFileSync(
+        new URL('../src/components/AvailableCourses.jsx', import.meta.url),
+        'utf8'
+      );
+      const previewSource = readFileSync(
+        new URL('../src/EarlySchedulePreview.jsx', import.meta.url),
+        'utf8'
+      );
+      assert.ok(src.includes("inputModalityRef.current !== 'keyboard'"), 'Pointer-driven focus does not show the keyboard preview');
+      assert.ok(src.includes("event.key === 'Tab' && !hasStartedKeyboardNavigationRef.current"), 'Initial keyboard-only Tab enters the course tray first');
+      assert.ok(src.includes("!hasUsedPointerRef.current") && src.includes("querySelector('[data-course-card-id]:not(:disabled)')"), 'The initial Tab shortcut targets the first available card only before pointer use');
+      assert.ok(src.includes('document.addEventListener(\'pointerdown\', handlePointerDown, true)'), 'Pointer use remembers and hides the keyboard preview');
+      assert.ok(src.includes("event.target?.closest?.('[data-repair-action], [data-preview-alert-action]')"), 'Clicking a contextual action does not clear its preview before click');
+      assert.ok(src.includes('document.addEventListener(\'keydown\', handleKeyDown, true)'), 'Keyboard input restores or advances the remembered course');
+      assert.ok(src.includes('setPressedCardId(null);'), 'Keyboard input clears the mouse-pressed card styling');
+      assert.ok(src.includes("!event.altKey && !event.ctrlKey && !event.metaKey && key === 'q'"), 'Q activates the visible contextual repair or alert action');
+      assert.ok(src.includes("window.dispatchEvent(new CustomEvent('courseweft:repair-focus-origin'"), 'Q records the focused course as the repair return target');
+      assert.ok(src.includes('const focusedCourseId = focusedCourseCard?.dataset.courseCardId'), 'The shortcut resolves the action for the focused course');
+      assert.ok(src.includes('[data-course-action-for="${CSS.escape(focusedCourseId)}"]'), 'The shortcut cannot activate another course card’s action');
+      assert.ok(src.includes('contextualAction.click()'), 'The shortcut uses the same handler as the contextual action button');
+      assert.ok(src.includes('const isRepairPreviewActive = Boolean(state?.candidate && !state?.isApplied)'), 'The course tray can detect when the repair preview is active');
+      assert.ok(src.includes('setHeldCard(null);\n    setPressedCardId(null);\n    pointerStateRef.current = null;'), 'Opening a repair preview clears lifted or pressed course cards');
+      assert.ok(src.includes('data-course-action-for={repairPreviewId}'), 'The repair action is associated with its course card');
+      assert.ok(src.includes('data-course-action-for={unavailableLinkedLabPreviewId}'), 'The alert action is associated with its course card');
+      assert.ok(src.includes('rememberContextualActionOrigin(repairPreviewId)'), 'Mouse repair activation records the course to restore after Cancel');
+      assert.ok(src.includes('rememberContextualActionOrigin(unavailableLinkedLabPreviewId)'), 'Alert acknowledgement records the course to restore focus to');
+      assert.ok(src.includes("event.relatedTarget?.closest?.('[role=\"alertdialog\"]')"), 'Opening a modal does not clear the selected course preview');
+      assert.ok(src.includes("'courseweft:restore-course-preview'"), 'Dismissing a modal restores the selected course preview');
+      assert.ok(!src.includes('onBlur={() => {\n                  preservePreviewOnBlurRef.current = false;\n                  onPreviewSectionChange?.(null);\n                }}'), 'Contextual actions do not unmount themselves on focus changes');
+      assert.ok(src.includes('const rememberedIndex = catalog.findIndex((item) => item.id === rememberedId)'), 'A remembered course is checked against the current catalogue');
+      assert.ok(src.includes('?.focus();'), 'A removed remembered course advances focus to the next available card');
+      assert.ok(src.includes('onClick={(event) => handleKeyboardCardActivation(event, item)}'), 'The course card itself handles keyboard activation');
+      assert.ok(src.includes('if (event.detail !== 0 || !dispatch || repairLockedIds.includes(item.id)) return'), 'Pointer clicks do not activate the keyboard action');
+      assert.ok(src.includes('getConflictingSections('), 'Keyboard activation checks all conflicting sections');
+      assert.ok(src.includes('.map((section) => `${section.id} (${formatCourseSlot(section)})`)'), 'Rejected keyboard activation lists every conflicting course and time');
+      assert.ok(src.includes("title: 'Class clash'"), 'Conflict feedback uses the existing error toast');
+      assert.ok(src.includes('The timetable has not been changed.'), 'Conflict feedback explains that the timetable was not changed');
+      assert.ok(src.includes('fromId: draftedAlternate || null'), 'A keyboard-triggered section switch remembers which timetable section it replaces');
+      assert.ok(src.includes('returnedCourseCard.focus();'), 'A completed swap returns focus to the course card for the swapped-out section');
+      assert.ok(src.includes('pendingFocusAdvance.fromId\n            ? track?.querySelector'), 'Swap focus targets the course card that returns to Available Courses');
+      assert.ok(src.includes('}, [draft, animatingSwap, updatePreview, returningCardId]);'), 'Focus retries when the returned card finishes its tray animation');
+      assert.ok(src.includes('focusTimetableSection(pendingFocusAdvance.activatedId)'), 'A normal keyboard add can still move focus to its timetable section');
+      assert.ok(src.includes('animatingSwap?.incomingId !== pendingFocusAdvance.activatedId'), 'Focus waits for the incoming timetable section to finish animating');
+      assert.ok(src.includes('course.component === requirement.component &&\n        course.linkedGroup === requirement.linkedGroup'), 'Adding a linked lecture identifies an eligible required lab course');
+      assert.ok(src.includes('focusCourseId: requiredCourse?.id ?? null'), 'The next required course receives focus after the lecture is added');
+      assert.ok(src.includes('nextCourseCard.focus();'), 'Focus moves directly to the required course card instead of the timetable');
+      assert.ok(previewSource.includes('`[data-testid="course-return-placeholder-${CSS.escape(fromId)}"]`'), 'A returning course animates to its own sorted position in the course tray');
+      assert.ok(previewSource.includes('left: placeholderRect.left') && previewSource.includes('top: placeholderRect.top'), 'The return animation uses the measured placeholder position');
+      assert.ok(src.includes('keyboardPreviewIdRef.current = null;\n    onPreviewSectionChange?.(null);\n    handleCardClick(item);'), 'Successful activation clears the stale course preview');
+      assert.ok(src.includes('fromId: draftedAlternate || null,\n      focusCourseId: requiredCourse?.id ?? null,\n      focusTimetable: !requiredCourse,'), 'Keyboard activation focuses a required course first, otherwise the timetable');
+      assert.ok(src.includes("title: 'Section is full'"), 'Activating a full section displays an error toast');
+      assert.ok(src.includes('message: `${item.title} (${item.id}) has no open seats.`'), 'The full-section toast names the unavailable section');
+      assert.ok(src.includes('pendingAction.fromDraft.includes(id)'), 'Redo identifies newly restored timetable sections');
+      assert.ok(src.includes("action: 'redo'"), 'Redo schedules focus on the restored timetable section');
+      assert.ok(src.includes('focusedCourseId && rememberedId && rememberedId !== focusedCourseId'), 'A stale pointer selection cannot steal keyboard activation from the currently focused course');
+      assert.ok(src.includes("document.addEventListener('pointerdown', handlePointerDown, true)"), 'Pointer interactions are tracked globally');
+      assert.ok(!src.includes('rememberedPreviewIdRef.current = null;\n      keyboardPreviewIdRef.current = null;\n      onPreviewSectionChange?.(null);'), 'Clicking outside the course cards does not clear a selected preview');
+      assert.ok(src.includes('inputModalityRef.current === \'keyboard\' &&\n                      !preservePreviewOnBlurRef.current'), 'Moving focus by pointer does not clear a preview on blur');
+      assert.ok(src.includes('focusTimetable: true'), 'Pointer drops preserve the existing focus handoff for additions');
+      assert.ok(src.includes('<Wrench size={12} strokeWidth={3} aria-hidden="true" />'), 'The repair action remains an icon-only bold icon button');
+      assert.ok(src.includes('<AlertTriangle size={12} strokeWidth={3} aria-hidden="true" />'), 'The alert action remains an icon-only bold icon button');
+      assert.ok(src.includes('border-[#dc2626] bg-white p-0 text-[#dc2626]'), 'The alert icon remains red');
+      assert.ok(src.includes('data-course-card-id={item.id}'), 'Available cards can be focused after draft changes');
+      assert.ok(src.includes('const focusNextAfterRedo = () =>'), 'Exhausted redo moves focus to the next available toolbar or tray control');
+      assert.ok(src.includes("pendingHistoryFocusRef.current = { action: 'undo', fromDraft: [...draft] }"), 'Undo schedules focus restoration after its transition');
+      assert.ok(src.includes("pendingHistoryFocusRef.current = { action: 'redo', fromDraft: [...draft] }"), 'Redo schedules focus restoration after its transition');
+      assert.ok(src.includes('else if (canRedoRepair && redoButtonRef.current'), 'Exhausting undo moves focus to redo');
+      assert.ok(src.includes('pendingAction.action === \'redo\' &&\n      !canRedoRepair &&\n      canUndoRepair'), 'Exhausting redo moves focus to undo, including after restoring a timetable section');
+      assert.ok(src.includes('disabled={!canUndoRepair && !historyTransitionInProgress}'), 'Undo remains focusable during its transition');
+      assert.ok(src.includes('disabled={!canRedoRepair && !historyTransitionInProgress}'), 'Redo remains focusable during its transition');
+      assert.ok(!src.includes('onMouseEnter'), 'Mouse hover alone does not show the fixed-slot preview');
+      assert.ok(!src.includes('course-conflicts-'), 'Conflict details are not rendered as an inline card panel');
+      const cardAttributeIndex = src.indexOf('data-course-card-id={item.id}');
+      const cardButtonStart = src.lastIndexOf('<button', cardAttributeIndex);
+      const cardButtonEnd = src.indexOf('onDragStart=', cardButtonStart);
+      const courseButtonOpeningTag = src.slice(cardButtonStart, cardButtonEnd);
+      assert.ok(cardButtonStart >= 0, 'Each course card is a focusable button');
+      assert.ok(!courseButtonOpeningTag.includes('role='), 'Course cards retain native button semantics');
+      assert.ok(src.includes('aria-keyshortcuts="Enter Space Q"'), 'Cards announce activation and contextual shortcuts');
+
+      const css = readFileSync(new URL('../src/app.css', import.meta.url), 'utf8');
+      assert.match(
+        css,
+        /\.nb-course-card:focus-visible:not\(\.nb-linked-outline\)[\s\S]*?box-shadow: 0 0 0 2px var\(--color-blue\) !important;[\s\S]*?background-color: #fff !important;/,
+        'Keyboard-focused course cards return to a white, flat style while keeping a focus ring'
+      );
+      assert.match(
+        css,
+        /\.nb-course-card:focus-visible\s*\{[^}]*z-index: 40 !important;[^}]*outline: 2px solid var\(--color-blue\) !important;/,
+        'The blue keyboard focus outline sits above linked-course rainbow outlines'
+      );
+      assert.match(
+        css,
+        /\.nb-tt-block\.nb-linked-outline:focus-visible\s*\{[^}]*z-index: 40 !important;[^}]*outline: 3px solid var\(--color-blue\) !important;[^}]*outline-offset: 5px !important;/,
+        'Focused linked timetable blocks render their blue outline above the rainbow outline'
+      );
+      assert.match(
+        css,
+        /\.nb-course-card\.nb-linked-outline:focus-visible\s*\{[^}]*outline-width: 3px !important;[^}]*outline-offset: 5px !important;/,
+        'Focused linked course cards render the blue focus outline outside the rainbow outline'
+      );
+      assert.ok(css.includes('.nb-keyboard-hint'), 'Optional Q key hints have a compact keycap style');
+      assert.match(css, /\.nb-keyboard-hint\s*\{[^}]*font-weight: 900;/, 'The Q key hint uses bold lettering');
+      assert.match(css, /\.nb-preview-alert-action svg\s*\{[^}]*color: inherit;[^}]*stroke: currentColor;/, 'The alert icon stroke follows its color during the flash');
+      assert.ok(src.includes('className={`nb-keyboard-hint${qHintBounceId ==='), 'Contextual actions display the optional Q key hint and apply its bounce state');
+      assert.ok(src.includes('setQHintBounceId(focusedCourseId)'), 'Pressing Q animates its matching action hint');
+      assert.match(
+        css,
+        /@media \(prefers-reduced-motion: reduce\)\s*\{\s*\.nb-shake\s*\{\s*animation: none !important;/,
+        'Conflict shake respects reduced motion'
+      );
+
+      const noticeSource = readFileSync(new URL('../src/Notice.jsx', import.meta.url), 'utf8');
+      assert.ok(noticeSource.includes('{notice.title}'), 'The error toast displays only its short title');
+      assert.ok(!noticeSource.includes('toastDetails'), 'The error toast has no long visual detail panel');
+      assert.match(
+        noticeSource,
+        /\{onAction && \(\s*<button\s+type="button"\s+autoFocus\s+onClick={onAction}/,
+        'The repair action receives focus as soon as its dialog opens'
+      );
+      const repairPreviewSource = readFileSync(new URL('../src/components/RepairPreview.jsx', import.meta.url), 'utf8');
+      assert.match(
+        repairPreviewSource,
+        /<button\s+type="button"\s+disabled={isApplied}\s+autoFocus/,
+        'Apply repair receives focus when the repair preview opens'
+      );
+      const appShellSource = readFileSync(new URL('../src/AppShell.jsx', import.meta.url), 'utf8');
+      assert.ok(appShellSource.includes("window.addEventListener('courseweft:repair-focus-origin', rememberRepairFocusOrigin)"));
+      assert.ok(appShellSource.includes('if (state.isApplied) closeRepairAfterApply();'));
+      assert.ok(appShellSource.includes('focusCourseCard(linkedCard);'), 'Applying a repair focuses the available linked course when present');
+      assert.ok(appShellSource.includes('const nextCard = cards[Math.min(Math.max(origin.index, 0), cards.length - 1)]'));
+      assert.ok(appShellSource.includes('restoreNoticeFocus();'), 'Dismissing a repair prompt restores focus and its course preview');
+      assert.ok(appShellSource.includes("'courseweft:restore-course-preview'"), 'The restored course is communicated to the schedule workspace');
+      assert.ok(appShellSource.includes("notice?.title !== 'Timetable updated'"), 'Post-apply focus waits until the timetable transition finishes');
+      assert.ok(appShellSource.includes('const linkedFollowup = availableCourses.find'), 'Post-apply focus prefers a linked course that is still available');
     });
   });
 
@@ -1824,6 +2096,19 @@ describe('Available Courses drag, drop, and cancel', () => {
         'utf8'
       );
       assert.ok(src.includes('handleRemove'), 'Timetable wires handleRemove to dispatch REMOVE_SECTION');
+      assert.ok(src.includes('role="button"') && src.includes('tabIndex={0}'), 'Timetable course blocks are keyboard navigable');
+      assert.ok(src.includes('event.key !== \'Enter\' && event.key !== \' \''), 'Enter and Space remove the focused timetable course');
+      assert.ok(src.includes('onRemove(sec.id, event.currentTarget)'), 'Keyboard removal dispatches the selected section and records its focus target');
+      assert.ok(src.includes('press Enter or Space to remove'), 'Course blocks announce their keyboard removal action');
+    });
+
+    it('linked timetable outlines are not clipped at row boundaries and layer above grid lines', async () => {
+      const { readFileSync } = await import('node:fs');
+      const css = readFileSync(new URL('../src/app.css', import.meta.url), 'utf8');
+      const trackRule = css.match(/\.nb-tt-row-track\s*\{([^}]+)\}/)?.[1] || '';
+      const linkedTimetableRule = css.match(/\.nb-tt-block\.nb-linked-outline\s*\{([^}]+)\}/)?.[1] || '';
+      assert.match(trackRule, /overflow:\s*visible;/, 'Row tracks allow the outline to cross the timetable row line');
+      assert.match(linkedTimetableRule, /z-index:\s*30\s*!important;/, 'Linked outlines layer above timetable grid lines');
     });
 
     it('Timetable supports dragging course blocks and swap animations', async () => {
@@ -1940,8 +2225,10 @@ describe('Available Courses drag, drop, and cancel', () => {
       assert.ok(previewSource.includes("if (transition.direction === 'undo') replacementPairs.reverse()"));
       assert.ok(previewSource.includes('runSections(ids, direction, onComplete, index + 1)'));
       assert.ok(previewSource.includes('type: ACTION.COMPLETE_HISTORY_TRANSITION'));
-      assert.ok(coursesSource.includes('disabled={!canUndoRepair || historyTransitionInProgress}'));
-      assert.ok(coursesSource.includes('disabled={!canRedoRepair || historyTransitionInProgress}'));
+      assert.ok(coursesSource.includes('disabled={!canUndoRepair && !historyTransitionInProgress}'));
+      assert.ok(coursesSource.includes('disabled={!canRedoRepair && !historyTransitionInProgress}'));
+      assert.ok(coursesSource.includes('aria-disabled={!canUndoRepair || historyTransitionInProgress || undefined}'));
+      assert.ok(coursesSource.includes('aria-disabled={!canRedoRepair || historyTransitionInProgress || undefined}'));
     });
 
     it('scenario switching animates selected sections back before revealing the new course list', async () => {
